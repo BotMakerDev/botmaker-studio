@@ -49,10 +49,15 @@ public final class UiEvents {
 
     private UiEvents() {}
 
-    /** Wraps {@code System.err} and catches what no handler did, once; nothing unless {@link UiTools#enabled}. */
+    /**
+     * Wraps {@code System.err} and catches what no handler did, once, starts {@link FxWatch} and writes
+     * {@link UiFindings}; nothing unless {@link UiTools#enabled}. The FX toolkit must be running.
+     */
     public static synchronized void install() {
         if (installed || !UiTools.enabled()) return;
         installed = true;
+        UiFindings.install();
+        FxWatch.start();
         Thread.UncaughtExceptionHandler before = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, failure) -> {
             uncaught(thread.getName(), failure);
@@ -116,8 +121,10 @@ public final class UiEvents {
 
     private static synchronized void add(Kind kind, String text) {
         String cut = text.length() > LINE_CHARS ? text.substring(0, LINE_CHARS) + "…" : text;
-        EVENTS.addLast(new Event(++seq, kind, cut));
+        Event event = new Event(++seq, kind, cut);
+        EVENTS.addLast(event);
         while (EVENTS.size() > KEPT) EVENTS.removeFirst();
+        UiFindings.record(UiFindings.Kind.ERROR, 0, event.line());
     }
 
     /** The newest event's number; 0 before any. */

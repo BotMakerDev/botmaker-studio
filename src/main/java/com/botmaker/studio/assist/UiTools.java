@@ -3,6 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.assist.AgentReply;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.Describe;
+import com.botmaker.shared.config.CacheDirs;
 import javafx.application.Platform;
 import javafx.event.Event;
 import javafx.geometry.Bounds;
@@ -44,7 +45,13 @@ import javafx.stage.Window;
 import javafx.stage.WindowEvent;
 
 import java.awt.image.BufferedImage;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -71,7 +78,8 @@ import java.util.stream.Collectors;
  *
  * <p>Built to find bugs as well as to drive (2026-10-28): a press or a type waits until what the windows show holds
  * still, then answers with what changed (a window opened is read whole), and every answer ends with the errors
- * {@link UiEvents} caught since the last one said.
+ * {@link UiEvents} caught since the last one said, the stalls {@link FxWatch} saw and the heap. {@code perf} and
+ * {@code profile} ({@link UiProfile}) say where the time went; {@link UiFindings} keeps it all for the next walk.
  */
 final class UiTools {
 
@@ -132,6 +140,23 @@ final class UiTools {
         @Describe("Studio's newest errors")
         record Log(@Describe(value = "how many, 30 when left out", optional = true) Integer lines) implements Ui {
         }
+
+        @Describe("stalls, slowest steps, node counts")
+        record Perf(@Describe(value = "true: count from now", optional = true) Boolean mark) implements Ui {
+        }
+
+        @Describe("JFR: where the time goes between start and stop")
+        record Profile(Step step) implements Ui {
+        }
+    }
+
+    /** A {@link Ui.Profile}'s step. */
+    enum Step {
+        START, STOP
+    }
+
+    /** A press or type and its time to idle, -1 when Studio never held still. */
+    private record Timed(String what, long ms) {
     }
 
     /** What the last read numbered: a {@link Node}, {@link MenuItem} or {@link Tab}. FX thread only. */
@@ -140,6 +165,15 @@ final class UiTools {
     private Window lastRead;
     /** The newest {@link UiEvents} event an answer has reported, over every endpoint: a new one repeats none. */
     private static final AtomicLong SEEN = new AtomicLong();
+    /** Likewise the newest {@link FxWatch} stall reported, the one {@code perf} counts from, and the GC time said. */
+    private static final AtomicLong STALLS_SEEN = new AtomicLong();
+    private static final AtomicLong PERF_MARK = new AtomicLong();
+    private static final AtomicLong GC_SAID = new AtomicLong(-1);
+    /** The latest presses and types, oldest first, at most {@link #KEPT_STEPS}. */
+    private static final Deque<Timed> STEPS = new ArrayDeque<>();
+    private static final int KEPT_STEPS = 200;
+    private static final int MOST_STALLS = 5;
+    private static final int SLOWEST = 5;
 
     /** Whether this Studio serves {@code ui}: the flag set, and not an installed Studio. */
     static boolean enabled() {
@@ -156,10 +190,10 @@ final class UiTools {
 
     AssistantTool<AssistantTool.OneOf<Ui>> tool() {
         return AssistantTool.named("ui")
-                .describedAs("Studio's own windows: list, read, press, type, look, wait; answers say what changed "
-                        + "and new errors. Dev Studio only.")
+                .describedAs("Studio's own windows: list, read, press, type, look, wait; answers say what changed, "
+                        + "new errors and stalls. Dev Studio only.")
                 .takesOneOf(Ui.class)
-                .handledBy((action, context) -> withEvents(handle(action)));
+                .handledBy((action, context) -> reported(handle(action)));
     }
 
     private AgentReply handle(Ui action) {
@@ -172,6 +206,12 @@ final class UiTools {
                 case Ui.Look look -> look(look.window(), look.scale());
                 case Ui.Wait wait -> AgentReply.text(waitFor(wait.text(), wait.seconds(), Boolean.TRUE.equals(wait.gone())));
                 case Ui.Log log -> AgentReply.text(log(log.lines()));
+                case Ui.Perf perf -> AgentReply.text(perf(Boolean.TRUE.equals(perf.mark())));
+                case Ui.Profile profile -> AgentReply.text(switch (profile.step()) {
+                    case START -> UiProfile.start();
+                    case STOP -> UiProfile.stop(CacheDirs.cacheRoot().resolve("ui-profile.jfr"));
+                    case null -> throw new IllegalArgumentException("Say start or stop.");
+                });
             };
         } catch (IllegalArgumentException refused) {
             return AgentReply.refused("REFUSED: " + refused.getMessage());
@@ -435,6 +475,7 @@ final class UiTools {
                 }
             });
             double took = awaitIdle();
+            timed("press " + what[0], took);
             if (failed.get() != null) {
                 throw new IllegalStateException("pressing r" + ref + " failed: " + UiEvents.summary(failed.get()));
             }
@@ -447,8 +488,10 @@ final class UiTools {
     /** {@link #type} on the FX thread, then what it changed once Studio is idle. */
     String typed(int ref, String text) {
         Shown before = onFx(this::shown);
+        String what = onFx(() -> named(target(ref)));
         String held = onFx(() -> type(ref, text));
         double took = awaitIdle();
+        timed("type into " + what, took);
         return held + " " + capitalised(idle(took)) + ".\n" + onFx(() -> changes(before));
     }
 
@@ -553,19 +596,103 @@ final class UiTools {
 
     // ---- what went wrong ----------------------------------------------------------------------------------
 
-    /** {@code reply}, then what went wrong in Studio since the last answer said. */
-    private AgentReply withEvents(AgentReply reply) {
+    /**
+     * {@code reply}, then what went wrong in Studio since the last answer said, the stalls since then, and the heap
+     * with the time GC took since then.
+     */
+    private static AgentReply reported(AgentReply reply) {
+        StringBuilder out = new StringBuilder();
         List<UiEvents.Event> events = UiEvents.after(SEEN.get());
-        if (events.isEmpty()) return reply;
-        SEEN.accumulateAndGet(events.getLast().seq(), Math::max);
-        int listed = Math.min(events.size(), MOST_EVENTS);
-        StringBuilder out = new StringBuilder("Studio reported " + events.size() + " problem"
-                + (events.size() == 1 ? "" : "s") + " since the last answer:");
-        for (UiEvents.Event event : events.subList(events.size() - listed, events.size())) {
-            out.append("\n  ").append(event.line());
+        if (!events.isEmpty()) {
+            SEEN.accumulateAndGet(events.getLast().seq(), Math::max);
+            int listed = Math.min(events.size(), MOST_EVENTS);
+            out.append("Studio reported ").append(events.size()).append(" problem")
+                    .append(events.size() == 1 ? "" : "s").append(" since the last answer:");
+            for (UiEvents.Event event : events.subList(events.size() - listed, events.size())) {
+                out.append("\n  ").append(event.line());
+            }
+            if (events.size() > listed) out.append("\n  (").append(events.size() - listed).append(" older; log lists them)");
+            out.append('\n');
         }
-        if (events.size() > listed) out.append("\n  (").append(events.size() - listed).append(" older; log lists them)");
+        List<FxWatch.Stall> stalls = FxWatch.after(STALLS_SEEN.get());
+        if (!stalls.isEmpty()) {
+            STALLS_SEEN.accumulateAndGet(stalls.getLast().seq(), Math::max);
+            int listed = Math.min(stalls.size(), MOST_STALLS);
+            out.append("Studio's windows stalled ").append(stalls.size()).append(stalls.size() == 1 ? " time" : " times")
+                    .append(" since the last answer:");
+            for (FxWatch.Stall stall : stalls.subList(stalls.size() - listed, stalls.size())) {
+                out.append("\n  ").append(stall.line());
+            }
+            if (stalls.size() > listed) out.append("\n  (").append(stalls.size() - listed).append(" older; perf lists them)");
+            out.append('\n');
+        }
+        out.append(memory());
         return reply.and(AgentReply.text(out.toString()));
+    }
+
+    /** The heap in use, and GC's time since the last answer said it when it moved. */
+    private static String memory() {
+        long used = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
+        long gc = ManagementFactory.getGarbageCollectorMXBeans().stream()
+                .mapToLong(GarbageCollectorMXBean::getCollectionTime).filter(ms -> ms > 0).sum();
+        long said = GC_SAID.getAndSet(gc);
+        String heap = "Heap " + used / (1024 * 1024) + " MB";
+        return said < 0 || gc == said ? heap + "." : heap + "; GC " + (gc - said) + " ms since the last answer.";
+    }
+
+    /** Keeps a press or type and its time to idle; a finding row too. */
+    private static void timed(String what, double seconds) {
+        long ms = seconds < 0 ? -1 : Math.round(seconds * 1000);
+        synchronized (STEPS) {
+            STEPS.addLast(new Timed(what, ms));
+            while (STEPS.size() > KEPT_STEPS) STEPS.removeFirst();
+        }
+        UiFindings.record(UiFindings.Kind.STEP, ms, what);
+    }
+
+    /** {@code perf}: the stalls since Studio started or the mark, the slowest steps, and each window's nodes. */
+    static String perf(boolean mark) {
+        List<FxWatch.Stall> stalls = FxWatch.after(PERF_MARK.get());
+        StringBuilder out = new StringBuilder(stalls.isEmpty() ? "No stall" : stalls.size() + " stalls")
+                .append(PERF_MARK.get() == 0 ? " since Studio started" : " since the mark")
+                .append(" (over ").append(FxWatch.STALL_MS).append(" ms)").append(stalls.isEmpty() ? "." : ":");
+        for (FxWatch.Stall stall : stalls) {
+            out.append("\n  ").append(stall.at().truncatedTo(ChronoUnit.SECONDS)).append(' ').append(stall.line());
+        }
+        List<Timed> steps;
+        synchronized (STEPS) {
+            steps = new ArrayList<>(STEPS);
+        }
+        if (!steps.isEmpty()) {
+            out.append("\nSlowest steps to idle:");
+            steps.stream().sorted(Comparator.comparingLong((Timed t) -> t.ms() < 0 ? Long.MAX_VALUE : t.ms()).reversed())
+                    .limit(SLOWEST).forEach(t -> out.append("\n  ")
+                            .append(t.ms() < 0 ? "never idle" : t.ms() + " ms").append(' ').append(t.what()));
+        }
+        out.append("\nNodes:");
+        onFx(() -> {
+            List<Window> all = showing();
+            for (int i = 0; i < all.size(); i++) {
+                Scene scene = all.get(i).getScene();
+                out.append("\n  ").append(describe(i + 1, all.get(i))).append(": ")
+                        .append(scene == null ? 0 : nodes(scene.getRoot()));
+            }
+            return null;
+        });
+        if (mark) {
+            PERF_MARK.set(FxWatch.last());
+            out.append("\nMarked: perf counts stalls from now.");
+        }
+        return out.toString();
+    }
+
+    private static int nodes(Node node) {
+        if (node == null) return 0;
+        int count = 1;
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) count += nodes(child);
+        }
+        return count;
     }
 
     /** {@code log}: the newest problems Studio reported, whether or not an answer said them. */

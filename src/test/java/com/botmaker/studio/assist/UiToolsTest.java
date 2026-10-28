@@ -12,9 +12,12 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.testfx.util.WaitForAsyncUtils;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +60,9 @@ class UiToolsTest extends FxHeadlessTest {
         broken.setOnAction(e -> {
             throw new IllegalStateException("no bot");
         });
-        root.getChildren().addAll(add, open, broken);
+        Button slow = new Button("Slow");
+        slow.setOnAction(e -> slowly());
+        root.getChildren().addAll(add, open, broken, slow);
         stage.setTitle("My bots");
         stage.setScene(new Scene(root, 300, 300));
         stage.show();
@@ -191,6 +196,48 @@ class UiToolsTest extends FxHeadlessTest {
                 + " ← IOException: gone at UiToolsTest."), text);
     }
 
+    private static void slowly() {
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException stopped) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static long spin(long ms) {
+        long until = System.nanoTime() + ms * 1_000_000;
+        long sum = 0;
+        while (System.nanoTime() < until) sum += Long.numberOfTrailingZeros(sum + System.nanoTime());
+        return sum;
+    }
+
+    @Test
+    void aSlowHandlerIsAStallNamedByItsFrame() throws InterruptedException {
+        FxWatch.start();
+        UiTools ui = new UiTools();
+        int slow = refOf(UiTools.onFx(() -> ui.read("my bots")), "button \"Slow\"");
+        long before = FxWatch.last();
+        ui.press(slow);
+        for (int i = 0; i < 50 && FxWatch.after(before).isEmpty(); i++) Thread.sleep(20);
+        List<FxWatch.Stall> stalls = FxWatch.after(before);
+        assertFalse(stalls.isEmpty(), "no stall seen");
+        FxWatch.Stall stall = stalls.getLast();
+        assertTrue(stall.ms() >= FxWatch.STALL_MS && stall.line().contains("UiToolsTest.slowly"), stall.line());
+        String perf = UiTools.perf(false);
+        assertTrue(perf.contains("UiToolsTest.slowly") && perf.contains("press (button \"Slow\")"), perf);
+        assertTrue(perf.contains("Nodes:\n  1 window \"My bots\""), perf);
+    }
+
+    @Test
+    void aProfileSaysWhereTheFxThreadWasBusy(@TempDir Path dir) {
+        UiProfile.start();
+        UiTools.onFx(() -> spin(600));
+        String summary = UiProfile.stop(dir.resolve("ui-profile.jfr"));
+        assertTrue(Files.exists(dir.resolve("ui-profile.jfr")));
+        assertTrue(summary.contains("FX thread (") && summary.contains("UiToolsTest.spin"), summary);
+        assertThrows(IllegalArgumentException.class, () -> UiProfile.stop(dir.resolve("again.jfr")));
+    }
+
     @Test
     void onlyAFlaggedDevStudioServesIt() {
         assertFalse(UiTools.enabled(key -> null, key -> null));
@@ -203,6 +250,7 @@ class UiToolsTest extends FxHeadlessTest {
     void itStaysSmallForTheAssistantToRead() {
         var tool = new UiTools().tool();
         int chars = tool.description().length() + McpTools.schemaOf(tool.schema()).length();
-        assertTrue(chars < 1_500, "ui is " + chars + " characters");
+        // 1,500 until perf and profile came (2026-10-28).
+        assertTrue(chars < 1_800, "ui is " + chars + " characters");
     }
 }

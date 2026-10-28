@@ -18,6 +18,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   windows hold still and says what changed: lines gained and lost, or a newly opened window read whole. Every
   answer ends with the errors Studio hit since the last one: uncaught exceptions and `stderr` lines, each with
   its first BotMaker frame. `wait` takes `gone`, and `log` lists the newest errors.
+- It finds slow moments too. A watchdog notices when Studio's windows stop answering for 150 ms or more and
+  samples where its code was; every `ui` answer lists those stalls and the heap. `perf` lists the stalls, the
+  slowest steps and each window's node count; `profile start`/`stop` records a JFR profile and names the busiest
+  methods. Errors, stalls over 500 ms and each step's time are kept in `ui-findings.tsv` in Studio's cache.
 
 ## [1.10.1] — 2026-10-28
 
