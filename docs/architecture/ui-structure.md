@@ -12,7 +12,8 @@ The `ui/` package is split by concern:
   (**Project ▸ Recover Project Files**) and `WorkspaceLayoutStore` (the persisted dividers + open bottom tab);
   none of them holds a reference back. `BottomTab` is the closed set of bottom tabs. Alongside those: the
   panel/screen managers `FileExplorerManager` (project file tree), `MenuBarManager` / `ToolbarManager` (menus
-  and toolbar; the **Project → Manage Libraries…** entry lives here), `RunConsole` (the Run tab: the
+  and toolbar; the **Project → Manage Libraries…** entry lives here; the toolbar is Studio's row above
+  `PluginTabs`, a tab per plugin, and **Navigate ▸ Find Action** is `ActionFinder`, since 2026-10-28), `RunConsole` (the Run tab: the
   bot's output, Stop, Clear — the bot runs on pipes, so it is lines, not a terminal; the Event Log that stood
   beside it was deleted on 2026-09-25), `terminal/TerminalPane` + `TerminalView` (the Terminal tab:
   xterm.js vendored under `resources/terminal/` in a `WebView`, over `services/terminal/PtySession` on
@@ -151,7 +152,7 @@ The `ui/` package is split by concern:
   fullscreen through `OverlayToolbars`), `PanelHeader` (what it is beside, ⇄ Change, and the run bar's slot —
   `ui/app/run/RunBarDock`), `TargetStrip` (a chip per plugin target, and the `Collect ▸ body() ▾` breadcrumb),
   `OverlayTreeView` over `BlockTree` (**pure, no JavaFX** — the tree model and the flattened rows; one ⋮ per
-  row), `ToolTabs` (each plugin's `OverlayTool` pane, *Actions* for `ToolbarGroup.OVERLAY`, *Blocks* for
+  row), `ToolTabs` (each plugin's `OverlayTool` pane, *Actions* for the plugins' `inOverlay` items, *Blocks* for
   `OverlayPalette`), `ToolContext` and `WatchedShots` (a tool's frame, picks and insert),
   `ArgumentConfigPopover`, `OverlayStyles`. What the panel is beside comes from a live session, else the
   plugins' `OverlayPart.watched` (`services/overlay/WatchedScreen`), else `OverlayWindowPicker`, which lists

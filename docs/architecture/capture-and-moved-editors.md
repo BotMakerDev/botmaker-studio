@@ -118,7 +118,8 @@ pickers do not have, which is the bug the move exists to prevent.
 `ui/app/ManageCaptureTargetsDialog`, `ui/app/capture/{CaptureSourcePicker, TargetThumbnail}`,
 `project/launch/QuickLaunch` and `project/capture/CaptureRegion` are **deleted**; they are
 `com.botmaker.sdk.internal.plugin.capture.{CaptureTargets, SourcePicker, TargetThumbnail}` and
-`internal.plugin.launch.QuickLaunch`, reached through a `ToolbarItem` in `ToolbarGroup.PROJECT` at order 50.
+`internal.plugin.launch.QuickLaunch`, reached through a `ToolbarItem` in `ToolbarGroup.PROJECT` at order 50 (since 2026-10-28 there are no
+groups: the SDK's 🎮 game item, `onBar(10)` on its tab, opens it; `dated-notes.md`).
 
 - **The maintainer's rule is stronger than "the SDK stores the targets": *whatever the SDK writes, the SDK
   reads*.** So the migration off this editor's own older `settings.json` shape went with them, into
@@ -148,6 +149,7 @@ pickers do not have, which is the bug the move exists to prevent.
 (2026-08-31).** `ui/app/capture/OverlayTemplateCapture` is **deleted**; the tool is
 `com.botmaker.sdk.internal.plugin.capture.CaptureTemplates`, contributed as a `ToolbarItem` into
 `ToolbarGroup.TOOLS` at order 20 — the slot Studio's own ✂ Templates item vacated, so the bar reads the same.
+(Groups are gone since 2026-10-28; the SDK's items sit flat on its own tab.)
 
 - **Four host entry points went, and each for a different reason.** `ToolbarManager`'s ✂ Templates item and
   `setOnCaptureTemplates` (the plugin's item takes the slot); `StudioActions.openOverlayTemplateCapture`;
@@ -160,7 +162,7 @@ pickers do not have, which is the bug the move exists to prevent.
   clause that followed — *the dialog itself cannot move, its guards are host work* — was true of the guards
   and not of the dialog, and **on 2026-09-01 the dialog moved too**, to
   `sdk/internal/plugin/templates/ResourceManagerDialog` and a 🖼 Manage Pictures item in `ToolbarGroup.TOOLS`
-  at order 30. What unblocked it is the `Sources` capability above: the guards stayed host work and stopped
+  at order 30 (`onBar(70)` on the SDK's tab since 2026-10-28). What unblocked it is the `Sources` capability above: the guards stayed host work and stopped
   being *this window's* work. Its per-picture **Capture a new picture…** stays with it — a region crop the
   window runs itself, over a picture that already exists.
 - **`OverlayToolbars.show` is deleted and `installDrag` delegates.** The mini-toolbar factory is

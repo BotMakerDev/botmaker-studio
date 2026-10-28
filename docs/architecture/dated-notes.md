@@ -1,5 +1,19 @@
 # Dated notes — read these before the other files here
 
+> **The toolbar is Studio's row, then a tab per plugin, since 2026-10-28** (umbrella toolbar-tabs plan; spec
+> `../../../docs/superpowers/specs/2026-10-28-toolbar-tabs-design.md`). `ToolbarGroup` is gone from the contract: a
+> plugin's item is `.onBar(order)` or `.inOverlay(order)` (`ToolbarItem.place()`), flat within the plugin. The top
+> row holds Studio's own five buttons (Settings, Parameters, Debug output, Preview, Overlay) beside the capture and
+> run clusters; the second row is `ui/app/PluginTabs` — one tab per plugin with a bar item, the most recent first,
+> the rest in a filterable `» N more` list — followed by the selected plugin's buttons in an `OverflowBar`.
+> `PluginHost.barItemsByPlugin()` and `overlayItems()` replace `itemsIn(group)`. The tab order is the project's
+> `toolbarTabs` (coordinates, most recent first); the overlay's Actions row hides by the boolean
+> `overlayActionsHidden`. `ToolbarVisibility`, the right-click group menu, `hiddenToolbarGroups` and the
+> resolution label are deleted. **Navigate ▸ Find Action** (Ctrl+Shift+A, `ui/app/ActionFinder`) lists every
+> toolbar button, Studio's and each plugin's, and presses one, selecting its plugin's tab first; the bar and the
+> finder both apply `EnabledWhen` (`ToolbarItems.enabled`). Older text here naming a `ToolbarGroup` constant is
+> history: read it as that plugin's tab.
+
 > **A plugin is its pom's coordinate since 2026-10-27** (umbrella plan *one jar, one plugin*; `../../../docs/refactor/24-plugin-platform.md`
 > §10). No plugin id, no `displayName()`, no services file: `PluginHost` holds plugin-host's `LoadedPlugin`s
 > (coordinate, name, jar, instance), and every owner record, editor verdict, catalog row and consent key is keyed by
