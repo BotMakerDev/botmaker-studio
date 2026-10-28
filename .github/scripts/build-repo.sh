@@ -135,6 +135,10 @@ grep -qF "BOTMAKER_REPO_URL:-${PAGES_URL}}" "${INSTALLER}" || {
   echo "::error::install.sh's BASE_URL default does not match ${PAGES_URL} — update packaging/linux/install.sh."
   exit 1
 }
+grep -qF "BOTMAKER_CLI_REPO_URL:-${PAGES_URL%/*}/botmaker-cli}" "${INSTALLER}" || {
+  echo "::error::install.sh's CLI_URL default does not match ${PAGES_URL%/*}/botmaker-cli — update packaging/linux/install.sh."
+  exit 1
+}
 install -m 755 "${INSTALLER}" "${SITE}/install.sh"
 
 cat > "${SITE}/botmaker-studio.repo" <<EOF
@@ -150,12 +154,17 @@ ONELINER="curl -fsSL ${PAGES_URL}/install.sh | sudo bash"
 # No `rpm --import` here: with repo_gpgcheck=1 dnf fetches the key from the repo's own gpgkey= and offers
 # to import it on the first metadata read, which an interactive user can simply accept. (install.sh DOES
 # import it explicitly — piped into a root shell there is no terminal to answer that prompt on.)
+# Both snippets register botmaker-cli's repository too: the package requires `botmaker`, which only that site
+# serves, and without it every install refuses with "nothing provides botmaker" (2026-10-28).
+CLI_PAGES_URL="${PAGES_URL%/*}/botmaker-cli"
 DNF_SNIPPET="sudo curl -fsSL -o /etc/yum.repos.d/botmaker-studio.repo ${PAGES_URL}/botmaker-studio.repo
+sudo curl -fsSL -o /etc/yum.repos.d/botmaker.repo ${CLI_PAGES_URL}/botmaker.repo
 sudo dnf install botmaker-studio"
 
 APT_SNIPPET="sudo install -d -m 755 /etc/apt/keyrings
 sudo curl -fsSL -o /etc/apt/keyrings/botmaker.asc ${PAGES_URL}/botmaker.asc
 echo \"deb ${apt_opts}${PAGES_URL}/deb stable main\" | sudo tee /etc/apt/sources.list.d/botmaker-studio.list
+echo \"deb ${apt_opts}${CLI_PAGES_URL}/deb stable main\" | sudo tee /etc/apt/sources.list.d/botmaker.list
 sudo apt-get update && sudo apt-get install botmaker-studio"
 
 # --- landing page -----------------------------------------------------------------------------------------

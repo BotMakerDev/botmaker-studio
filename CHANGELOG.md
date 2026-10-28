@@ -10,6 +10,15 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- **The one-command Linux install works again** (`packaging/linux/install.sh`): it registers botmaker-cli's
+  repository beside Studio's. The package requires `botmaker`, which only that repository serves, so every
+  install refused with "nothing provides botmaker". The landing page's by-hand dnf and apt snippets register it
+  too. Checked in fresh Fedora and Ubuntu 24.04 containers, install and rerun.
+
 ## [1.10.0] — 2026-10-28
 
 ### Added
