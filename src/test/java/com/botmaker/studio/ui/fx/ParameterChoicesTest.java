@@ -47,6 +47,7 @@ class ParameterChoicesTest extends FxHeadlessTest {
             package fixture.text;
 
             import com.botmaker.plugin.api.DeclaredPlugin;
+            import com.botmaker.plugin.api.EditorHolder;
             import com.botmaker.plugin.api.StudioPlugin;
             import com.botmaker.plugin.api.slot.SlotEditor;
             import javafx.scene.control.TextField;
@@ -54,14 +55,21 @@ class ParameterChoicesTest extends FxHeadlessTest {
 
             public final class TextPlugin extends DeclaredPlugin {
                 public TextPlugin() {
-                    super(StudioPlugin.declare().editors(() -> List.of(SlotEditor.forType(String.class).draw(() -> ctx -> {
-                        TextField field = new TextField(ctx.value(String.class).orElse(""));
-                        field.setOnAction(e -> ctx.set(field.getText()));
-                        field.focusedProperty().addListener((o, had, has) -> {
-                            if (!has) ctx.set(field.getText());
-                        });
-                        return field;
-                    }))));
+                    super(StudioPlugin.declare().editors(Editors.class));
+                }
+
+                public static final class Editors implements EditorHolder {
+                    @Override
+                    public List<SlotEditor> editors() {
+                        return List.of(SlotEditor.forType(String.class).draw(() -> ctx -> {
+                            TextField field = new TextField(ctx.value(String.class).orElse(""));
+                            field.setOnAction(e -> ctx.set(field.getText()));
+                            field.focusedProperty().addListener((o, had, has) -> {
+                                if (!has) ctx.set(field.getText());
+                            });
+                            return field;
+                        }));
+                    }
                 }
             }
             """;
