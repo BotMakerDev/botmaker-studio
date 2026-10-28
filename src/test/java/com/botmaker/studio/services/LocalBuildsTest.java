@@ -42,6 +42,15 @@ class LocalBuildsTest {
     }
 
     @Test
+    void theArchetypesExamplePluginIsATemplateNotABuild() throws Exception {
+        install("com/github/BotMakerDev", "botmaker-plugin-archetype", "0.5.1-SNAPSHOT", true, 2000);
+        install("com/example", "greetings", "0.1.0-SNAPSHOT", true, 1000);
+
+        assertEquals(List.of("com.example:greetings"),
+                LocalBuilds.scan(repository).stream().map(LocalBuilds.Build::coordinate).toList());
+    }
+
+    @Test
     void aReleasedVersionIsADownloadNotABuild() throws Exception {
         install("com/example", "botmaker-discord", "1.2.0", true, 1000);
 

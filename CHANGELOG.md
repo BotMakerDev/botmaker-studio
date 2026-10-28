@@ -53,6 +53,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   hidden groups (`hiddenToolbarGroups`) are ignored.
 - The empty bundled plugin set: a project whose classpath loads nothing binds no plugin, and the catalog id check
   after loading is gone (the catalog pins the coordinate itself).
+### Fixed
+
+- **Dev mode no longer offers the plugin archetype as a local build** (2026-10-28): the example that `botmaker plugin
+  new` copies is a working plugin, so an umbrella `mvn install` made it appear in *Plugins & Libraries* beside the
+  plugins anyone binds. `LocalBuilds` skips its coordinate.
 
 ## [1.9.2] — 2026-10-25
 

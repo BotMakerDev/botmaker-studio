@@ -16,8 +16,10 @@ import java.util.Map;
  *
  * <p>That covers a plugin author's own {@code mvn install} at {@code 0.1.0-SNAPSHOT}, and the umbrella's
  * {@code mvn -pl botmaker-sdk -am install} — the SDK, plugin-basics and every plugin the toolkit's users build
- * at their {@code main} SNAPSHOT. <b>What makes a jar a plugin is its service file</b>
- * ({@link MavenService#declaresPlugin}), so no list or naming rule has to be kept in step with anything.
+ * at their {@code main} SNAPSHOT. <b>What makes a jar a plugin is its pom's {@code botmaker.plugin}</b>
+ * ({@link MavenService#declaresPlugin}), so no list or naming rule has to be kept in step with anything — but for
+ * one coordinate, {@link #EXAMPLE}: the archetype is a working plugin only because {@code botmaker plugin new}
+ * copies it, and the umbrella's install puts it here beside the plugins anyone binds (2026-10-28).
  *
  * <p>Offered only in a project in dev mode, which is what makes this different from the scans deleted on
  * 2026-10-01 ({@code localPluginBuilds}, {@code localSdkVersions}): those offered a SNAPSHOT in every project,
@@ -36,6 +38,9 @@ public final class LocalBuilds {
             return groupId + ":" + artifactId;
         }
     }
+
+    /** The example plugin {@code botmaker plugin new} copies: a template, never offered as a build. */
+    static final String EXAMPLE = MavenService.SDK_GROUP_ID + ":botmaker-plugin-archetype";
 
     private LocalBuilds() {}
 
@@ -61,6 +66,7 @@ public final class LocalBuilds {
                     .replace('\\', '/').replace('/', '.');
             if (groupId.isBlank()) continue;
             Build build = new Build(groupId, artifactId, version, modified(jar));
+            if (build.coordinate().equals(EXAMPLE)) continue;
             newest.merge(build.coordinate(), build, (a, b) -> a.built().isAfter(b.built()) ? a : b);
         }
         return newest.values().stream().sorted(Comparator.comparing(Build::built).reversed()).toList();
