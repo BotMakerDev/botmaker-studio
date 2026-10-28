@@ -1,0 +1,66 @@
+# Maintainer: LiQiyeDev <bgroisne@proton.me>
+#
+# BotMaker Studio on Arch, published to the AUR as botmaker-studio-bin (2026-10-28).
+#
+# A template: @PKGVER@ and @SHA256@ are filled in by .github/scripts/aur-publish.sh in the `aur` job of each
+# version tag, which pushes the result and its .SRCINFO to ssh://aur@aur.archlinux.org/botmaker-studio-bin.git.
+# Never edit the AUR copy; it is overwritten by the next release.
+#
+# -bin: it repackages the release's linux-x64 tarball, the jpackage app-image with its own Java runtime, the
+# same tree the rpm and deb put in /opt/botmaker-studio. Nothing is built from source here.
+#
+# depends: the deb's (pom.xml --linux-package-deps) by their Arch names, and `botmaker`, the command-line
+# tool, which the AUR's botmaker-bin provides (botmaker-cli's packaging/arch). The rpm and deb hard-require it
+# too. gamescope and Xephyr, the deb's Recommends, are optdepends.
+pkgname=botmaker-studio-bin
+pkgver=@PKGVER@
+pkgrel=1
+pkgdesc='Visual block-based bot builder'
+arch=('x86_64')
+url='https://github.com/BotMakerDev/botmaker-studio'
+license=('CC0-1.0')
+depends=('gtk3' 'libx11' 'libxtst' 'libxi' 'libxxf86vm' 'libglvnd' 'fontconfig' 'botmaker')
+optdepends=('gamescope: private display sessions'
+            'xorg-server-xephyr: private display sessions')
+provides=('botmaker-studio')
+conflicts=('botmaker-studio')
+options=('!strip' '!debug')
+source=("BotMaker-Studio-v${pkgver}-linux-x64.tar.gz::${url}/releases/download/v${pkgver}/BotMaker-Studio-v${pkgver}-linux-x64.tar.gz")
+sha256sums=('@SHA256@')
+
+package() {
+  install -d "${pkgdir}/opt"
+  cp -a "BotMaker Studio" "${pkgdir}/opt/botmaker-studio"
+
+  # A wrapper, not a symlink: the jpackage launcher finds its app-image from its own path.
+  install -d "${pkgdir}/usr/bin"
+  printf '#!/bin/sh\nexec "/opt/botmaker-studio/bin/BotMaker Studio" "$@"\n' > "${pkgdir}/usr/bin/botmaker-studio"
+  chmod 755 "${pkgdir}/usr/bin/botmaker-studio"
+
+  install -Dm644 "BotMaker Studio/lib/BotMaker Studio.png" \
+    "${pkgdir}/usr/share/icons/hicolor/256x256/apps/botmaker-studio.png"
+
+  # The menu entry and the .bmk type, as the rpm and deb register them (packaging/linux/BotMaker Studio.desktop,
+  # packaging/bmk.properties): %u so a double-clicked .bmk and a botmaker:// link both reach Studio. pacman's
+  # shared-mime-info and desktop-file-utils hooks refresh the databases.
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/botmaker-studio.desktop" <<'EOF'
+[Desktop Entry]
+Name=BotMaker Studio
+Comment=Visual block-based bot builder
+Exec=botmaker-studio %u
+Icon=botmaker-studio
+Terminal=false
+Type=Application
+Categories=Development;
+MimeType=application/x-botmaker-bot;x-scheme-handler/botmaker;
+EOF
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/mime/packages/botmaker-studio.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-botmaker-bot">
+    <comment>BotMaker bot</comment>
+    <glob pattern="*.bmk"/>
+  </mime-type>
+</mime-info>
+EOF
+}

@@ -12,6 +12,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Arch Linux: `botmaker-studio-bin` on the AUR** (`packaging/arch/PKGBUILD`): each version tag's `aur` job
+  fills in the version and the release tarball's sha256 and pushes the package, which installs the app-image in
+  `/opt/botmaker-studio` with the menu entry, the `.bmk` type and `botmaker://` links, and depends on
+  botmaker-cli's `botmaker-bin`. `yay -S botmaker-studio-bin` installs it, and `yay -Syu` updates it. Without the
+  `AUR_SSH_PRIVATE_KEY` secret the job checks the package and pushes nothing.
+
 ### Fixed
 
 - **The one-command Linux install works again** (`packaging/linux/install.sh`): it registers botmaker-cli's

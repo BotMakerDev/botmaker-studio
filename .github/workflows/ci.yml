@@ -519,3 +519,27 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # Arch: botmaker-studio-bin on the AUR (2026-10-28), from packaging/arch/PKGBUILD with this tag's version and
+  # the sha256 of the tarball users will download — fetched from the published Release, so `needs: release`.
+  # Without the AUR_SSH_PRIVATE_KEY secret (the maintainer's AUR account key) the package is checked and not
+  # pushed; see .github/scripts/aur-publish.sh. Not for a pre-release (`v1.0.0-rc1`): a hyphen is not valid in
+  # pkgver, and the AUR would offer it as the latest.
+  aur:
+    needs: release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Publish botmaker-studio-bin
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tarball="BotMaker-Studio-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+          curl -fsSL -o "/tmp/${tarball}" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${tarball}"
+          sha="$(sha256sum "/tmp/${tarball}" | cut -d' ' -f1)"
+          bash .github/scripts/aur-publish.sh packaging/arch/PKGBUILD botmaker-studio-bin \
+            "PKGVER=${version}" "SHA256=${sha}"
