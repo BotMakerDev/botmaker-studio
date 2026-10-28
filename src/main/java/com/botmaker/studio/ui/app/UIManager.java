@@ -513,6 +513,7 @@ public class UIManager implements ProjectWindow {
             selectBottomTab(BottomTab.USAGES);
             usagesPanel.search(binding);
         });
+        menuBarManager.setOnNavigate(Shortcuts.FIND_ACTION, () -> toolbarManager.findAction(primaryStage));
         // A block's right-click Go to Definition highlights the block first, so it is Navigate ▸'s own action.
         eventBus.subscribe(CoreApplicationEvents.GoToDefinitionRequestedEvent.class,
                 e -> navigation.goToDeclaration(), true);

@@ -18,6 +18,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Stage;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -303,6 +304,19 @@ public class ToolbarManager {
         run(onRebuildBar);
     }
 
+    /**
+     * Opens Navigate ▸ Find Action over {@code owner}: Studio's buttons and every plugin's, each pressed as its
+     * button would be, a plugin's selecting its tab first ({@link ActionFinder}).
+     */
+    public void findAction(Stage owner) {
+        List<PluginBar> bars = PluginTabs.ordered(PluginHost.barItemsByPlugin(), tabs());
+        ActionFinder.show(owner, ActionFinder.entries(studioItems(), bars), actionContext(), projectOpen(),
+                botRunning(), plugin -> {
+                    // The tab already in front stays there; a rebuild would only redraw the same bar.
+                    if (!bars.getFirst().plugin().equals(plugin)) selectTab(bars, plugin);
+                });
+    }
+
     /** One button on the bar and the item it was built from, so {@link #refreshItems()} can re-read it. */
     private record Placed(ToolbarItem item, Button button) {}
 
@@ -312,8 +326,19 @@ public class ToolbarManager {
     /** Builds {@code item}'s button and records it for {@link #refreshItems()}. */
     private Button place(List<Placed> into, ActionContext ctx, ToolbarItem item) {
         Button button = ToolbarItems.button(item, ctx);
+        ToolbarItems.applyState(button, item, projectOpen(), botRunning());
         into.add(new Placed(item, button));
         return button;
+    }
+
+    /** Whether a project is open, for an item's {@code EnabledWhen}. */
+    private boolean projectOpen() {
+        return settings != null && settings.current() != null;
+    }
+
+    /** Whether a bot is running or being debugged, for an item's {@code EnabledWhen}. */
+    private boolean botRunning() {
+        return currentAppState != AppState.IDLE;
     }
 
     /** This checkout's debug output choice, read from its run properties at every refresh. */
@@ -335,13 +360,16 @@ public class ToolbarManager {
     }
 
     /**
-     * Re-reads every item's label and icon.
+     * Re-reads every item's label and icon, and whether it can be pressed now.
      *
      * <p>Cheap by contract — a supplier is a field read and a format — so this runs on the events that
      * already redraw parts of the bar rather than on a timer.
      */
     private void refreshItems() {
-        for (Placed p : items) ToolbarItems.refresh(p.button(), p.item());
+        for (Placed p : items) {
+            ToolbarItems.refresh(p.button(), p.item());
+            ToolbarItems.applyState(p.button(), p.item(), projectOpen(), botRunning());
+        }
     }
 
     /**
@@ -413,6 +441,8 @@ public class ToolbarManager {
     private void setAppState(AppState state) {
         this.currentAppState = state;
         updateToolbarState();
+        // A plugin's BOT_RUNNING or BOT_STOPPED item follows the run as the Run/Stop cluster does.
+        refreshItems();
     }
 
     private void updateToolbarState() {

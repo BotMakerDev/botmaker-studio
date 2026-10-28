@@ -88,12 +88,17 @@ public final class ToolbarItems {
      * evaluates, not somebody else's code called once per item on every state change.
      */
     static void applyState(Button button, ToolbarItem item, boolean projectOpen, boolean botRunning) {
-        button.setDisable(!switch (item.enabledWhen()) {
+        button.setDisable(!enabled(item.enabledWhen(), projectOpen, botRunning));
+    }
+
+    /** Whether an item that is enabled {@code when} can be pressed now; the bar's and Find Action's one rule. */
+    static boolean enabled(EnabledWhen when, boolean projectOpen, boolean botRunning) {
+        return switch (when) {
             case ALWAYS -> true;
             case PROJECT_OPEN -> projectOpen;
             case BOT_RUNNING -> botRunning;
             case BOT_STOPPED -> !botRunning;
-        });
+        };
     }
 
     /**

@@ -120,7 +120,8 @@ public class MenuBarManager {
             });
             navigateItems.put(shortcut, item);
             menu.getItems().add(item);
-            if (shortcut == Shortcuts.FIND_IN_PROJECT || shortcut == Shortcuts.FILE_STRUCTURE) {
+            if (shortcut == Shortcuts.FIND_IN_PROJECT || shortcut == Shortcuts.FILE_STRUCTURE
+                    || shortcut == Shortcuts.QUICK_DOCUMENTATION) {
                 menu.getItems().add(new SeparatorMenuItem());
             }
         }

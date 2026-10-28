@@ -2954,6 +2954,11 @@
     -fx-font-family: "JetBrains Mono", monospace;
 }
 
+/* Navigate ▸ Find Action: a row whose button could not be pressed now (its EnabledWhen fails). */
+.action-finder-disabled {
+    -fx-opacity: 0.45;
+}
+
 /* Navigate ▸ Find: the popup surface, floating over the canvas's top-right corner. */
 .find-bar {
     -fx-padding: 6 8 6 8;

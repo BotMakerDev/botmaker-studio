@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- **Navigate ▸ Find Action** (Ctrl+Shift+A, 2026-10-28): every toolbar button by name, Studio's and each
+  plugin's, whichever plugin tab is selected. Type part of a name (the glyph in front does not count), then Enter
+  or a click presses it; a plugin's button selects that plugin's tab first. A button that cannot be pressed now
+  is greyed. The bar now greys the same buttons: a toolbar item's `enabledWhen` was never applied before.
 - **A plugin's log** (2026-10-28): what a plugin writes through `StudioServices.log()` is kept under its name.
   Each row of Plugins & Libraries ▸ Installed has a *Log* button, with the line count, in the warning colour once
   the plugin warned; it opens the lines in a fold under the row. Studio's standard error carries them too, the

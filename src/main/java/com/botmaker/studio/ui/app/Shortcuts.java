@@ -24,7 +24,10 @@ enum Shortcuts {
     FIND_USAGES("find-usages", "Find Usages",
             new KeyCodeCombination(KeyCode.F7, KeyCombination.ALT_DOWN)),
     // F1, IntelliJ's macOS key, not its Ctrl+Q: Ctrl+Q is File ▸ Exit here.
-    QUICK_DOCUMENTATION("quick-documentation", "Quick Documentation", new KeyCodeCombination(KeyCode.F1));
+    QUICK_DOCUMENTATION("quick-documentation", "Quick Documentation", new KeyCodeCombination(KeyCode.F1)),
+    // Every toolbar button by name, whichever plugin tab is selected (2026-10-28, ActionFinder).
+    FIND_ACTION("find-action", "Find Action…",
+            new KeyCodeCombination(KeyCode.A, KeyCombination.SHORTCUT_DOWN, KeyCombination.SHIFT_DOWN));
 
     private final String id;
     private final String displayName;
