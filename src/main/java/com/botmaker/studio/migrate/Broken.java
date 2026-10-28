@@ -67,7 +67,7 @@ public record Broken(OldElement element, List<Sites.Site> sites, State state, Ru
         old.read(units -> {
             errors.forEach((file, problems) -> {
                 CompilationUnit unit = units.get(file);
-                if (unit == null || file.equals(probe)) return;
+                if (unit == null || Rules.added(file, probe)) return;
                 Set<Integer> had = new HashSet<>();
                 for (Problem problem : before.getOrDefault(file, List.of())) had.add(problem.offset());
                 for (Problem problem : problems) {
@@ -113,7 +113,7 @@ public record Broken(OldElement element, List<Sites.Site> sites, State state, Ru
         if (gone.isEmpty()) return;
         old.read(units -> {
             units.forEach((file, unit) -> {
-                if (file.equals(probe)) return;
+                if (Rules.added(file, probe)) return;
                 unit.accept(new ASTVisitor() {
                     @Override
                     public boolean visit(MethodDeclaration method) {

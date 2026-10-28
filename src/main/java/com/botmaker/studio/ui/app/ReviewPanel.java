@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.migrate.ApiCache;
+import com.botmaker.studio.migrate.PluginRules;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -149,9 +150,12 @@ final class ReviewPanel {
             // "@Migrate(", not "@Migrate": every copy a migration wrote carries @Migrated.
             BotSources.scan(config, state, (file, source) -> methods[0] |= source.contains("@Migrate("));
         }
-        // A plugin change since the last load: what it broke is read too, by Migrate's own reading.
-        boolean changed = config != null && !state.isReaderMode() && !ApiCache.shared().previous(config.projectPath(),
-                state.getResolvedClasspath()).equals(state.getResolvedClasspath());
+        // A plugin change since the last load: what it broke is read too, by Migrate's own reading; so are the
+        // deprecated elements a plugin ships a rule for.
+        List<String> classpath = config == null ? List.of() : state.getResolvedClasspath();
+        boolean changed = config != null && !state.isReaderMode()
+                && (!ApiCache.shared().previous(config.projectPath(), classpath).equals(classpath)
+                    || PluginRules.shared().mayShip(classpath));
         if (config == null || !MigrationSteps.anyRetired(declared) && !methods[0] && !changed) {
             shown(Migrations.NONE, items);
             return;
@@ -164,7 +168,7 @@ final class ReviewPanel {
                 BotIndex bot = index.get();
                 found = new Migrations(MigrationSteps.pending(bot, PluginHost.grammar(), declared),
                         methods[0] ? MigrationCleanup.unneeded(bot, PluginHost.grammar()) : List.of(),
-                        changed ? MigrateWindow.brokenSince(bot, config.projectPath()) : 0);
+                        changed ? MigrateWindow.pendingSince(bot, config.projectPath()) : MigrateWindow.Pending.NONE);
             } catch (RuntimeException | LinkageError e) {
                 found = Migrations.NONE;
             }
@@ -179,15 +183,15 @@ final class ReviewPanel {
 
     /**
      * What the bot still has to migrate, the migration methods nothing needs any more, and how many old elements
-     * the last plugin change broke that the bot still uses.
+     * the last plugin change broke that the bot still uses, or the deprecated ones a plugin ships a rule for.
      */
     private record Migrations(List<MigrationSteps.Pending> pending, List<ManagedMigrations.Method> unneeded,
-                              int broken) {
+                              MigrateWindow.Pending broken) {
 
-        static final Migrations NONE = new Migrations(List.of(), List.of(), 0);
+        static final Migrations NONE = new Migrations(List.of(), List.of(), MigrateWindow.Pending.NONE);
 
         boolean isEmpty() {
-            return pending.isEmpty() && unneeded.isEmpty() && broken == 0;
+            return pending.isEmpty() && unneeded.isEmpty() && broken.count() == 0;
         }
     }
 
@@ -195,7 +199,7 @@ final class ReviewPanel {
     private void shown(Migrations found, List<ReviewService.Item> items) {
         shown = found;
         List<Node> rows = new ArrayList<>();
-        if (found.broken() > 0) rows.add(brokenRow(found.broken()));
+        if (found.broken().count() > 0) rows.add(brokenRow(found.broken()));
         rows.addAll(found.pending().stream().map(this::migrationRow).toList());
         if (!found.unneeded().isEmpty()) rows.add(unneededRow(found.unneeded()));
         migrations.getChildren().setAll(rows);
@@ -211,15 +215,16 @@ final class ReviewPanel {
         String retired = pending == 0 ? "" : pending + (pending == 1 ? " retired type" : " retired types")
                 + " to migrate.";
         String done = found.unneeded().isEmpty() ? "" : "Migration methods to remove.";
-        String broken = found.broken() == 0 ? "" : found.broken()
-                + (found.broken() == 1 ? " old element to migrate." : " old elements to migrate.");
+        int count = found.broken().count();
+        String kind = found.broken().deprecated() ? " deprecated" : " old";
+        String broken = count == 0 ? "" : count + kind + (count == 1 ? " element to migrate." : " elements to migrate.");
         summary.setText(items.isEmpty() && found.isEmpty() ? "Nothing to review."
                 : String.join(" ", List.of(broken, retired, done, marks)).strip().replaceAll(" +", " "));
     }
 
     /** {@code 3 old elements the bot uses were broken by the last plugin change…}, and Migrate…. */
-    private HBox brokenRow(int count) {
-        Label label = new Label(MigrateWindow.brokenText(count));
+    private HBox brokenRow(MigrateWindow.Pending pending) {
+        Label label = new Label(pending.text());
         label.getStyleClass().add("review-cell-where");
         label.setWrapText(true);
         Button migrate = new Button("Migrate…");

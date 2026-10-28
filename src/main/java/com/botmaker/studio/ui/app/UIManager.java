@@ -7,6 +7,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
+import com.botmaker.studio.migrate.PluginRules;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.PluginOwners;
@@ -757,25 +758,27 @@ public class UIManager implements ProjectWindow {
 
     /**
      * Puts up or takes down the canvas's migrate banner: how many old elements the bot uses that the last plugin
-     * change broke. Nothing is parsed when nothing changed; otherwise the bot is compiled twice, on a worker.
+     * change broke, or the deprecated ones a plugin ships a rule for. Nothing is parsed when nothing changed and no
+     * plugin ships a rule; otherwise the bot is compiled twice, on a worker.
      */
     private void checkBroken() {
         if (editorCanvas == null || state.isReaderMode()) return;
         long asked = ++brokenAsked;
         List<String> classpath = state.getResolvedClasspath();
-        if (ApiCache.shared().previous(config.projectPath(), classpath).equals(classpath)) {
-            editorCanvas.showBroken(0, this::openMigrate);
+        if (ApiCache.shared().previous(config.projectPath(), classpath).equals(classpath)
+                && !PluginRules.shared().mayShip(classpath)) {
+            editorCanvas.showBroken(MigrateWindow.Pending.NONE, this::openMigrate);
             return;
         }
         java.util.function.Supplier<BotIndex> index = BotIndex.prepare(config, state);
         Thread worker = new Thread(() -> {
-            int count;
+            MigrateWindow.Pending count;
             try {
-                count = MigrateWindow.brokenSince(index.get(), config.projectPath());
+                count = MigrateWindow.pendingSince(index.get(), config.projectPath());
             } catch (RuntimeException | LinkageError e) {
-                count = 0;
+                count = MigrateWindow.Pending.NONE;
             }
-            int found = count;
+            MigrateWindow.Pending found = count;
             Platform.runLater(() -> {
                 if (asked == brokenAsked && editorCanvas != null) editorCanvas.showBroken(found, this::openMigrate);
             });

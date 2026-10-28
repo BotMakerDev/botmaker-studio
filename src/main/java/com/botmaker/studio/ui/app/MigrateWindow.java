@@ -7,6 +7,7 @@ import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.migrate.Migration;
 import com.botmaker.studio.migrate.OldElement;
+import com.botmaker.studio.migrate.PluginRules;
 import com.botmaker.studio.migrate.Rewrite;
 import com.botmaker.studio.migrate.Rule;
 import com.botmaker.studio.migrate.Sites;
@@ -237,13 +238,39 @@ final class MigrateWindow {
     }
 
     /**
-     * How many old elements {@code bot} still uses that the last plugin change broke or a rule names: what the
-     * canvas's banner and the Review row say. {@code 0}, with nothing parsed, when nothing changed. Off the FX thread.
+     * What the canvas's banner and the Review row say: how many old elements the bot still uses, and whether they
+     * are deprecated ones a plugin ships a rule for rather than what the last plugin change broke (2026-10-28).
      */
-    static int brokenSince(BotIndex bot, Path project) {
+    record Pending(int count, boolean deprecated) {
+
+        static final Pending NONE = new Pending(0, false);
+
+        /** {@code 3 old elements the bot uses were broken by the last plugin change…}, or their plugins' rules. */
+        String text() {
+            if (deprecated) {
+                return count + (count == 1 ? " deprecated element the bot uses" : " deprecated elements the bot uses")
+                        + " can be migrated by its plugin's own rule. Migrate rewrites each use.";
+            }
+            return count + (count == 1 ? " old element the bot uses was" : " old elements the bot uses were")
+                    + " broken by the last plugin change. Migrate carries the bot over by your @Migrate rules.";
+        }
+    }
+
+    /**
+     * How many old elements {@code bot} still uses that the last plugin change broke or a rule names. With nothing
+     * changed, the deprecated elements a plugin's own rule covers; {@link Pending#NONE}, with nothing parsed, when
+     * no plugin on the classpath ships a rule. Off the FX thread: it may download a plugin's sources jar.
+     */
+    static Pending pendingSince(BotIndex bot, Path project) {
         List<String> before = ApiCache.shared().previous(project, bot.classpath());
-        if (before.equals(bot.classpath())) return 0;
-        return Migration.of(bot, before).broken().size();
+        boolean unchanged = before.equals(bot.classpath());
+        if (unchanged && !PluginRules.shared().ships(before)) return Pending.NONE;
+        List<Broken> broken = Migration.of(bot, before).broken();
+        // With nothing changed, only what a plugin's own rule covers: the bot's own live rules are no news.
+        int count = unchanged
+                ? (int) broken.stream().filter(b -> b.rule() != null && b.rule().shipped()).count()
+                : broken.size();
+        return count == 0 ? Pending.NONE : new Pending(count, unchanged);
     }
 
     /** The most uses, changes or rows the assistant's answers list one by one. */
@@ -319,12 +346,6 @@ final class MigrateWindow {
                 + (change.after().isEmpty() ? "(deleted)" : change.after())));
         if (changes.size() > LISTED) lines.add("… and " + (changes.size() - LISTED) + " more.");
         return String.join("\n", lines);
-    }
-
-    /** The canvas's banner and the Review row: {@code 3 old elements … Migrate…}. */
-    static String brokenText(int count) {
-        return count + (count == 1 ? " old element the bot uses was" : " old elements the bot uses were")
-                + " broken by the last plugin change. Migrate carries the bot over by your @Migrate rules.";
     }
 
     // --- reading ----------------------------------------------------------------------------------------------
@@ -424,9 +445,10 @@ final class MigrateWindow {
 
     /** Where a new rule goes: beside the bot's first rule, or {@value Migration#CLASS} in the main package. */
     static Path rulesFile(ProjectConfig config, Migration migration) {
-        return migration.rules().isEmpty()
-                ? config.mainPackageDir().resolve(Migration.CLASS + ".java").toAbsolutePath().normalize()
-                : migration.rules().getFirst().file();
+        // A plugin's rule is in its sources jar: the bot's own rules are what a seed goes beside.
+        return migration.rules().stream().filter(rule -> !rule.shipped()).findFirst().map(Rule::file)
+                .orElseGet(() -> config.mainPackageDir().resolve(Migration.CLASS + ".java").toAbsolutePath()
+                        .normalize());
     }
 
     /** Preview, or with {@code write} Apply: every use a written rule covers, rewritten. */
@@ -513,6 +535,8 @@ final class MigrateWindow {
 
     /** Opens {@code rule} in the editor, the window staying open over it. */
     private void reveal(Rule rule) {
+        // A plugin's rule is in its sources jar, which the editor does not open.
+        if (rule.shipped()) return;
         goTo(rule.file(), rule.start());
     }
 

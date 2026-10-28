@@ -33,15 +33,22 @@ class MigrateWindowTest {
     private static Rule rule(boolean seeded, String problem) {
         return new Rule(Path.of("Migrations.java"), "Migrations", "marker", 0, Migrate.Kind.METHOD,
                 "com.bot.api.GameScreen", List.of(), List.of(), true, "self", false, "GameScreen", Set.of(),
-                Set.of(), seeded, MARKER, problem);
+                Set.of(), seeded, MARKER, problem, null);
     }
 
     @Test
     void theBannerCountsWhatTheLastChangeBroke() {
-        assertTrue(MigrateWindow.brokenText(1).startsWith("1 old element the bot uses was broken"),
-                MigrateWindow.brokenText(1));
-        assertTrue(MigrateWindow.brokenText(3).startsWith("3 old elements the bot uses were broken"),
-                MigrateWindow.brokenText(3));
+        String one = new MigrateWindow.Pending(1, false).text();
+        String three = new MigrateWindow.Pending(3, false).text();
+        assertTrue(one.startsWith("1 old element the bot uses was broken"), one);
+        assertTrue(three.startsWith("3 old elements the bot uses were broken"), three);
+    }
+
+    @Test
+    void theBannerSaysADeprecatedUseHasItsPluginsRuleNotThatItBroke() {
+        String two = new MigrateWindow.Pending(2, true).text();
+        assertTrue(two.startsWith("2 deprecated elements the bot uses can be migrated"), two);
+        assertTrue(!two.contains("broken"), two);
     }
 
     @Test

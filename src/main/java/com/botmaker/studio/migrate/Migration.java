@@ -26,7 +26,8 @@ import java.util.Set;
  * The bot between two APIs: as it compiles now, and as it compiled with the jars it used to have — what every
  * question of the author's migration is asked of (2026-10-16, {@code docs/refactor/25-compatibility.md} §12).
  *
- * <p><b>One engine.</b> The bot's {@code @Migrate} rules ({@link Rules}) name an old method, constructor, field or
+ * <p><b>One engine.</b> The bot's {@code @Migrate} rules ({@link Rules}), and those a plugin ships beside a
+ * deprecated element ({@link PluginRules}, 2026-10-28; the bot's win), name an old method, constructor, field or
  * type by their own signature; {@link #broken()} lists what the new jars break and what each rule covers;
  * {@link #plan} rewrites every use a ready rule names. The author decides what replaces what: with no rule,
  * nothing is rewritten. {@link #finished} is the last resort, an upgrade or a removal the author finishes anyway:
@@ -45,22 +46,42 @@ public final class Migration {
     private final List<String> oldClasspath;
     private final Path probe;
     private final List<Rule> rules;
+    private final PluginRules shipping;
 
-    private Migration(BotIndex now, BotIndex old, List<String> oldClasspath, Path probe, List<Rule> rules) {
+    private Migration(BotIndex now, BotIndex old, List<String> oldClasspath, Path probe, List<Rule> rules,
+                      PluginRules shipping) {
         this.now = now;
         this.old = old;
         this.oldClasspath = oldClasspath;
         this.probe = probe;
         this.rules = rules;
+        this.shipping = shipping;
     }
 
-    /** {@code now}, and its sources parsed against {@code oldClasspath}, with the bot's rules resolved. */
+    /**
+     * {@code now}, and its sources parsed against {@code oldClasspath}, with the bot's rules and those the plugins
+     * on {@code oldClasspath} ship resolved. May download a plugin's sources jar: off the FX thread.
+     */
     public static Migration of(BotIndex now, List<String> oldClasspath) {
+        return of(now, oldClasspath, PluginRules.shared());
+    }
+
+    /**
+     * The same, the plugins' rules read by {@code shipping}. A plugin's rule is read from the jars the bot moves
+     * from, where it still compiles against its element (2026-10-28): on a classpath nothing changed on, that is
+     * the jar that marks the element deprecated.
+     */
+    static Migration of(BotIndex now, List<String> oldClasspath, PluginRules shipping) {
         List<Rule> declared = Rules.declared(now);
         Path root = now.parser().sourceRoot() == null ? null : now.parser().sourceRoot().toAbsolutePath().normalize();
         Path probe = Rules.probePath(root);
-        BotIndex old = now.against(oldClasspath, Rules.probe(declared, root));
-        return new Migration(now, old, List.copyOf(oldClasspath), probe, Rules.resolved(declared, old, probe));
+        PluginRules.Shipped shipped = shipping.of(oldClasspath, probe);
+        Map<Path, String> added = new LinkedHashMap<>(Rules.probe(declared, root));
+        added.putAll(shipped.sources());
+        BotIndex old = now.against(oldClasspath, added);
+        List<Rule> all = new ArrayList<>(declared);
+        all.addAll(Rules.shipped(old, shipped.plugins()));
+        return new Migration(now, old, List.copyOf(oldClasspath), probe, Rules.resolved(all, old, probe), shipping);
     }
 
     /**
@@ -76,7 +97,7 @@ public final class Migration {
         return oldClasspath.equals(now.classpath());
     }
 
-    /** Every {@code @Migrate} rule in the bot, each resolved or saying why not. */
+    /** Every {@code @Migrate} rule in the bot and in its plugins' sources jars, each resolved or saying why not. */
     public List<Rule> rules() {
         return rules;
     }
@@ -130,7 +151,7 @@ public final class Migration {
         if (seeds.source() != null) {
             Map<Path, String> sources = new LinkedHashMap<>(now.sources());
             sources.put(file, seeds.source());
-            over = of(now.replacing(sources), oldClasspath);
+            over = of(now.replacing(sources), oldClasspath, shipping);
         }
         // What no rule stands for is left, listed and marked: the elements none could be seeded for, and those
         // whose rule cannot be applied.
@@ -162,12 +183,14 @@ public final class Migration {
 
     /**
      * Every rule whose old element the bot no longer uses, by {@code broken} — {@link #broken()}, which lists each
-     * element still used: what Migrate's <i>Remove finished rules</i> removes.
+     * element still used: what Migrate's <i>Remove finished rules</i> removes. A plugin's rule is never one: the bot
+     * does not hold it.
      */
     public List<Rule> done(List<Broken> broken) {
         Set<String> used = new HashSet<>();
         for (Broken each : broken) used.add(each.element().key());
-        return rules.stream().filter(rule -> rule.element() != null && !used.contains(rule.element().key())).toList();
+        return rules.stream().filter(rule -> !rule.shipped() && rule.element() != null
+                && !used.contains(rule.element().key())).toList();
     }
 
     /** What removing rules does: the files rewritten, or why nothing is, and the files it leaves empty. */
@@ -256,6 +279,10 @@ public final class Migration {
     public Refactor.Outcome write(Rule rule, String body, List<String> imports) {
         String text = body == null ? "" : body.strip();
         while (text.endsWith(";")) text = text.substring(0, text.length() - 1).strip();
+        if (rule.shipped()) {
+            return new Refactor.Refused(rule.qualified() + " is " + rule.plugin().name() + "'s, in its sources jar:"
+                    + " write a rule of your own for the same element, and it wins.");
+        }
         if (text.isEmpty()) return new Refactor.Refused("Give the rule's body: what each use becomes.");
         String source = now.sources().get(rule.file());
         if (source == null) return new Refactor.Refused(rule.qualified() + " is in no file of the bot.");

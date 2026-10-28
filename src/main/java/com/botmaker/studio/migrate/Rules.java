@@ -69,16 +69,31 @@ final class Rules {
 
     /** Every {@code @Migrate} method in {@code now}, in file order, its {@link Rule#element()} not yet known. */
     static List<Rule> declared(BotIndex now) {
-        return now.read(units -> {
+        return declared(now, null);
+    }
+
+    /**
+     * The same in {@code old}'s files that {@code shipped} names, each rule carrying its plugin (2026-10-28):
+     * a plugin's rules, read in the parse against the jars they were written for.
+     */
+    static List<Rule> shipped(BotIndex old, Map<Path, PluginRules.Plugin> shipped) {
+        return shipped.isEmpty() ? List.of() : declared(old, shipped);
+    }
+
+    /** @param shipped the plugin files to read, by path, or {@code null} for every file but those */
+    private static List<Rule> declared(BotIndex index, Map<Path, PluginRules.Plugin> shipped) {
+        return index.read(units -> {
             List<Rule> out = new ArrayList<>();
             units.forEach((file, unit) -> {
-                String source = now.sources().get(file);
+                PluginRules.Plugin plugin = shipped == null ? null : shipped.get(file);
+                if (shipped != null && plugin == null) return;
+                String source = index.sources().get(file);
                 if (source == null || !source.contains(Migrate.class.getSimpleName())) return;
                 unit.accept(new ASTVisitor() {
                     @Override
                     public boolean visit(MethodDeclaration method) {
                         Annotation mark = BotAnnotation.MIGRATE.on(method);
-                        if (mark != null) out.add(read(file, source, method, mark));
+                        if (mark != null) out.add(read(file, source, method, mark, plugin));
                         return false;
                     }
                 });
@@ -87,7 +102,8 @@ final class Rules {
         });
     }
 
-    private static Rule read(Path file, String source, MethodDeclaration method, Annotation mark) {
+    private static Rule read(Path file, String source, MethodDeclaration method, Annotation mark,
+                             PluginRules.Plugin plugin) {
         Map<String, Expression> members = members(mark);
         Expression value = members.get("value");
         Expression named = members.get("name");
@@ -147,7 +163,7 @@ final class Rules {
         String returns = statement ? "void" : typeOf(method.getReturnType2(), method.getExtraDimensions());
         return new Rule(file, className, method.getName().getIdentifier(), method.getStartPosition(), kind, owner,
                 params, types, self, body == null || body instanceof Block ? "" : JavaParameterSource.text(source, body),
-                statement, returns, imports, staticImports, review != null && !review.done(), null, problem);
+                statement, returns, imports, staticImports, review != null && !review.done(), null, problem, plugin);
     }
 
     /** The annotation's members, by name; a single member is {@code value}. */
@@ -272,13 +288,31 @@ final class Rules {
         return base.resolve(PROBE_PACKAGE).resolve("Probe.java").toAbsolutePath().normalize();
     }
 
+    /**
+     * Whether {@code file} is one the old parse adds and the bot does not hold — the probe, or a plugin's rule
+     * file ({@link PluginRules}): never searched for uses, never rewritten.
+     */
+    static boolean added(Path file, Path probe) {
+        return file.startsWith(probe.getParent());
+    }
+
     // --- resolving, against the old API ------------------------------------------------------------------------
 
     /**
-     * {@code rules}, each resolved to the element of {@code old} its signature names, or refused. Two that name
-     * the same element are both refused.
+     * {@code rules}, each resolved to the element of {@code old} its signature names, or refused. A plugin's rule
+     * for an element a rule of the bot names is dropped: the author's wins (2026-10-28). Two others that name the
+     * same element are both refused.
      */
     static List<Rule> resolved(List<Rule> rules, BotIndex old, Path probe) {
+        List<Rule> each = resolvedEach(rules, old, probe);
+        Set<String> authored = new LinkedHashSet<>();
+        for (Rule rule : each) if (!rule.shipped() && rule.element() != null) authored.add(rule.element().key());
+        return twinsRefused(each.stream()
+                .filter(rule -> !rule.shipped() || rule.element() == null || !authored.contains(rule.element().key()))
+                .toList());
+    }
+
+    private static List<Rule> resolvedEach(List<Rule> rules, BotIndex old, Path probe) {
         Map<String, ITypeBinding> owners = old.read(units -> owners(units.get(probe)));
         Map<String, String> oldTypes = new LinkedHashMap<>();
         for (Rule rule : rules) {
@@ -301,7 +335,7 @@ final class Rules {
             }
             return each;
         });
-        return twinsRefused(out);
+        return out;
     }
 
     /** Each probe field's type, by the qualified name the probe wrote. */

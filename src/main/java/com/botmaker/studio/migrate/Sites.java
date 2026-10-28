@@ -40,13 +40,16 @@ public final class Sites {
         }
     }
 
-    /** Every use in {@code old} of each element of {@code elements}, by key; the probe source is not searched. */
+    /**
+     * Every use in {@code old} of each element of {@code elements}, by key; the probe and a plugin's rule files are
+     * not searched.
+     */
     static List<Site> in(BotIndex old, Map<String, OldElement> elements, Path probe) {
         if (elements.isEmpty()) return List.of();
         return old.read(units -> {
             List<Site> out = new ArrayList<>();
             units.forEach((file, unit) -> {
-                if (file.equals(probe)) return;
+                if (Rules.added(file, probe)) return;
                 for (Uses.Found found : Uses.in(unit, elements.keySet(), true)) {
                     out.add(Site.of(file, unit, elements.get(found.key()), found));
                 }

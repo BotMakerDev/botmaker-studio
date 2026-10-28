@@ -142,7 +142,7 @@ public final class Rewrite {
         List<FilePlan> files = old.read(units -> {
             List<FilePlan> out = new ArrayList<>();
             units.forEach((file, unit) -> {
-                if (file.equals(probe)) return;
+                if (Rules.added(file, probe)) return;
                 List<Uses.Found> found = Uses.in(unit, elements.keySet(), true);
                 if (!found.isEmpty()) {
                     out.add(planned(file, old.sources().get(file), unit, found, byKey, why, elements,

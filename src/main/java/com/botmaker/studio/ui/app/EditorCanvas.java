@@ -346,15 +346,16 @@ final class EditorCanvas {
 
     /**
      * The migrate banner (2026-10-16): an upgrade, a removal or a dev build rebuilt under the same version broke
-     * {@code count} old elements the bot still uses, and Migrate is one button away. {@code 0} takes it down.
+     * {@code count} old elements the bot still uses, and Migrate is one button away. {@code 0} takes it down. Since
+     * 2026-10-28 also the deprecated elements a plugin ships a rule for, with nothing changed.
      */
-    void showBroken(int count, Runnable onMigrate) {
+    void showBroken(MigrateWindow.Pending pending, Runnable onMigrate) {
         if (brokenBanner != null) {
             column.getChildren().remove(brokenBanner);
             brokenBanner = null;
         }
-        if (count <= 0) return;
-        Label msg = new Label(MigrateWindow.brokenText(count));
+        if (pending.count() <= 0) return;
+        Label msg = new Label(pending.text());
         msg.setWrapText(true);
         msg.setMinWidth(0);
         HBox.setHgrow(msg, Priority.ALWAYS);

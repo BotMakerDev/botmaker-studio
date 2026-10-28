@@ -28,11 +28,13 @@ import java.util.Set;
  *                      is listed and never applied
  * @param element       the old element it resolves to, or {@code null} with a {@code problem}
  * @param problem       why it cannot be applied, or {@code null}
+ * @param plugin        the plugin that ships it in its sources jar (2026-10-28), {@code file} then its entry's place
+ *                      in the old parse; {@code null} for a rule in the bot
  */
 public record Rule(Path file, String className, String method, int start, Migrate.Kind kind, String owner,
                    List<String> params, List<String> types, boolean self, String body, boolean statement,
                    String returns, Set<String> imports, Set<String> staticImports, boolean seeded,
-                   OldElement element, String problem) {
+                   OldElement element, String problem, PluginRules.Plugin plugin) {
 
     public Rule {
         params = List.copyOf(params);
@@ -44,6 +46,11 @@ public record Rule(Path file, String className, String method, int start, Migrat
     /** What a person reads it as: {@code Migrations.marker}. */
     public String qualified() {
         return className + "." + method;
+    }
+
+    /** Whether a plugin ships it, so the bot holds nothing to edit or remove. */
+    public boolean shipped() {
+        return plugin != null;
     }
 
     /** Whether it is applied: resolved, without a problem, and written rather than seeded. */
@@ -62,13 +69,13 @@ public record Rule(Path file, String className, String method, int start, Migrat
     /** The same rule, refused for {@code why}. */
     Rule refused(String why) {
         return problem != null ? this : new Rule(file, className, method, start, kind, owner, params, types, self,
-                body, statement, returns, imports, staticImports, seeded, element, why);
+                body, statement, returns, imports, staticImports, seeded, element, why, plugin);
     }
 
     /** The same rule, resolved to {@code to}. */
     Rule resolved(OldElement to) {
         return new Rule(file, className, method, start, kind, owner, params, types, self, body, statement, returns,
-                imports, staticImports, seeded, to, problem);
+                imports, staticImports, seeded, to, problem, plugin);
     }
 
     /** The parameters a site's own parts stand for: every one but the receiver. */
