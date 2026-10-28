@@ -5,9 +5,6 @@ import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.Describe;
 import com.botmaker.shared.config.CacheDirs;
 import javafx.application.Platform;
-import javafx.event.Event;
-import javafx.geometry.Bounds;
-import javafx.geometry.Point2D;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -35,7 +32,6 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseButton;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.text.Text;
 import javafx.scene.transform.Transform;
 import javafx.stage.Modality;
@@ -74,7 +70,8 @@ import java.util.stream.Collectors;
  *
  * <p>{@code read} numbers what a window shows; a ref holds until the next {@code read}. Every scene access runs on the
  * FX thread; a press is fired there without waiting for it, since a press may open a dialog that waits for its own
- * answer.
+ * answer. Keys, right and double clicks, scrolls and drags are events {@link UiInput} fires as a user's would arrive
+ * (2026-10-28).
  *
  * <p>Built to find bugs as well as to drive (2026-10-28): a press or a type waits until what the windows show holds
  * still, then answers with what changed (a window opened is read whole), and every answer ends with the errors
@@ -119,11 +116,26 @@ final class UiTools {
         }
 
         @Describe("press a button, link, menu item, tab, check box, list item or clickable area")
-        record Press(@Describe("a ref from read") int ref) implements Ui {
+        record Press(@Describe("a ref from read") int ref,
+                     @Describe(value = "right opens its menu", optional = true) Mouse button,
+                     @Describe(value = "2: a double click", optional = true) Integer count) implements Ui {
         }
 
         @Describe("put text in a field, or pick a choice box's item by its text")
         record Type(int ref, @Describe("the text") String text) implements Ui {
+        }
+
+        @Describe("keys, as Ctrl+Shift+A or Escape")
+        record Key(String keys, @Describe(value = "the focused control when left out", optional = true) Integer ref)
+                implements Ui {
+        }
+
+        @Describe("scroll a ref into view, or its list or pane by pages")
+        record Scroll(int ref, @Describe(value = "down, negative up", optional = true) Double pages) implements Ui {
+        }
+
+        @Describe("drag one ref onto another")
+        record Drag(int from, int to) implements Ui {
         }
 
         @Describe("a picture of a window")
@@ -153,6 +165,15 @@ final class UiTools {
     /** A {@link Ui.Profile}'s step. */
     enum Step {
         START, STOP
+    }
+
+    /** A {@link Ui.Press}'s mouse button. */
+    enum Mouse {
+        LEFT, RIGHT
+    }
+
+    /** What an input does, built on the FX thread: its step for {@code perf}, its answer's start, and the events. */
+    private record Act(String step, String said, Runnable events) {
     }
 
     /** A press or type and its time to idle, -1 when Studio never held still. */
@@ -190,8 +211,8 @@ final class UiTools {
 
     AssistantTool<AssistantTool.OneOf<Ui>> tool() {
         return AssistantTool.named("ui")
-                .describedAs("Studio's own windows: list, read, press, type, look, wait; answers say what changed, "
-                        + "new errors and stalls. Dev Studio only.")
+                .describedAs("Studio's own windows: list, read, press, type, key, scroll, drag, look, wait; answers "
+                        + "say what changed, new errors and stalls. Dev Studio only.")
                 .takesOneOf(Ui.class)
                 .handledBy((action, context) -> reported(handle(action)));
     }
@@ -201,8 +222,13 @@ final class UiTools {
             return switch (action) {
                 case Ui.Windows ignored -> AgentReply.text(onFx(UiTools::windows));
                 case Ui.Read read -> AgentReply.text(onFx(() -> read(read.window(), Boolean.TRUE.equals(read.menus()))));
-                case Ui.Press press -> AgentReply.text(press(press.ref()));
+                case Ui.Press press -> AgentReply.text(press(press.ref(),
+                        press.button() == Mouse.RIGHT ? MouseButton.SECONDARY : MouseButton.PRIMARY,
+                        press.count() == null ? 1 : press.count()));
                 case Ui.Type type -> AgentReply.text(typed(type.ref(), type.text()));
+                case Ui.Key key -> AgentReply.text(key(key.ref(), key.keys()));
+                case Ui.Scroll scroll -> AgentReply.text(scroll(scroll.ref(), scroll.pages()));
+                case Ui.Drag drag -> AgentReply.text(drag(drag.from(), drag.to()));
                 case Ui.Look look -> look(look.window(), look.scale());
                 case Ui.Wait wait -> AgentReply.text(waitFor(wait.text(), wait.seconds(), Boolean.TRUE.equals(wait.gone())));
                 case Ui.Log log -> AgentReply.text(log(log.lines()));
@@ -456,33 +482,107 @@ final class UiTools {
     }
 
     String press(int ref) {
+        return press(ref, MouseButton.PRIMARY, 1);
+    }
+
+    /** A press of {@code button}, {@code count} times; a plain press fires a control as its own action does. */
+    String press(int ref, MouseButton button, int count) {
+        if (count < 1 || count > 2) throw new IllegalArgumentException("Say a count of 1 or 2.");
+        boolean plain = button == MouseButton.PRIMARY && count == 1;
+        String how = button == MouseButton.SECONDARY ? "right-click" : count == 2 ? "double-click" : "press";
+        String said = button == MouseButton.SECONDARY ? "Right-clicked" : count == 2 ? "Double-clicked" : "Pressed";
+        return drive(() -> {
+            String what = named(target(ref));
+            Runnable run = plain ? action(ref) : clicks(ref, button, count);
+            return new Act(how + " " + what, said + " r" + ref + " " + what, run);
+        });
+    }
+
+    /** {@code keys} at {@code ref}, focused first, or at the focused control of the window {@code read} names. */
+    String key(Integer ref, String keys) {
+        UiInput.Keys parsed = UiInput.Keys.of(keys);
+        return drive(() -> {
+            Node node = ref == null ? focusOwner() : node(ref, "takes no keys");
+            String what = ref == null ? named(node) : "r" + ref + " " + named(node);
+            return new Act("key " + parsed + " at " + named(node), "Sent " + parsed + " to " + what, () -> {
+                if (ref != null) node.requestFocus();
+                UiInput.key(node, parsed);
+            });
+        });
+    }
+
+    /** {@code ref} brought into view in its scroll panes, or the wheel turned {@code pages} at it. */
+    String scroll(int ref, Double pages) {
+        return drive(() -> {
+            Node node = node(ref, "cannot scroll");
+            String what = "r" + ref + " " + named(node);
+            if (pages != null) {
+                if (!UiInput.wheels(node)) {
+                    throw new IllegalArgumentException("r" + ref + " is in no scroll pane, list, tree or table.");
+                }
+                return new Act("scroll " + pages + " at " + named(node), "Scrolled " + pages + " pages at " + what,
+                        () -> UiInput.scroll(node, pages));
+            }
+            if (!UiInput.scrolled(node)) throw new IllegalArgumentException("r" + ref + " is in no scroll pane.");
+            return new Act("scroll to " + named(node), "Brought " + what + " into view", () -> UiInput.reveal(node));
+        });
+    }
+
+    /** {@code from} dragged onto {@code to} with the primary button. */
+    String drag(int from, int to) {
+        return drive(() -> {
+            Node start = node(from, "cannot be dragged");
+            Node end = node(to, "cannot take a drop");
+            return new Act("drag " + named(start) + " to " + named(end),
+                    "Dragged r" + from + " " + named(start) + " onto r" + to + " " + named(end),
+                    () -> UiInput.drag(start, end));
+        });
+    }
+
+    /**
+     * {@code prepare}d on the FX thread and its events fired there, then what they changed once Studio is idle.
+     * Not waited for: a press that opens a dialog runs until the dialog is answered.
+     */
+    private String drive(Callable<Act> prepare) {
         PRESSING.incrementAndGet();
         try {
-            String[] what = new String[1];
             Shown[] before = new Shown[1];
-            Runnable act = onFx(() -> {
-                what[0] = named(target(ref));
+            Act act = onFx(() -> {
+                Act made = prepare.call();
                 before[0] = shown();
-                return action(ref);
+                return made;
             });
             AtomicReference<RuntimeException> failed = new AtomicReference<>();
-            // Not waited for: a press that opens a dialog runs until the dialog is answered.
             Platform.runLater(() -> {
                 try {
-                    act.run();
+                    act.events().run();
                 } catch (RuntimeException e) {
                     failed.set(e);
                 }
             });
             double took = awaitIdle();
-            timed("press " + what[0], took);
+            timed(act.step(), took);
+            if (failed.get() instanceof UiInput.Undrivable refused) throw refused;
             if (failed.get() != null) {
-                throw new IllegalStateException("pressing r" + ref + " failed: " + UiEvents.summary(failed.get()));
+                throw new IllegalStateException(act.step() + " failed: " + UiEvents.summary(failed.get()));
             }
-            return "Pressed r" + ref + " " + what[0] + "; " + idle(took) + ".\n" + onFx(() -> changes(before[0]));
+            return act.said() + "; " + idle(took) + ".\n" + onFx(() -> changes(before[0]));
         } finally {
             PRESSING.decrementAndGet();
         }
+    }
+
+    /** The node {@code ref} names; {@code otherwise} says why a menu item or tab cannot. FX thread. */
+    private Node node(int ref, String otherwise) {
+        if (target(ref) instanceof Node node) return node;
+        throw new IllegalArgumentException("r" + ref + " " + named(target(ref)) + " " + otherwise + ".");
+    }
+
+    /** What has the keys in the window {@code read} picks when none is named: its focus owner, else its root. */
+    private static Node focusOwner() {
+        Scene scene = window(null).getScene();
+        if (scene == null || scene.getRoot() == null) throw new IllegalArgumentException("That window shows nothing.");
+        return scene.getFocusOwner() != null ? scene.getFocusOwner() : scene.getRoot();
     }
 
     /** {@link #type} on the FX thread, then what it changed once Studio is idle. */
@@ -732,28 +832,21 @@ final class UiTools {
                 case TitledPane pane -> () -> pane.setExpanded(!pane.isExpanded());
                 case MenuButton button -> button::show;
                 case ButtonBase button -> button::fire;
-                case ListCell<?> cell -> () -> {
-                    if (cell.getListView() != null) cell.getListView().getSelectionModel().select(cell.getIndex());
-                    click((Node) cell);
-                };
-                case Node node -> () -> click(node);
+                case ListCell<?> cell -> clicks(ref, MouseButton.PRIMARY, 1);
+                case Node node -> () -> UiInput.click(node, MouseButton.PRIMARY, 1);
                 default -> throw new IllegalArgumentException("r" + ref + " cannot be pressed.");
         };
     }
 
-    /** A primary click at {@code node}'s centre: pressed, released, clicked. */
-    private static void click(Node node) {
-        Bounds bounds = node.getLayoutBounds();
-        double x = bounds.getCenterX();
-        double y = bounds.getCenterY();
-        Point2D scene = node.localToScene(x, y);
-        Point2D screen = node.localToScreen(x, y);
-        double sx = screen == null ? scene.getX() : screen.getX();
-        double sy = screen == null ? scene.getY() : screen.getY();
-        for (var type : List.of(MouseEvent.MOUSE_PRESSED, MouseEvent.MOUSE_RELEASED, MouseEvent.MOUSE_CLICKED)) {
-            Event.fireEvent(node, new MouseEvent(type, scene.getX(), scene.getY(), sx, sy, MouseButton.PRIMARY, 1,
-                    false, false, false, false, type == MouseEvent.MOUSE_PRESSED, false, false, true, false, true, null));
-        }
+    /** {@code count} clicks of {@code button} at {@code ref}, a list item selected first. FX thread. */
+    private Runnable clicks(int ref, MouseButton button, int count) {
+        Node node = node(ref, "takes only a plain press");
+        return () -> {
+            if (node instanceof ListCell<?> cell && cell.getListView() != null) {
+                cell.getListView().getSelectionModel().select(cell.getIndex());
+            }
+            UiInput.click(node, button, count);
+        };
     }
 
     String type(int ref, String text) {

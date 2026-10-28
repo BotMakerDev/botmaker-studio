@@ -22,6 +22,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   samples where its code was; every `ui` answer lists those stalls and the heap. `perf` lists the stalls, the
   slowest steps and each window's node count; `profile start`/`stop` records a JFR profile and names the busiest
   methods. Errors, stalls over 500 ms and each step's time are kept in `ui-findings.tsv` in Studio's cache.
+- `ui` sends keys (`Ctrl+Shift+A`, `Escape`; menu accelerators hear them), right-clicks a control to open its
+  menu, double-clicks, scrolls a control into view or by pages, and drags one control onto another. A drag that
+  needs the system's drag and drop (blocks, keyboard chips, parameter grips) is refused, naming what to use.
 
 ## [1.10.1] — 2026-10-28
 

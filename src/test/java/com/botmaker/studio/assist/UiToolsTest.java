@@ -1,6 +1,7 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;
@@ -8,7 +9,13 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCombination;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.TransferMode;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
@@ -32,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class UiToolsTest extends FxHeadlessTest {
 
     private final AtomicInteger archived = new AtomicInteger();
+    private final AtomicInteger renamed = new AtomicInteger();
     private Stage stage;
 
     @Override
@@ -41,6 +49,9 @@ class UiToolsTest extends FxHeadlessTest {
         name.setMaxWidth(80);
         Button archive = new Button("Archive");
         archive.setOnAction(e -> archived.incrementAndGet());
+        MenuItem rename = new MenuItem("Rename");
+        rename.setOnAction(e -> renamed.incrementAndGet());
+        archive.setContextMenu(new ContextMenu(rename));
         TextField field = new TextField();
         field.setPromptText("Name");
         Menu file = new Menu("File", null, new MenuItem("My Bots"));
@@ -238,6 +249,122 @@ class UiToolsTest extends FxHeadlessTest {
         assertThrows(IllegalArgumentException.class, () -> UiProfile.stop(dir.resolve("again.jfr")));
     }
 
+    /** {@code node} added at the bottom of the bot list's window. */
+    private void add(Node node) {
+        UiTools.onFx(() -> ((VBox) stage.getScene().getRoot()).getChildren().add(node));
+        WaitForAsyncUtils.waitForFxEvents();
+    }
+
+    @Test
+    void aRightClickOpensTheMenuWhoseItemsArePressable() {
+        UiTools ui = new UiTools();
+        int archive = refOf(UiTools.onFx(() -> ui.read("my bots")), "button \"Archive\"");
+        String answer = ui.press(archive, MouseButton.SECONDARY, 1);
+        assertTrue(answer.startsWith("Right-clicked r" + archive) && answer.contains("Opened"), answer);
+        String closed = ui.press(refOf(answer, "menu \"Rename\""));
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals(1, renamed.get(), closed);
+        assertEquals(0, archived.get());
+    }
+
+    @Test
+    void aDoubleClickCountsTwo() {
+        AtomicInteger doubled = new AtomicInteger();
+        Region twice = new Region();
+        twice.setMinSize(20, 20);
+        twice.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) doubled.incrementAndGet();
+        });
+        add(twice);
+        UiTools ui = new UiTools();
+        int ref = refOf(UiTools.onFx(() -> ui.read("my bots")), "click");
+        assertTrue(ui.press(ref, MouseButton.PRIMARY, 2).startsWith("Double-clicked r" + ref));
+        assertEquals(1, doubled.get());
+        assertThrows(IllegalArgumentException.class, () -> ui.press(ref, MouseButton.PRIMARY, 3));
+    }
+
+    @Test
+    void keysReachTheSceneAcceleratorsAndTypeIntoTheFocusedField() {
+        AtomicInteger accelerated = new AtomicInteger();
+        UiTools.onFx(() -> stage.getScene().getAccelerators()
+                .put(KeyCombination.valueOf("Shortcut+Shift+A"), accelerated::incrementAndGet));
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read("my bots"));
+        ui.key(null, "Ctrl+Shift+A");
+        assertEquals(1, accelerated.get());
+        String answer = ui.key(refOf(read, "field"), "x");
+        assertTrue(answer.contains(" field \"x\""), answer);
+        assertEquals(KeyCode.PAGE_DOWN, UiInput.Keys.of("PageDown").code());
+        assertEquals("Ctrl+Shift+A", UiInput.Keys.of("ctrl + shift + a").toString());
+        assertThrows(IllegalArgumentException.class, () -> UiInput.Keys.of("Hyper+A"));
+        assertThrows(IllegalArgumentException.class, () -> UiInput.Keys.of("Ctrl+Nowhere"));
+        assertThrows(IllegalArgumentException.class, () -> UiInput.Keys.of("Ctrl++"));
+        assertEquals(".", UiInput.Keys.of("Period").typed());
+        assertEquals("", UiInput.Keys.of("Enter").typed());
+    }
+
+    @Test
+    void aScrollBringsARowIntoViewOrTurnsTheWheel() {
+        VBox rows = new VBox();
+        for (int i = 1; i <= 40; i++) rows.getChildren().add(new Button("Row " + i));
+        ScrollPane pane = new ScrollPane(rows);
+        pane.setPrefHeight(60);
+        add(pane);
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read("my bots"));
+        assertTrue(ui.scroll(refOf(read, "button \"Row 40\""), null).startsWith("Brought"));
+        assertEquals(1.0, UiTools.onFx(pane::getVvalue), 0.01);
+        UiTools.onFx(() -> {
+            pane.setVvalue(0);
+            return null;
+        });
+        ui.scroll(refOf(read, "button \"Row 1\""), 1.0);
+        assertTrue(UiTools.onFx(pane::getVvalue) > 0, "the wheel did not move the pane");
+        assertThrows(IllegalArgumentException.class, () -> ui.scroll(refOf(read, "button \"Archive\""), null));
+        assertThrows(IllegalArgumentException.class, () -> ui.scroll(refOf(read, "button \"Archive\""), 1.0));
+    }
+
+    @Test
+    void aPressDragReleaseGestureDropsOnItsTarget() {
+        AtomicInteger dropped = new AtomicInteger();
+        AtomicInteger entered = new AtomicInteger();
+        AtomicInteger clickedOnRelease = new AtomicInteger();
+        Region knob = new Region();
+        knob.setMinSize(20, 20);
+        knob.setOnMousePressed(e -> {});
+        knob.setOnMouseReleased(e -> {
+            if (e.isStillSincePress()) clickedOnRelease.incrementAndGet();
+        });
+        knob.setOnDragDetected(e -> knob.startFullDrag());
+        Button bin = new Button("Bin");
+        bin.setOnMouseDragEntered(e -> entered.incrementAndGet());
+        bin.setOnMouseDragReleased(e -> {
+            if (e.getGestureSource() == knob) dropped.incrementAndGet();
+        });
+        add(new VBox(knob, bin));
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read("my bots"));
+        String answer = ui.drag(refOf(read, "click"), refOf(read, "button \"Bin\""));
+        assertTrue(answer.startsWith("Dragged"), answer);
+        assertEquals(1, dropped.get());
+        assertEquals(1, entered.get());
+        assertEquals(0, clickedOnRelease.get());
+    }
+
+    @Test
+    void aDragboardDragIsRefusedNamingWhatToUse() {
+        Region card = new Region();
+        card.setMinSize(20, 20);
+        card.setOnMousePressed(e -> {});
+        card.setOnDragDetected(e -> card.startDragAndDrop(TransferMode.MOVE));
+        add(card);
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read("my bots"));
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+                () -> ui.drag(refOf(read, "click"), refOf(read, "button \"Archive\"")));
+        assertTrue(refused.getMessage().contains("edit_code"), refused.getMessage());
+    }
+
     @Test
     void onlyAFlaggedDevStudioServesIt() {
         assertFalse(UiTools.enabled(key -> null, key -> null));
@@ -250,7 +377,7 @@ class UiToolsTest extends FxHeadlessTest {
     void itStaysSmallForTheAssistantToRead() {
         var tool = new UiTools().tool();
         int chars = tool.description().length() + McpTools.schemaOf(tool.schema()).length();
-        // 1,500 until perf and profile came (2026-10-28).
-        assertTrue(chars < 1_800, "ui is " + chars + " characters");
+        // 1,500 until perf and profile came, 1,800 until key, scroll and drag (2026-10-28).
+        assertTrue(chars < 2_400, "ui is " + chars + " characters");
     }
 }
