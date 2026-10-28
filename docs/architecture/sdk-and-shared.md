@@ -57,7 +57,8 @@ point of it.**
   `com.botmaker.sdk.api.` prefix constant. **Deleted 2026-09-02**, with `SDK_API_PREFIX` and
   `SHARED_OCR_PREFIX`, because that guard is one plugin's package name written down in the host: the
   repair could only ever fire for the SDK, and a second plugin re-packaging its own types got nothing.
-  A rename is the bot's author's `@Migrate` rule since 2026-10-16 (`dated-notes.md`); a package move with no rule is a
+  A rename is a `@Migrate` rule since 2026-10-16, the bot author's or, since 2026-10-28, one the plugin ships
+  beside the deprecated element (`dated-notes.md`); a package move with no rule is a
   readable compile error, which is the honest outcome for a host that cannot know what the package was
   called.
 - **Method knowledge does _not_ come from that jar, on purpose.** A generated bot compiles against the SDK
@@ -145,7 +146,7 @@ point of it.**
   call sites: what's new, what the bot calls that is now deprecated, what the bot calls that is **gone**
   (file + line), and where each break went — read from the **one pointer the old jar carries**
   (`@ReplacedBy`, `docs/refactor/21-api-compat.md` §4). **Since 2026-10-16 there are no pointers**: breaks are
-  `migrate/Broken` and repairs the bot's `@Migrate` rules (`dated-notes.md`), so the bullets below about
+  `migrate/Broken` and repairs `@Migrate` rules, the bot's and its plugins' (`dated-notes.md`), so the bullets below about
   pointers, pairing, redirects, candidates, decisions, Modernise and `ApiMigrationRunner` are history; the pom
   write, rows, one-pass order, snapshot and review marks still hold. Ten things about it are load-bearing:
   - **The coordinate is a constructor argument, not a constant (2026-09-15), and that is the whole of what

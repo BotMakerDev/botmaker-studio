@@ -149,6 +149,17 @@
 > guesses a successor: with no rule, nothing is rewritten. `project/source/BotIndex`'s cache is keyed by each
 > jar's size and mtime, so a `-SNAPSHOT` rebuilt in place is parsed again.
 
+> **A plugin ships its own `@Migrate` rules (2026-10-28,** `docs/refactor/25-compatibility.md` §8**).** A plugin
+> keeps an element `@Deprecated(forRemoval = true)` for one release beside a rule, then deletes both.
+> `migrate/PluginRules` resolves each plugin's `-sources.jar` (pinned version, and the version an upgrade leaves),
+> keeps the `.java` entries mentioning `@Migrate`, and puts them into the old parse under the probe folder
+> (`Rules.added`). Such a `Rule` carries `plugin()` and answers `shipped()`; it must use `value =`, name an element
+> its own jar declares and marks `@Deprecated`, and loses to a bot rule (written or seeded) for the same element
+> (`Rules.resolved`). `Migration` lists deprecated uses a plugin covers as pending (`MigrateWindow.Pending`).
+> `MigrateWindow` shows "…, from <plugin>", read-only, with *Write my own* (`seedable`: not over a TYPE rule); the
+> MCP `migration seed` writes over one too; `InstalledPluginsTab.openSentence` names a plugin that ships no rule
+> for an element an upgrade breaks (default seeds).
+
 > **A managed value is marked by its plugin's own annotation (2026-10-10).** `@Managed("id")` is gone. A
 > plugin declares an annotation meta-annotated `@ManagedMarker` whose `value()` is an enum nested in it
 > (`@SdkValue(SdkValue.Id.FLOW)`); the id is that enum's binary name plus the constant.
