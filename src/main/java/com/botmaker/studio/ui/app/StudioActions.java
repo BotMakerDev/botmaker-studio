@@ -23,6 +23,7 @@ import com.botmaker.studio.sharing.PluginRegistry;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.ui.app.dev.PickerGalleryWindow;
 import com.botmaker.studio.services.overlay.WatchedScreen;
+import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.params.ParametersDialog;
 import com.botmaker.session.launch.BackgroundLauncher;
@@ -30,13 +31,12 @@ import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
-import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -189,16 +189,12 @@ final class StudioActions {
      * picks ({@link BmkExport}), off the FX thread; then where it went and its sha256, or why it was refused.
      */
     private void exportBmk() {
-        DirectoryChooser chooser = new DirectoryChooser();
-        chooser.setTitle("Export .bmk into…");
         // Not the project's folder: a file there would ride along in its next version (finding N3).
-        File start = AppPaths.saveFolder().toFile();
-        if (start.isDirectory()) chooser.setInitialDirectory(start);
-        File picked = chooser.showDialog(primaryStage);
-        if (picked == null) return;
+        Optional<Path> picked = Choosers.folder(primaryStage, "Export .bmk into…", AppPaths.saveFolder());
+        if (picked.isEmpty()) return;
         CompletableFuture.supplyAsync(() -> {
             try {
-                Path written = BmkExport.export(config.projectPath(), picked.toPath(), MavenService::resolvedJars);
+                Path written = BmkExport.export(config.projectPath(), picked.get(), MavenService::resolvedJars);
                 return written + "\n\nsha256 " + BotFiles.sha256(written);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

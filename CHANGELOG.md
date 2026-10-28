@@ -30,6 +30,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `expand` opens or closes a tree row. A control with no text says its accessible text, tooltip or id; blocks and
   palette entries now carry an accessible name. A control keeps its ref across reads. `read` takes `within` (one
   part) and `find` (lines holding a text), and `press` and `type` take the text a control shows instead of a ref.
+- `ui choose` answers the next file chooser with paths, or cancels it, without the chooser showing. Every chooser
+  Studio shows goes through one place (`ui/Choosers`), plugins' too, and a chooser left waiting for the user is
+  named in the next `ui` answer. A plugin's file chooser now opens over the window the user is in.
+- Plugins can ask for a save chooser (`Dialogs.saveFile`).
 
 ## [1.10.1] — 2026-10-28
 

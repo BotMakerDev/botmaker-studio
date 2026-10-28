@@ -1,5 +1,6 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -36,8 +37,10 @@ import org.testfx.util.WaitForAsyncUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -95,6 +98,60 @@ class UiToolsTest extends FxHeadlessTest {
         Matcher m = Pattern.compile("r(\\d+) " + Pattern.quote(what)).matcher(read);
         assertTrue(m.find(), what + " not in:\n" + read);
         return Integer.parseInt(m.group(1));
+    }
+
+    @Test
+    void chooseAnswersTheNextFileChooserWithoutShowingIt(@TempDir Path dir) throws IOException {
+        Path font = Files.createFile(dir.resolve("a.ttf"));
+        Path other = Files.createFile(dir.resolve("b.ttf"));
+        List<Object> got = new ArrayList<>();
+        Choosers.Filter fonts = Choosers.Filter.of("Fonts", "ttf");
+        Button one = new Button("Import font…");
+        one.setOnAction(e -> got.add(Choosers.open(stage, "Import a font", null, fonts)));
+        Button many = new Button("Attach…");
+        many.setOnAction(e -> got.add(Choosers.openMany(stage, "Attach", null, fonts)));
+        Button save = new Button("Export…");
+        save.setOnAction(e -> got.add(Choosers.save(stage, "Export", dir, "x.ttf", fonts)));
+        UiTools.onFx(() -> ((VBox) stage.getScene().getRoot()).getChildren().addAll(one, many, save));
+        Choosers.forget();
+        try {
+            choosersAnswer(font, other, dir, got);
+        } finally {
+            Choosers.forget();
+        }
+        assertEquals(List.of("png"), Choosers.Filter.of("Pictures", "png", null, " ").extensions());
+    }
+
+    private void choosersAnswer(Path font, Path other, Path dir, List<Object> got) {
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read(null));
+
+        assertThrows(IllegalArgumentException.class, () -> UiTools.choose("fonts/a.ttf"));
+        assertEquals("The next file chooser answers " + font + ".", UiTools.choose(font.toString()));
+        ui.press(refOf(read, "button \"Import font…\""));
+        assertEquals(List.of(Optional.of(font)), got);
+        assertEquals(List.of("The file chooser \"Import a font\" got " + font + ", not shown."), Choosers.news());
+
+        UiTools.choose(null);
+        ui.press(refOf(read, "button \"Import font…\""));
+        assertEquals(Optional.empty(), got.getLast());
+        assertEquals(List.of("The file chooser \"Import a font\" was cancelled, not shown."), Choosers.news());
+
+        UiTools.choose(font + "\n" + other);
+        ui.press(refOf(read, "button \"Attach…\""));
+        assertEquals(List.of(font, other), got.getLast());
+
+        UiTools.choose(font.toString());
+        assertTrue(UiTools.choose(dir.resolve("new.ttf").toString()).endsWith("the answer queued before is dropped."));
+        ui.press(refOf(read, "button \"Export…\""));
+        assertEquals(Optional.of(dir.resolve("new.ttf")), got.getLast());
+        Choosers.news();
+
+        UiTools.choose(font.toString());
+        ui.press(refOf(read, "button \"Export…\""));
+        assertEquals(List.of("The file chooser \"Export\" got " + font + ", replacing the file there, not shown."),
+                Choosers.news());
+        assertTrue(Choosers.waiting().isEmpty());
     }
 
     @Test

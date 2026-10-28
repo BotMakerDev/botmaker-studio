@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.assist.AgentReply;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.Describe;
 import com.botmaker.shared.config.CacheDirs;
+import com.botmaker.studio.ui.Choosers;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -52,6 +53,7 @@ import javafx.stage.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
+import java.nio.file.Path;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -168,6 +170,11 @@ final class UiTools {
         record Drag(int from, int to) implements Ui {
         }
 
+        @Describe("answer the next file chooser")
+        record Choose(@Describe(value = "paths, a line each; none cancels", optional = true) String paths)
+                implements Ui {
+        }
+
         @Describe("a picture of a window")
         record Look(@Describe(value = WINDOW, optional = true) String window,
                     @Describe(value = "0.1 to 1; 0.5 when left out", optional = true) Double scale) implements Ui {
@@ -256,7 +263,7 @@ final class UiTools {
 
     AssistantTool<AssistantTool.OneOf<Ui>> tool() {
         return AssistantTool.named("ui")
-                .describedAs("Studio's own windows: list, read, press, type, key, scroll, drag, expand, look, wait; "
+                .describedAs("Studio's own windows: list, read, press, type, key, scroll, drag, expand, choose, look, wait; "
                         + "answers say what changed, new errors and stalls. Dev Studio only.")
                 .takesOneOf(Ui.class)
                 .handledBy((action, context) -> reported(handle(action)));
@@ -276,6 +283,7 @@ final class UiTools {
                 case Ui.Key key -> AgentReply.text(key(key.ref(), key.keys()));
                 case Ui.Scroll scroll -> AgentReply.text(scroll(scroll.ref(), scroll.pages()));
                 case Ui.Drag drag -> AgentReply.text(drag(drag.from(), drag.to()));
+                case Ui.Choose choose -> AgentReply.text(choose(choose.paths()));
                 case Ui.Look look -> look(look.window(), look.scale());
                 case Ui.Wait wait -> AgentReply.text(waitFor(wait.text(), wait.seconds(), Boolean.TRUE.equals(wait.gone())));
                 case Ui.Log log -> AgentReply.text(log(log.lines()));
@@ -291,6 +299,18 @@ final class UiTools {
         } catch (RuntimeException failed) {
             return AgentReply.refused("Studio could not do that: " + failed.getMessage());
         }
+    }
+
+    /** {@code choose}: {@code paths}, one absolute path a line, queued for the next file chooser; none cancels it. */
+    static String choose(String paths) {
+        List<Path> picked = new ArrayList<>();
+        for (String line : paths == null ? List.<String>of() : paths.lines().map(String::strip).toList()) {
+            if (line.isEmpty()) continue;
+            Path path = Path.of(line);
+            if (!path.isAbsolute()) throw new IllegalArgumentException(line + " is not an absolute path.");
+            picked.add(path.normalize());
+        }
+        return Choosers.answerNext(picked);
     }
 
     /** {@code quit_studio} on the home endpoint: Studio's main window asked to close, a moment after the answer. */
@@ -1090,6 +1110,9 @@ final class UiTools {
             if (stalls.size() > listed) out.append("\n  (").append(stalls.size() - listed).append(" older; perf lists them)");
             out.append('\n');
         }
+        for (String said : Choosers.news()) out.append(said).append('\n');
+        Choosers.waiting().ifPresent(title -> out.append("A file chooser waits: \"").append(title)
+                .append("\". The user answers it; choose answers only the next one.\n"));
         out.append(memory());
         return reply.and(AgentReply.text(out.toString()));
     }

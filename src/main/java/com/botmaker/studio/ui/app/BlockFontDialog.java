@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StyleClasses;
+import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.BlockFont;
 import com.botmaker.studio.ui.render.theme.ImportedFonts;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -25,13 +26,12 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Optional;
 
 /**
@@ -138,13 +138,10 @@ final class BlockFontDialog {
 
         Button importFont = new Button("Import font…");
         importFont.setOnAction(e -> {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle("Import a font");
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Fonts", "*.ttf", "*.otf"));
-            File file = chooser.showOpenDialog(stage);
-            if (file == null) return;
+            Optional<Path> file = Choosers.open(stage, "Import a font", null, Choosers.Filter.of("Fonts", "ttf", "otf"));
+            if (file.isEmpty()) return;
             try {
-                BlockFont font = ImportedFonts.importFont(file.toPath());
+                BlockFont font = ImportedFonts.importFont(file.get());
                 problem.setText("");
                 if (!installed.contains(font.family())) installed.add(font.family());
                 search.clear();

@@ -4,6 +4,7 @@ import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.config.AppVersion;
+import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
@@ -19,12 +20,12 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
-import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
 import java.io.File;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,13 +77,10 @@ public final class ReportIssueDialog {
         shotsLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
         javafx.scene.control.Button addShot = new javafx.scene.control.Button("Attach screenshots…");
         addShot.setOnAction(e -> {
-            FileChooser fc = new FileChooser();
-            fc.setTitle("Attach screenshots");
-            fc.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif"));
-            List<File> chosen = fc.showOpenMultipleDialog(owner);
-            if (chosen != null && !chosen.isEmpty()) {
-                screenshots.addAll(chosen);
+            List<Path> chosen = Choosers.openMany(owner, "Attach screenshots", null,
+                    Choosers.Filter.of("Images", "png", "jpg", "jpeg", "gif"));
+            if (!chosen.isEmpty()) {
+                chosen.forEach(path -> screenshots.add(path.toFile()));
                 shotsLabel.setText(screenshots.size()
                         + " screenshot(s) attached — you'll be asked to drop them into the issue page.");
             }

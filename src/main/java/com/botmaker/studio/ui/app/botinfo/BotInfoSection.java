@@ -5,6 +5,7 @@ import com.botmaker.studio.project.BotIcon;
 import com.botmaker.studio.project.PomInfo;
 import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
+import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
@@ -19,7 +20,6 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
 import javax.imageio.ImageIO;
@@ -136,12 +136,10 @@ public final class BotInfoSection {
     }
 
     private void chooseFile() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Choose the bot's icon");
-        chooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"));
-        File picked = chooser.showOpenDialog(owner);
-        if (picked == null) return;
+        Optional<Path> chosen = Choosers.open(owner, "Choose the bot's icon", null,
+                Choosers.Filter.of("Images", "png", "jpg", "jpeg", "gif", "bmp"));
+        if (chosen.isEmpty()) return;
+        File picked = chosen.get().toFile();
         BufferedImage image;
         try {
             image = ImageIO.read(picked);

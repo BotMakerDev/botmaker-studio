@@ -7,6 +7,7 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.Theme;
 import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.NativeFileDialog;
 import javafx.scene.Parent;
@@ -15,22 +16,20 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
-import javafx.stage.DirectoryChooser;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
-import java.io.File;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
  * Studio's own side of {@link StudioServices} — the host capabilities a plugin's editor may reach.
  *
- * <p><b>Everything here already existed; none of it is new capability.</b> The theme is
- * {@link ThemedWindows}, the file choosers are {@link NativeFileDialog}, the paths are the
+ * <p><b>Everything here already existed; none of it is new capability</b> — but the save chooser, added
+ * 2026-10-28 so a plugin's export goes through {@link Choosers} like every other chooser. The theme is
+ * {@link ThemedWindows}, the file choosers are {@link Choosers}, the paths are the
  * open project's {@link ProjectConfig}. What the class adds is the *shape* — a set of interfaces a plugin
  * can compile against without seeing a Studio type, which is the only way an editor written outside this
  * repository can look and behave like one written inside it.
@@ -191,14 +190,13 @@ public final class HostServices implements StudioServices {
     private final class DialogsAdapter implements Dialogs {
 
         @Override
-        public java.util.Optional<Window> ownerWindow() {
-            return java.util.Optional.ofNullable(owner.get());
+        public Optional<Window> ownerWindow() {
+            return Optional.ofNullable(owner.get());
         }
 
         @Override
         public Choice chooseProgram(Path initialDir) {
-            NativeFileDialog.Choice choice =
-                    NativeFileDialog.chooseProgram(initialDir == null ? null : initialDir.toString());
+            NativeFileDialog.Choice choice = Choosers.program(initialDir);
             // nativeDialogShown is passed through rather than recomputed: a plugin uses it to decide whether
             // to offer its own fallback, and only the dialog itself knows whether one appeared.
             return new Choice(choice.nativeDialogShown(), choice.path().map(Path::of));
@@ -206,42 +204,43 @@ public final class HostServices implements StudioServices {
 
         @Override
         public Choice chooseFile(String title, Path initialDir, String... extensions) {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle(title == null || title.isBlank() ? "Choose a file" : title);
-            initialDirectory(initialDir, chooser::setInitialDirectory);
-            if (extensions != null && extensions.length > 0) {
-                chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(
-                        String.join(", ", extensions), globs(extensions)));
-            }
-            return chosen(chooser.showOpenDialog(owner.get()));
+            return chosen(Choosers.open(chooserOwner(), titled(title, "Choose a file"), initialDir, filter(extensions)));
         }
 
         @Override
         public Choice chooseDirectory(String title, Path initialDir) {
-            DirectoryChooser chooser = new DirectoryChooser();
-            chooser.setTitle(title == null || title.isBlank() ? "Choose a folder" : title);
-            initialDirectory(initialDir, chooser::setInitialDirectory);
-            return chosen(chooser.showDialog(owner.get()));
+            return chosen(Choosers.folder(chooserOwner(), titled(title, "Choose a folder"), initialDir));
         }
 
-        private static String[] globs(String[] extensions) {
-            String[] globs = new String[extensions.length];
-            for (int i = 0; i < extensions.length; i++) {
-                String ext = extensions[i] == null ? "" : extensions[i].trim();
-                globs[i] = ext.startsWith("*.") ? ext : ext.startsWith(".") ? "*" + ext : "*." + ext;
-            }
-            return globs;
+        @Override
+        public Choice saveFile(String title, Path initialDir, String fileName, String... extensions) {
+            return chosen(Choosers.save(chooserOwner(), titled(title, "Save a file"), initialDir, fileName,
+                    filter(extensions)));
         }
 
-        /** A directory that does not exist is no directory at all — JavaFX throws rather than ignoring it. */
-        private static void initialDirectory(Path dir, Consumer<File> set) {
-            if (dir == null) return;
-            File file = dir.toFile();
-            if (file.isDirectory()) set.accept(file);
+        /**
+         * The window the user is in, so a chooser opened from a plugin's own window shows over it; with none focused
+         * (another application has the focus), the newest window shown, which is the one that asked when a plugin's
+         * dialog is open; else the editor's.
+         */
+        private Window chooserOwner() {
+            List<Window> shown = Window.getWindows().stream().filter(w -> w instanceof Stage && w.isShowing()).toList();
+            return shown.stream().filter(Window::isFocused).findFirst()
+                    .or(() -> shown.isEmpty() ? Optional.empty() : Optional.of(shown.getLast()))
+                    .orElseGet(owner);
         }
 
-        private static Choice chosen(File file) {
-            return new Choice(true, file == null ? Optional.empty() : Optional.of(file.toPath()));
+        private static String titled(String title, String otherwise) {
+            return title == null || title.isBlank() ? otherwise : title;
+        }
+
+        private static Choosers.Filter filter(String[] extensions) {
+            if (extensions == null || extensions.length == 0) return null;
+            return Choosers.Filter.of(String.join(", ", extensions), extensions);
+        }
+
+        private static Choice chosen(Optional<Path> path) {
+            return new Choice(true, path);
         }
     }
 }

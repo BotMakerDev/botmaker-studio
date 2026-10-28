@@ -27,6 +27,7 @@ import com.botmaker.studio.ui.app.ArchivedProjectsDialog;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.app.NewProjectDialog;
 import com.botmaker.studio.ui.app.ProjectWindow;
+import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
@@ -55,7 +56,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
-import javafx.stage.DirectoryChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
@@ -654,14 +654,9 @@ public final class RunHome implements ProjectWindow {
      * folder is not a Maven project. It is remembered, so it shows in My bots from then on.
      */
     private void openFolder() {
-        DirectoryChooser chooser = new DirectoryChooser();
-        chooser.setTitle("Open a project folder");
-        // A directory that does not exist is no directory at all — JavaFX throws rather than ignoring it.
-        File home = new File(System.getProperty("user.home"));
-        if (home.isDirectory()) chooser.setInitialDirectory(home);
-        File picked = chooser.showDialog(stage);
-        if (picked == null) return;
-        Path dir = picked.toPath().toAbsolutePath().normalize();
+        Optional<Path> picked = Choosers.folder(stage, "Open a project folder", Path.of(System.getProperty("user.home")));
+        if (picked.isEmpty()) return;
+        Path dir = picked.get().toAbsolutePath().normalize();
         if (projectManager.projectAt(dir).isEmpty()) {
             error("Not a project", dir + " has no " + ProjectManager.PROJECT_SHAPE
                     + ", so there is no project here to open.");
