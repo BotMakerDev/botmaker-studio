@@ -90,14 +90,14 @@ public final class MavenService {
      * make that bump silently stop working. What a <em>freshly created</em> pom pins is also a separate
      * question from what this build of the SDK is.
      */
-    public static final String SDK_FALLBACK_VERSION = "1.7.1";
+    public static final String SDK_FALLBACK_VERSION = "1.8.0";
 
     /**
      * The contract tag a dev build of Studio writes into a project ({@code config/HostContract}); a release
      * build writes the tag it was built against instead. Hand-typed for the same reason as
      * {@link #SDK_FALLBACK_VERSION}: the release bumps this literal on every {@code --studio-api} release.
      */
-    public static final String CONTRACT_FALLBACK_VERSION = "0.12.0";
+    public static final String CONTRACT_FALLBACK_VERSION = "0.13.0";
 
     // There is no MIN_SDK_VERSION any more, and its absence is deliberate (2026-08-25).
     //
