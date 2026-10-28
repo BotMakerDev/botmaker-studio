@@ -38,8 +38,21 @@ import java.util.jar.JarFile;
  */
 public final class PluginRules {
 
-    /** Who wrote a rule the bot does not hold: the plugin's coordinate, and its name for a person. */
-    public record Plugin(PluginCoordinate coordinate, String name) {}
+    /**
+     * Who wrote a rule the bot does not hold: the plugin's coordinate, its name for a person, and the jar it was
+     * read beside, which must declare every element its rules name.
+     */
+    public record Plugin(PluginCoordinate coordinate, String name, Path jar) {
+
+        /** Whether the plugin's own jar declares {@code binaryName}: a plugin's rule covers its own API only. */
+        boolean declares(String binaryName) {
+            try (JarFile file = new JarFile(jar.toFile())) {
+                return file.getEntry(binaryName.replace('.', '/') + ".class") != null;
+            } catch (IOException e) {
+                return false;
+            }
+        }
+    }
 
     /** The rule files of the plugins on one classpath: each one's text, and its plugin, by its path in the parse. */
     record Shipped(Map<Path, String> sources, Map<Path, Plugin> plugins) {
@@ -132,6 +145,8 @@ public final class PluginRules {
             if (one.files().isEmpty()) continue;
             Path own = base.resolve(one.plugin().coordinate().groupId())
                     .resolve(one.plugin().coordinate().artifactId()).normalize();
+            // A coordinate is the pom's own text: one that climbs out of the probe folder is no folder of it.
+            if (!own.startsWith(base) || own.getNameCount() != base.getNameCount() + 2) continue;
             one.files().forEach((name, text) -> {
                 Path at = own.resolve(name).normalize();
                 // An entry that climbs out of the plugin's own folder would stand in for a file of the bot.
@@ -151,7 +166,7 @@ public final class PluginRules {
     private Held read(Key key, long now) {
         List<PluginPoms.PluginPom> poms = PluginPoms.read(key.jar());
         if (poms.size() != 1) return Held.NOTHING;
-        Plugin plugin = new Plugin(poms.getFirst().coordinate(), poms.getFirst().name());
+        Plugin plugin = new Plugin(poms.getFirst().coordinate(), poms.getFirst().name(), key.jar());
         Optional<Path> sources = sourcesOf.apply(key.jar(), plugin.coordinate());
         if (sources.isEmpty()) return new Held(plugin, Map.of(), now);
         Map<String, String> files = new LinkedHashMap<>();

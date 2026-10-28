@@ -89,6 +89,24 @@ class PluginRulesTest {
             }
             """;
 
+    private static final String OVERREACH = """
+            package lib;
+
+            import com.botmaker.plugin.api.meta.Migrate;
+
+            final class Migrations {
+                @Migrate(Screen.class)
+                static Screen named(String name) {
+                    return new Screen();
+                }
+
+                @Migrate(String.class)
+                static String strip(@Migrate.Self String self) {
+                    return self;
+                }
+            }
+            """;
+
     private static final String BOT = """
             package bot;
 
@@ -122,12 +140,29 @@ class PluginRulesTest {
         twinsSources = sources("twins", Map.of("Screen", SCREEN_DEPRECATED, "Migrations", RULES,
                 "MoreMigrations", TWIN));
         removedJar = plugin("removed", Map.of("Screen", SCREEN_REMOVED));
+        overreachJar = plugin("overreach", Map.of("Screen", SCREEN_DEPRECATED, "Migrations", OVERREACH));
+        overreachSources = sources("overreach", Map.of("Screen", SCREEN_DEPRECATED, "Migrations", OVERREACH));
     }
+
+    private static Path overreachJar;
+    private static Path overreachSources;
 
     /** Each plugin jar's sources jar, as the fixture built it; none for the release that removed the rule. */
     private static PluginRules shipping() {
         return new PluginRules((jar, coordinate) -> Optional.ofNullable(Map.of(
-                deprecatedJar, deprecatedSources, twinsJar, twinsSources).get(jar)));
+                deprecatedJar, deprecatedSources, twinsJar, twinsSources, overreachJar, overreachSources).get(jar)));
+    }
+
+    @Test
+    void aPluginsRuleCoversOnlyAnElementOfItsOwnThatItMarksDeprecated() throws IOException {
+        BotIndex now = bot(NO_RULES, overreachJar);
+        Migration migration = Migration.of(now, now.classpath(), shipping());
+
+        Map<String, String> problems = new LinkedHashMap<>();
+        for (Rule rule : migration.rules()) problems.put(rule.method(), rule.problem());
+        assertEquals(2, problems.size(), migration.rules().toString());
+        assertTrue(problems.get("named").contains("does not mark @Deprecated"), problems.toString());
+        assertTrue(problems.get("strip").contains("does not declare"), problems.toString());
     }
 
     @Test

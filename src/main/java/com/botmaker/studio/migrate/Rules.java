@@ -374,10 +374,13 @@ final class Rules {
     private static Rule resolved(Rule rule, ITypeBinding owner, Map<String, String> oldTypes) {
         String ownerName = OldElement.simple(OldElement.erased(owner));
         if (rule.kind() == Migrate.Kind.TYPE) {
-            return OldElement.of(owner).map(rule::resolved)
+            return OldElement.of(owner).map(element -> ownedBy(rule.resolved(element), owner, owner.isDeprecated()))
                     .orElseGet(() -> rule.refused("names " + ownerName + ", which is no type of a library"));
         }
         List<OldElement> matches = new ArrayList<>();
+        // Of each match, the type that declares it and whether it is deprecated: what a plugin's rule is held to.
+        Map<String, ITypeBinding> declaring = new LinkedHashMap<>();
+        Set<String> deprecated = new LinkedHashSet<>();
         List<String> near = new ArrayList<>();
         boolean field = rule.kind() == Migrate.Kind.FIELD;
         boolean constructor = rule.kind() == Migrate.Kind.CONSTRUCTOR;
@@ -387,8 +390,11 @@ final class Rules {
                 for (IVariableBinding candidate : type.getDeclaredFields()) {
                     if (!candidate.getName().equals(rule.method())) continue;
                     OldElement.of(candidate).ifPresent(element -> {
-                        if (element.instance() == rule.self()) matches.add(element);
-                        else near.add(element.display() + (element.instance() ? ", an instance field" : ", static"));
+                        if (element.instance() == rule.self()) {
+                            matches.add(element);
+                            declaring.putIfAbsent(element.key(), type);
+                            if (candidate.isDeprecated()) deprecated.add(element.key());
+                        } else near.add(element.display() + (element.instance() ? ", an instance field" : ", static"));
                     });
                 }
                 continue;
@@ -400,6 +406,8 @@ final class Rules {
                 OldElement.of(candidate).ifPresent(element -> {
                     if (element.instance() == rule.self() && sameParams(element.params(), rule.partTypes(), oldTypes)) {
                         matches.add(element);
+                        declaring.putIfAbsent(element.key(), type);
+                        if (candidate.isDeprecated()) deprecated.add(element.key());
                     } else {
                         near.add(element.display() + (element.instance() ? ", an instance method" : ""));
                     }
@@ -409,7 +417,10 @@ final class Rules {
         Map<String, OldElement> byKey = new LinkedHashMap<>();
         matches.forEach(element -> byKey.putIfAbsent(element.key(), element));
         List<OldElement> distinct = List.copyOf(byKey.values());
-        if (distinct.size() == 1) return rule.resolved(distinct.getFirst());
+        if (distinct.size() == 1) {
+            String key = distinct.getFirst().key();
+            return ownedBy(rule.resolved(distinct.getFirst()), declaring.get(key), deprecated.contains(key));
+        }
         if (distinct.size() > 1) return rule.refused("matches " + distinct.size() + " elements of " + ownerName);
         String what = field ? "field " + rule.method() : constructor ? "constructor"
                 : "method " + rule.method();
@@ -417,6 +428,25 @@ final class Rules {
                 + (near.isEmpty() ? "" : "; it has " + String.join(" / ", near.stream().distinct().toList())
                 + (near.stream().anyMatch(n -> n.endsWith("instance method") || n.endsWith("instance field"))
                         && !rule.self() ? " (an instance member's rule takes a first @Migrate.Self parameter)" : "")));
+    }
+
+    /**
+     * {@code rule}, resolved to an element {@code type} declares: as it is for the bot's own rule, and for a
+     * plugin's only when its own jar declares {@code type} and marks the element deprecated (2026-10-28) — a
+     * plugin carries a bot over its own API, never another library's.
+     */
+    private static Rule ownedBy(Rule rule, ITypeBinding type, boolean deprecated) {
+        if (!rule.shipped()) return rule;
+        String binary = type == null ? null : type.getErasure().getBinaryName();
+        if (binary == null || !rule.plugin().declares(binary)) {
+            return rule.refused("names " + rule.element().display() + ", which " + rule.plugin().name()
+                    + " does not declare");
+        }
+        if (!deprecated) {
+            return rule.refused("names " + rule.element().display() + ", which " + rule.plugin().name()
+                    + " does not mark @Deprecated");
+        }
+        return rule;
     }
 
     /** The type and every class and interface above it, the type first. */
