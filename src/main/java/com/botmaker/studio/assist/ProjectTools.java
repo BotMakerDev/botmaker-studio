@@ -84,12 +84,13 @@ final class ProjectTools {
     /** {@code migration}: the bot carried over a plugin change by its own {@code @Migrate} rules. */
     sealed interface Migration {
         @Describe("each old element (method, constructor, field, type) the bot uses that the last plugin change "
-                + "broke, with its uses and its rule; the rules nothing needs now; values of retired types")
+                + "broke or a plugin deprecates, with its uses and its rule (the bot's own, or from the plugin "
+                + "that ships it); the rules nothing needs now; values of retired types")
         record List() implements Migration {
         }
 
         @Describe("write an element's rule into Migrations: its old signature and a default body marked @Refactor; "
-                + "then write")
+                + "then write. Over a plugin's rule, the bot's own, which wins")
         record Seed(@Describe(ELEMENT) String element) implements Migration {
         }
 

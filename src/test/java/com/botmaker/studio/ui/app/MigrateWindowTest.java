@@ -1,8 +1,10 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.meta.Migrate;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.migrate.OldElement;
+import com.botmaker.studio.migrate.PluginRules;
 import com.botmaker.studio.migrate.Rewrite;
 import com.botmaker.studio.migrate.Rule;
 import com.botmaker.studio.migrate.Sites;
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,6 +75,21 @@ class MigrateWindowTest {
                 new Broken(MARKER, List.of(), Broken.State.WRITTEN, rule(false, null))));
         assertEquals("rule Migrations.marker cannot be applied: twice", MigrateWindow.toolRuleText(
                 new Broken(MARKER, List.of(), Broken.State.REFUSED, rule(false, "twice"))));
+    }
+
+    @Test
+    void aPluginsRuleSaysWhoseItIsAndMayBeWrittenOver() {
+        Rule shipped = new Rule(Path.of("lib/Migrations.java"), "Migrations", "marker", 0, Migrate.Kind.METHOD,
+                "com.bot.api.GameScreen", List.of(), List.of(), true, "self", false, "GameScreen", Set.of(),
+                Set.of(), false, MARKER, null, new PluginRules.Plugin(PluginCoordinate.parse("fixture:sdk"),
+                "BotMaker SDK", Path.of("sdk.jar")));
+        Broken fromPlugin = new Broken(MARKER, List.of(site(3)), Broken.State.WRITTEN, shipped);
+        assertEquals("Migrations.marker, from BotMaker SDK", MigrateWindow.ruleText(fromPlugin));
+        assertTrue(MigrateWindow.toolRuleText(fromPlugin).startsWith("rule Migrations.marker, from BotMaker SDK"
+                + " (read-only"), MigrateWindow.toolRuleText(fromPlugin));
+        assertTrue(MigrateWindow.seedable(fromPlugin));
+        assertTrue(MigrateWindow.seedable(new Broken(MARKER, List.of(), Broken.State.NONE, null)));
+        assertFalse(MigrateWindow.seedable(new Broken(MARKER, List.of(), Broken.State.WRITTEN, rule(false, null))));
     }
 
     @Test

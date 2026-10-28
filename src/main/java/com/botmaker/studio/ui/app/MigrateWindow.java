@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.events.CoreApplicationEvents.RevealRequestedEvent;
 import com.botmaker.studio.events.EventBus;
@@ -64,6 +65,10 @@ import java.util.function.Supplier;
  * covers as one version, after a safety one. <b>Remove finished rules</b> removes each rule whose element the bot no
  * longer uses. A plugin type's values are copied, not rewritten: <b>Copy values…</b> opens {@link MigrationWindow}
  * on a retired type, whose <i>Switch uses</i> and <i>Remove originals</i> follow.
+ *
+ * <p>A rule a plugin ships beside its deprecated element (2026-10-28, {@link PluginRules}) is listed as
+ * {@code from <plugin>} and is read-only: it is in the plugin's sources jar. <b>Write my own</b> seeds the bot's own
+ * rule for the same element, which wins over the plugin's.
  *
  * <p>Opened from Project ▸ Migrate…, the Review tab, the canvas's banner after a change broke something, and the
  * upgrade's <i>Migrate first</i>. Each read compiles the bot twice, so it runs off the FX thread; the buffers are
@@ -220,9 +225,23 @@ final class MigrateWindow {
         return switch (broken.state()) {
             case NONE -> "none — Write rule";
             case SEEDED -> broken.rule().qualified() + ", to write";
-            case WRITTEN -> broken.rule().qualified();
-            case REFUSED -> broken.rule().qualified() + ": " + broken.rule().problem();
+            case WRITTEN -> broken.rule().qualified() + from(broken.rule());
+            case REFUSED -> broken.rule().qualified() + from(broken.rule()) + ": " + broken.rule().problem();
         };
+    }
+
+    /** {@code , from BotMaker SDK} for a plugin's rule, blank for the bot's own. */
+    static String from(Rule rule) {
+        return rule.shipped() ? ", from " + rule.plugin().name() : "";
+    }
+
+    /**
+     * Whether a rule of the bot's own may be seeded for {@code broken}: none names it yet, or only a plugin's
+     * rule, which the bot's then wins over — save over a whole type, which has no default to seed.
+     */
+    static boolean seedable(Broken broken) {
+        return broken.state() == Broken.State.NONE
+                || broken.rule().shipped() && broken.element().kind() != Migrate.Kind.TYPE;
     }
 
     /** {@code N old elements …} over the rows, from what the last read found. */
@@ -322,8 +341,12 @@ final class MigrateWindow {
         return switch (broken.state()) {
             case NONE -> "no rule (seed)";
             case SEEDED -> "rule " + broken.rule().qualified() + " still seeded: write its body";
-            case WRITTEN -> "rule " + broken.rule().qualified();
-            case REFUSED -> "rule " + broken.rule().qualified() + " cannot be applied: " + broken.rule().problem();
+            case WRITTEN -> "rule " + broken.rule().qualified() + from(broken.rule())
+                    + (broken.rule().shipped() ? " (read-only" + (seedable(broken)
+                    ? "; seed writes the bot's own, which wins)" : ")") : "");
+            case REFUSED -> "rule " + broken.rule().qualified() + from(broken.rule()) + " cannot be applied: "
+                    + broken.rule().problem() + (broken.rule().shipped() && seedable(broken)
+                    ? " (seed writes the bot's own)" : "");
         };
     }
 
@@ -414,8 +437,10 @@ final class MigrateWindow {
     private void buttons() {
         Broken chosen = rows.getSelectionModel().getSelectedItem();
         boolean readOnly = state.isReaderMode();
-        writeRule.setDisable(working || readOnly || chosen == null || chosen.state() != Broken.State.NONE);
-        openRule.setDisable(working || chosen == null || chosen.rule() == null);
+        boolean shipped = chosen != null && chosen.rule() != null && chosen.rule().shipped();
+        writeRule.setText(shipped ? "Write my own" : "Write rule");
+        writeRule.setDisable(working || readOnly || chosen == null || !seedable(chosen));
+        openRule.setDisable(working || chosen == null || chosen.rule() == null || shipped);
         boolean ready = read != null && read.migration().rules().stream().anyMatch(Rule::ready);
         preview.setDisable(working || !ready);
         apply.setDisable(working || readOnly || !ready);

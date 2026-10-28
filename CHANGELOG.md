@@ -19,7 +19,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   Review tab count the bot's uses of such an element ("can be migrated by its plugin's own rule"), and Migrate
   rewrites them. After an upgrade to the release that removed the element, the rule is read from the jar the
   bot moved from, so Migrate still rewrites the uses. Your own rule for the same element wins over the plugin's.
-  A plugin with no sources jar ships no rule.
+  A plugin with no sources jar ships no rule. Migrate lists a plugin's rule as "from <plugin>", read-only;
+  *Write my own* seeds your rule for the same element, which then wins (the assistant's `migration seed` too).
+  The upgrade question names each plugin that ships no rule for what the move breaks: default seeds are
+  written for those, as before — a bot that skipped the release that deprecated an element gets none.
 - **Navigate ▸ Find Action** (Ctrl+Shift+A, 2026-10-28): every toolbar button by name, Studio's and each
   plugin's, whichever plugin tab is selected. Type part of a name (the glyph in front does not count), then Enter
   or a click presses it; a plugin's button selects that plugin's tab first. A button that cannot be pressed now

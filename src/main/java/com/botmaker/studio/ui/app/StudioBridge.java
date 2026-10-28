@@ -921,7 +921,7 @@ final class StudioBridge implements StudioDriver {
             index = prepared.get();
             Migration migration = Migration.sinceLastChange(index, ctx.config().projectPath());
             Broken chosen = MigrateWindow.named(migration.broken(), element);
-            if (chosen.state() != Broken.State.NONE) {
+            if (!MigrateWindow.seedable(chosen)) {
                 throw new IllegalArgumentException(chosen.element().display() + " has its rule already, "
                         + chosen.rule().qualified() + ".");
             }
@@ -1307,8 +1307,9 @@ final class StudioBridge implements StudioDriver {
     private static List<String> brokenLines(PluginUpgradeService.Report report) {
         List<String> lines = new ArrayList<>();
         if (!report.covered().isEmpty()) {
-            lines.add(report.covered().size() + " broken element(s) take the bot's @Migrate rules: "
-                    + String.join(", ", report.covered().stream().map(b -> b.element().display()).limit(20).toList())
+            lines.add(report.covered().size() + " broken element(s) take a @Migrate rule: "
+                    + String.join(", ", report.covered().stream().map(b -> b.element().display()
+                    + (b.rule().shipped() ? " (from " + b.rule().plugin().name() + ")" : "")).limit(20).toList())
                     + ".");
         }
         if (!report.open().isEmpty()) {

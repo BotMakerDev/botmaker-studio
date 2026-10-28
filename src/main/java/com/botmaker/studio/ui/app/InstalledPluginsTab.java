@@ -40,9 +40,11 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -938,17 +940,27 @@ public final class InstalledPluginsTab {
      */
     static String openSentence(List<ProjectUpgrade.Row> moving, List<Report> reports) {
         List<String> open = new ArrayList<>();
+        Set<String> silent = new LinkedHashSet<>();
         for (int i = 0; i < moving.size(); i++) {
+            String plugin = moving.get(i).upgrades().displayName();
             for (Broken broken : reports.get(i).open()) {
                 String uses = broken.sites().size() + (broken.sites().size() == 1 ? " use" : " uses");
-                open.add(broken.element().display() + " (" + moving.get(i).upgrades().displayName() + ", " + uses
-                        + ")");
+                open.add(broken.element().display() + " (" + plugin + ", " + uses + ")");
+                // A seeded or refused rule is a rule: only an element none names takes a default seed.
+                if (broken.state() == Broken.State.NONE) silent.add(plugin);
             }
         }
         if (open.isEmpty()) return "";
+        // The known gap (2026-10-28): a plugin ships a rule only in the release that deprecates its element, and
+        // Studio reads the one the bot moves from — a bot that skipped that release, or a plugin that wrote none,
+        // gets no rule from it.
+        String gap = silent.isEmpty() ? "" : String.join(", ", silent) + (silent.size() == 1 ? " ships" : " ship")
+                + " no migration rule for some of them in the version the bot moves from; default seeds will be"
+                + " written for those.";
         return "This move breaks " + open.size() + (open.size() == 1 ? " element" : " elements") + " no @Migrate"
-                + " rule of yours covers: " + String.join(", ", open.stream().limit(12).toList())
-                + (open.size() > 12 ? " and " + (open.size() - 12) + " more" : "") + ".\n\nMigrate first moves the"
+                + " rule covers: " + String.join(", ", open.stream().limit(12).toList())
+                + (open.size() > 12 ? " and " + (open.size() - 12) + " more" : "") + ". " + gap
+                + "\n\nMigrate first moves the"
                 + " version and leaves the bot's code as it is: Migrate lists each element, you write its rule, and"
                 + " Apply rewrites every use.\n\nUpgrade anyway writes a"
                 + " default rule for each into Migrations — a value standing for nothing, or the call deleted —"

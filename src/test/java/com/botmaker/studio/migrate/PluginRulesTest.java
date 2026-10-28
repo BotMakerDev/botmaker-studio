@@ -216,6 +216,26 @@ class PluginRulesTest {
     }
 
     @Test
+    void theAuthorsOwnSeedOverAPluginsRuleTakesItsPlace() throws IOException {
+        BotIndex now = bot(NO_RULES, deprecatedJar);
+        Migration migration = Migration.of(now, now.classpath(), shipping());
+        Broken marker = migration.broken().getFirst();
+        Path file = now.sources().keySet().stream().filter(path -> path.endsWith("Migrations.java")).findFirst()
+                .orElseThrow();
+
+        Refactor.Planned seeded = assertInstanceOf(Refactor.Planned.class,
+                migration.seed(marker.element(), file, "bot"));
+        Map<Path, String> after = new LinkedHashMap<>(now.sources());
+        after.putAll(seeded.rewrites());
+        Migration over = Migration.of(now.replacing(after), now.classpath(), shipping());
+
+        Broken mine = over.broken().getFirst();
+        assertEquals(Broken.State.SEEDED, mine.state(), over.rules().toString());
+        assertFalse(mine.rule().shipped());
+        assertTrue(over.rules().stream().noneMatch(Rule::shipped), over.rules().toString());
+    }
+
+    @Test
     void twoPluginRulesForOneElementAreBothRefused() throws IOException {
         BotIndex now = bot(NO_RULES, twinsJar);
         Migration migration = Migration.of(now, now.classpath(), shipping());
