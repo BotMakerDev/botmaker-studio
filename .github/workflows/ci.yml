@@ -85,6 +85,13 @@ jobs:
           repository: BotMakerDev/botmaker-plugin-toolkit
           path: .deps/botmaker-plugin-toolkit
 
+      # The archetype's <parent> (2026-10-27), at its main -SNAPSHOT, which nothing publishes.
+      - name: Check out botmaker-plugin-parent
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-plugin-parent
+          path: .deps/botmaker-plugin-parent
+
       - name: Check out botmaker-plugin-archetype
         uses: actions/checkout@v7
         with:
@@ -113,6 +120,7 @@ jobs:
           mvn_retry mvn -B -f .deps/botmaker-studio-api/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-plugin-host/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-plugin-toolkit/pom.xml install -DskipTests
+          mvn_retry mvn -B -f .deps/botmaker-plugin-parent/pom.xml install
           mvn_retry mvn -B -f .deps/botmaker-plugin-archetype/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-cli/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-shared/pom.xml install -DskipTests
@@ -140,7 +148,7 @@ jobs:
       - name: Install the upstreams (their main -SNAPSHOT)
         run: |
           source .github/mvn-retry.sh
-          for repo in botmaker-studio-api botmaker-plugin-host botmaker-plugin-toolkit botmaker-plugin-archetype \
+          for repo in botmaker-studio-api botmaker-plugin-host botmaker-plugin-toolkit botmaker-plugin-parent botmaker-plugin-archetype \
                       botmaker-cli botmaker-shared botmaker-session; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -f ".deps/${repo}/pom.xml" install -DskipTests
