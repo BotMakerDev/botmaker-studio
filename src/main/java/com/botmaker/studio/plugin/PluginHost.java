@@ -8,7 +8,6 @@ import com.botmaker.plugin.api.run.Readiness;
 import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
@@ -30,8 +29,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.Optional;
@@ -619,35 +620,59 @@ public final class PluginHost {
      * Every loaded plugin's toolbar items, sorted into the order the bar draws them.
      *
      * <p>Sorted here rather than at render time because the order is a property of the <em>set</em>, not of
-     * the bar: group first, then the item's own {@code order}, then the contributing plugin's coordinate. That
-     * last tie-break is what stops a bar built from two plugins depending on which one the loader happened to
-     * find first — the same reasoning that makes the value catalog refuse a clash instead of
-     * letting the winner be decided by load order.
+     * the bar: the contributing plugin's name, then its coordinate, then the item's own {@code order}, then its
+     * id. The plugin comes first because the bar gives each plugin a tab of its own (2026-10-28), and the
+     * coordinate is what stops two plugins of one name depending on which one the loader happened to find
+     * first — the same reasoning that makes the value catalog refuse a clash instead of letting the winner be
+     * decided by load order.
      *
-     * <p>Studio's own items are <b>not</b> here. They are added by the toolbar itself, which is why
-     * {@link ToolbarGroup#STUDIO} is refused below: it is the host's section, and a plugin quietly re-homed
-     * into it would sit where a user reads the application rather than their project.
+     * <p>Studio's own items are <b>not</b> here. They are added by the toolbar itself, on a row of their own.
      */
     public static List<ToolbarItem> toolbarItems() {
         return toolbarItems;
     }
 
     /**
-     * The merged items in one group, in their merged order.
-     *
-     * <p>Two readers, which is why this exists rather than each filtering for itself: the main bar takes
-     * every group but {@link ToolbarGroup#OVERLAY}, and {@code OverlayEditor} takes only that one. A
-     * group nobody reads is an item <em>silently absent</em>, which is the class of failure every rule in
-     * {@code ToolbarMergeTest} is about — so the split is one filter with two callers rather than two
-     * conditions that can disagree about which groups exist.
+     * One plugin's tab on the bar: whose it is, its jar (for the icon), and its {@link ToolbarItem.Place#BAR}
+     * items in order. A plugin with no bar item has no tab and so is not here.
      */
-    public static List<ToolbarItem> itemsIn(ToolbarGroup group) {
-        return itemsIn(toolbarItems(), group);
+    public record PluginBar(PluginCoordinate plugin, String name, Path jar, List<ToolbarItem> items) {
+        public PluginBar {
+            // A tab needs a label, and a pom with no <name> still has its coordinate.
+            if (name == null || name.isBlank()) name = plugin.toString();
+            items = List.copyOf(items);
+        }
+    }
+
+    /** Every loaded plugin's bar items, one {@link PluginBar} per plugin that has any, by name. */
+    public static List<PluginBar> barItemsByPlugin() {
+        return barItemsByPlugin(ownedToolbarItems);
+    }
+
+    /** The same grouping over an explicit list — the seam the merge test uses. */
+    static List<PluginBar> barItemsByPlugin(List<OwnedItem> owned) {
+        Map<PluginCoordinate, PluginBar> bars = new LinkedHashMap<>();
+        for (OwnedItem o : owned) {
+            if (o.item().place() != ToolbarItem.Place.BAR) continue;
+            PluginBar bar = bars.get(o.plugin());
+            List<ToolbarItem> items = new ArrayList<>(bar == null ? List.of() : bar.items());
+            items.add(o.item());
+            bars.put(o.plugin(), new PluginBar(o.plugin(), o.pluginName(), o.jar(), items));
+        }
+        return List.copyOf(bars.values());
+    }
+
+    /**
+     * Every loaded plugin's {@link ToolbarItem.Place#OVERLAY} items, in the merged order: what the overlay
+     * editor's Actions tab draws. The bar never shows one — its subject is the window the panel is beside.
+     */
+    public static List<ToolbarItem> overlayItems() {
+        return overlayItems(toolbarItems());
     }
 
     /** The same filter over an explicit list — the seam the merge test uses. */
-    static List<ToolbarItem> itemsIn(List<ToolbarItem> items, ToolbarGroup group) {
-        return items.stream().filter(item -> item.group() == group).toList();
+    static List<ToolbarItem> overlayItems(List<ToolbarItem> items) {
+        return items.stream().filter(item -> item.place() == ToolbarItem.Place.OVERLAY).toList();
     }
 
     /**
@@ -853,18 +878,18 @@ public final class PluginHost {
         return List.copyOf(merged);
     }
 
-    // Package-private rather than private: the three rules below — the STUDIO refusal, the sort's tie-break
-    // on the plugin's coordinate, and a throwing plugin costing only itself — have no visible symptom when they
-    // are wrong. A bar in a slightly different order looks like somebody's preference, not like a bug.
+    // Package-private rather than private: the two rules below — the sort's tie-break on the plugin's
+    // coordinate, and a throwing plugin costing only itself — have no visible symptom when they are wrong. A
+    // bar in a slightly different order looks like somebody's preference, not like a bug.
     static List<ToolbarItem> mergeToolbarItems(List<LoadedPlugin> set) {
         return mergeOwnedToolbarItems(set).stream().map(OwnedItem::item).toList();
     }
 
     /**
-     * A toolbar item with the plugin that offered it — what lets the bar draw one section per plugin
-     * (2026-09-26) rather than mixing every plugin's buttons into the host's four groups.
+     * A toolbar item with the plugin that offered it and that plugin's jar — what lets the bar give each
+     * plugin a tab of its own, with its icon (2026-10-28).
      */
-    public record OwnedItem(PluginCoordinate plugin, String pluginName, ToolbarItem item) {}
+    public record OwnedItem(PluginCoordinate plugin, String pluginName, Path jar, ToolbarItem item) {}
 
     /** Every loaded plugin's toolbar items with their owner, in {@link #toolbarItems()}' order. */
     public static List<OwnedItem> ownedToolbarItems() {
@@ -886,17 +911,14 @@ public final class PluginHost {
             if (offered == null) continue;
             for (ToolbarItem item : offered) {
                 if (item == null || item.label() == null || item.onClick() == null) continue;
-                if (item.group() == ToolbarGroup.STUDIO) {
-                    System.err.println("Warning: " + plugin.coordinate() + " asked for the STUDIO toolbar group with '"
-                            + item.id() + "'; that group is the host's own and the item is dropped.");
-                    continue;
-                }
-                merged.add(new OwnedItem(plugin.coordinate(), plugin.name(), item));
+                merged.add(new OwnedItem(plugin.coordinate(), plugin.name(), plugin.jar(), item));
             }
         }
-        merged.sort(Comparator.comparing((OwnedItem o) -> o.item().group())
+        merged.sort(Comparator.comparing((OwnedItem o) -> o.pluginName() == null ? ""
+                        : o.pluginName().toLowerCase(Locale.ROOT))
+                .thenComparing(o -> o.plugin().toString())
                 .thenComparingInt(o -> o.item().order())
-                .thenComparing(o -> o.plugin().toString()));
+                .thenComparing(o -> o.item().id()));
         return List.copyOf(merged);
     }
 

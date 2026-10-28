@@ -2,29 +2,25 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.toolbar.ActionContext;
-import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.HostActionContext;
 import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.studio.plugin.PluginHost.PluginBar;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 
 public class ToolbarManager {
 
@@ -41,7 +37,8 @@ public class ToolbarManager {
     private Button undoButton, redoButton;
     private Button runButton, debugButton, followButton, unifiedStopButton;
     private Button stepOverButton, continueButton;
-    private Label resolutionLabel;
+    /** The plugin tabs, most recent first, while no project is open to keep them. */
+    private List<String> sessionTabs = List.of();
 
     /** Opens the Project Settings dialog; the same action the Project menu fires. */
     private Runnable onProjectSettings;
@@ -52,7 +49,7 @@ public class ToolbarManager {
     private Runnable onPreviewAsUser;
     /** Opens the program-shape overlay authoring editor; wired by {@link UIManager}. */
     private Runnable onOverlayEditor;
-    /** Rebuilds the bar in place after a group is hidden or shown; wired by {@link UIManager}. */
+    /** Rebuilds the bar in place after a plugin tab is picked; wired by {@link UIManager}. */
     private Runnable onRebuildBar;
 
     private enum AppState { IDLE, RUNNING, DEBUGGING }
@@ -65,13 +62,9 @@ public class ToolbarManager {
     }
 
     private void setupEventHandlers() {
-        // Keep the Capture button's text + resolution readout in sync with the project's settings.
-        eventBus.subscribe(CoreApplicationEvents.SettingsChangedEvent.class, e -> {
-            // Every item re-reads itself, not just this one: a supplier is a field read by contract, so
-            // refreshing the bar costs less than knowing which button a settings change touched.
-            refreshItems();
-            if (resolutionLabel != null) resolutionLabel.setText(resolutionText());
-        }, true);
+        // Every item re-reads itself on a settings change: a supplier is a field read by contract, so
+        // refreshing the bar costs less than knowing which button a settings change touched.
+        eventBus.subscribe(CoreApplicationEvents.SettingsChangedEvent.class, e -> refreshItems(), true);
         // A plugin's write to the bot's Java — its game or capture source is a @Param now — relabels the bar too.
         eventBus.subscribe(CoreApplicationEvents.FilesRewrittenEvent.class, e -> refreshItems(), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> setAppState(AppState.RUNNING), true);
@@ -136,10 +129,8 @@ public class ToolbarManager {
     }
 
     /**
-     * Wires the in-place rebuild the visibility menu needs.
-     *
-     * <p>A rebuild rather than a hide: see {@link #hideGroups}. Read at click time, so it may be wired at
-     * any point before the bar can be right-clicked.
+     * Wires the in-place rebuild a tab pick needs ({@link #selectTab}). Read at click time, so it may be wired
+     * at any point before a tab can be clicked.
      */
     public void setOnRebuildBar(Runnable callback) {
         this.onRebuildBar = callback;
@@ -164,39 +155,59 @@ public class ToolbarManager {
     }
 
     /**
-     * Creates the center group: every project-level action as its own visible button, wrapping onto a second
-     * row when the window narrows and into a {@code »} menu after that ({@link OverflowBar}).
+     * Creates the center: Studio's own row, and under it the plugin row — a tab per plugin that has bar
+     * buttons, then the selected plugin's buttons (2026-10-28, {@link PluginTabs}). Each row is an
+     * {@link OverflowBar}, so what does not fit goes into a {@code »} menu rather than onto more rows.
      *
-     * <p>There used to be a "⋯ More" menu here that hid Capture Templates / Overlay Editor / Resources
-     * <em>at every width</em>, and dropping it for a wrapping pane was right: an action you can't see is an
-     * action you don't know exists, and there was room for those three. What the pane then did was wrap
-     * without limit, so at narrow widths the bar grew rows until it painted over the menu bar. The cap is the
-     * middle position — nothing is hidden while there is room for it, and the overflow appears only at a width
-     * where the alternative was a toolbar taller than the canvas.
+     * <p>Until 2026-10-28 this was one bar of every button, Studio's and each plugin's, in sections sorted by
+     * shared toolbar groups. With the SDK alone it overflowed, the groups said nothing on the bar, and nothing
+     * separated the project's buttons from the plugins'.
      */
-    public OverflowBar createCaptureGroup() {
-        // CALLED MORE THAN ONCE. Since 2026-09-05 UIManager rebuilds this group on LibrariesChangedEvent,
+    public Node createCentre() {
+        // CALLED MORE THAN ONCE. Since 2026-09-05 UIManager rebuilds the centre on LibrariesChangedEvent,
         // because it is the only plugin-facing surface composed once rather than on each open — the menus
         // and the pickers ask PluginHost when they are opened, so they were always live, and this bar was
-        // why installing a plugin needed a restart before its buttons appeared. So nothing here may consume
-        // state that only exists the first time: every callback is a field set by StudioActions on this same
-        // instance.
-        //
-        // Studio's own items, spelled the way a plugin would have to spell them. Going through the same
-        // record and the same builder is the point rather than a tidiness: an item built by a second path is
-        // an item that drifts, and the first thing anybody would notice is that the host's buttons are the
-        // ones that line up. The orders below reproduce, exactly, the sequence this bar was hand-arranged
-        // into before any of it was data — see the reading-order note on the return.
+        // why installing a plugin needed a restart before its buttons appeared. Picking a tab rebuilds it too.
+        // So nothing here may consume state that only exists the first time: every callback is a field set by
+        // StudioActions on this same instance.
         List<Placed> placed = new ArrayList<>();
         ActionContext ctx = actionContext();
+
+        List<Node> own = new ArrayList<>();
+        for (ToolbarItem item : studioItems()) own.add(place(placed, ctx, item));
+        OverflowBar studioRow = new OverflowBar(5, 5, 1, HPos.CENTER, own.toArray(Node[]::new));
+
+        List<PluginBar> bars = PluginTabs.ordered(PluginHost.barItemsByPlugin(), tabs());
+        Node centre = studioRow;
+        if (!bars.isEmpty()) {
+            List<Node> buttons = new ArrayList<>();
+            for (ToolbarItem item : bars.getFirst().items()) buttons.add(place(placed, ctx, item));
+            OverflowBar pluginButtons = new OverflowBar(5, 5, TOOLBAR_MAX_ROWS, HPos.LEFT,
+                    buttons.toArray(Node[]::new));
+            PluginTabs pluginRow = new PluginTabs(bars, pluginButtons, plugin -> selectTab(bars, plugin));
+            VBox rows = new VBox(6, studioRow, pluginRow);
+            rows.setMinWidth(0);
+            centre = rows;
+        }
+        this.items = List.copyOf(placed);
+        return centre;
+    }
+
+    /**
+     * Studio's own buttons, spelled the way a plugin would have to spell them. Going through the same record
+     * and the same builder is the point rather than a tidiness: an item built by a second path is an item that
+     * drifts, and the first thing anybody would notice is that the host's buttons are the ones that line up.
+     */
+    private List<ToolbarItem> studioItems() {
+        List<ToolbarItem> own = new ArrayList<>();
 
         // 🧭 Setup stood first in this group until 2026-08-31 and is the SDK plugin's 📋 Project Setup item
         // now, placed by the same merge as the pilot's and the capture items'. Every row of that checklist
         // reads a file the plugin owns, so there is nothing left for the shell to wire.
 
-        place(placed, ctx, ToolbarItem.id("settings").label("⚙ Settings")
+        own.add(ToolbarItem.id("settings").label("⚙ Settings")
                 .tooltip("Project settings: the standard resolution templates are authored at, and favourite methods")
-                .in(ToolbarGroup.PROJECT, 20)
+                .onBar(10)
                 .onPress(() -> c -> run(onProjectSettings)));
 
         // 🎯 Capture Targets stood here at PROJECT/30 until 2026-08-31 and is the SDK plugin's item now,
@@ -210,9 +221,9 @@ public class ToolbarManager {
         // the one thing on this bar that does not reduce to data the contract already carries: a parameter
         // is a ParameterRow, and the window over those stayed here.
 
-        place(placed, ctx, ToolbarItem.id("parameters").label("🎚 Parameters")
+        own.add(ToolbarItem.id("parameters").label("🎚 Parameters")
                 .tooltip("The project's variables: every value the bot reads, with its tag and its editor")
-                .in(ToolbarGroup.AUTHORING, 20)
+                .onBar(20)
                 .onPress(() -> c -> run(onParameters)));
 
         // 🎮 Pilot stood here until 2026-08-30 and is the SDK plugin's item now, placed by the same merge as
@@ -224,19 +235,19 @@ public class ToolbarManager {
         // a bot does by default is still its own @SdkValue(SdkValue.Id.SETTINGS) value; whether this machine's runs
         // print and trace is a fact about running here, so it is a run property, and the host's to toggle
         // (docs/refactor/40-run-trace.md).
-        place(placed, ctx, ToolbarItem.id("debug-output").label(() -> debugOutput().label())
+        own.add(ToolbarItem.id("debug-output").label(() -> debugOutput().label())
                 .tooltip("Whether runs on this computer print and trace their debug lines: the bot's own "
                         + "setting, always on, or always off. Takes effect on the next run.")
-                .in(ToolbarGroup.RUN, 20)
+                .onBar(30)
                 .onPress(() -> c -> cycleDebugOutput()));
 
         // The same action as View ▸ Preview as user, not a second thing that sounds like it. This used to be
         // a "Reader mode" toggle that hid the editor's controls in place — a third rendering of the project
         // that answered "what does a user see?" with something no user ever sees. The Runner is the answer.
-        place(placed, ctx, ToolbarItem.id("preview").label("👁 Preview")
+        own.add(ToolbarItem.id("preview").label("👁 Preview")
                 .tooltip("Open this bot the way someone who only runs it sees it — the Runner window, with the "
                         + "switches and values you chose to expose. Its header brings you back.")
-                .in(ToolbarGroup.RUN, 30)
+                .onBar(40)
                 .onPress(() -> c -> run(onPreviewAsUser)));
 
         // 🖱 Input stood here at TOOLS/10 until 2026-09-27, opening Studio's Input & Clicks window over
@@ -249,9 +260,9 @@ public class ToolbarManager {
         // the clearest case for it: the host owns the bar, the plugin owns the capture target it reads, the
         // pixels it grabs and the picture folder it writes.
 
-        place(placed, ctx, ToolbarItem.id("overlay").label("⧉ Overlay")
+        own.add(ToolbarItem.id("overlay").label("⧉ Overlay")
                 .tooltip("Build the bot over the running game: a compact block tree on top of the target window")
-                .in(ToolbarGroup.TOOLS, 30)
+                .onBar(50)
                 .onPress(() -> c -> run(onOverlayEditor)));
 
         // ⏺ Record stood here at order 40 and opened the overlay straight into recording. It is the SDK
@@ -266,142 +277,42 @@ public class ToolbarManager {
         // deliberately left empty rather than backfilled — the shell has no handle on another plugin's
         // toolbar item, the same reason the Capture Templates and Capture Targets steps lost their buttons.
 
-        resolutionLabel = new Label(resolutionText());
-        resolutionLabel.getStyleClass().add("toolbar-resolution");
-        // A Label's default minimum is "as small as the row will make me", which is what clipped the text
-        // once the bar was under pressure; the padding that keeps it level with its button siblings lives
-        // in .toolbar-resolution.
-        resolutionLabel.setMinHeight(Region.USE_PREF_SIZE);
-        resolutionLabel.setTooltip(new Tooltip("Project standard resolution · primary screen resolution"));
-        // A read-out, not an action, and the reason ToolbarItem has no kind for one: a plugin that wants to
-        // state a fact on the bar has not asked for that yet, and inventing the surface before it does is how
-        // a contract acquires a member with one implementor.
-        placed.add(new Placed(ToolbarGroup.STUDIO, 100, "resolution", resolutionLabel, null));
-
-        // Every plugin's items, merged into the same groups. PluginHost has already sorted them and already
-        // refused anything claiming ToolbarGroup.STUDIO, so what arrives here is only ever placeable — with
-        // one group it also has to skip. An OVERLAY item's subject is "the window the HUD is drawn over", so
-        // it belongs to the overlay editor's Actions tab and this bar has no section for it; placing one here
-        // would put a button on a bar that is drawn with no overlay open, where its context answers empty.
-        // The filter is PluginHost.itemsIn's complement, and the two are the only readers of that split.
-        for (PluginHost.OwnedItem owned : PluginHost.ownedToolbarItems()) {
-            ToolbarItem item = owned.item();
-            if (item.group() == ToolbarGroup.OVERLAY) continue;
-            Button button = ToolbarItems.button(item, ctx);
-            placed.add(new Placed(item.group(), item.order(), item.id(), button, item,
-                    owned.plugin(), owned.pluginName()));
-        }
-
-        // The reading order the bar was hand-arranged into, now stated as four groups rather than as an
-        // argument list — and it comes out identical, which is the acceptance test for this change.
-        //
-        // PROJECT: the SDK's game button before its Capture Source — you pick what the bot opens, then where it
-        // looks, and a game's window can only be picked as a capture target once the game is actually up. Settings
-        // sits next to Setup: the checklist is the guided path, this is the same project's stored values
-        // (the resolution the label at the end of this bar is reading) in one dialog.
-        // AUTHORING: Flow then Parameters — the activities are drawn first, and their values are what the
-        // drawing reads.
-        // RUN, then TOOLS: what is observed, then what observes it.
-        //
-        // The order is also the order things drop into the » menu: what is furthest right goes first, so the
-        // readout and the least-reached-for tools are what a narrow window costs you, not Project Setup.
-        //
-        // Since 2026-09-26 the bar is one section per owner — Studio's own first, then each plugin by name —
-        // and the groups above order the buttons inside a section. Mixed, a plugin's button sat between two
-        // of Studio's and nothing said whose it was; a section says it once, in its caption.
-        placed.sort(Comparator.comparing((Placed p) -> p.owner() != null)
-                .thenComparing(p -> p.ownerName() == null ? "" : p.ownerName().toLowerCase(java.util.Locale.ROOT))
-                .thenComparing(p -> p.owner() == null ? "" : p.owner().toString())
-                .thenComparing(Placed::group)
-                .thenComparingInt(Placed::order)
-                .thenComparing(Placed::id));
-        // A group the user switched off leaves the node list rather than being made invisible inside it:
-        // OverflowBar packs what it is given, so a hidden-but-present node keeps its gap and keeps counting
-        // towards the » menu. Dropped *after* the sort, so what is missing cannot change the tie-break.
-        Set<ToolbarGroup> hidden = hiddenGroups();
-        placed.removeIf(p -> hidden.contains(p.group()));
-        this.items = List.copyOf(placed);
-        List<Node> nodes = new ArrayList<>();
-        String section = null;
-        boolean first = true;
-        for (Placed p : placed) {
-            String owner = p.owner() == null ? "" : p.owner().toString();
-            if (first || !owner.equals(section)) {
-                nodes.add(sectionCaption(p.owner() == null ? "Studio" : p.ownerName(), !first));
-                section = owner;
-                first = false;
-            }
-            nodes.add(p.node());
-        }
-        OverflowBar bar = new OverflowBar(5, 5, TOOLBAR_MAX_ROWS, HPos.CENTER, nodes.toArray(Node[]::new));
-        // The way back in, and the only one: hiding every group leaves an empty bar, which is still a node
-        // with this handler on it. That is why the menu's "Show all" cannot be unticked.
-        bar.setOnContextMenuRequested(e -> {
-            ToolbarVisibility.menu(hiddenGroups(), this::hideGroups).show(bar, e.getScreenX(), e.getScreenY());
-            e.consume();
-        });
-        return bar;
-    }
-
-    /** The groups this project has switched off, or none when there is no project open. */
-    private Set<ToolbarGroup> hiddenGroups() {
-        return settings == null
-                ? EnumSet.noneOf(ToolbarGroup.class)
-                : ToolbarVisibility.hidden(settings.current().hiddenToolbarGroups());
+        // 📐 The resolution read-out stood at the end of this bar until 2026-10-28, the primary screen's size.
+        // It is gone, not moved: the user's call, a screen size is the capture plugin's concern, not Studio's.
+        return List.copyOf(own);
     }
 
     /**
-     * Persists the new hidden set and rebuilds the bar, in that order.
+     * The plugin tabs, most recent first: the project's, or this window's own while no project is open.
+     */
+    private List<String> tabs() {
+        return settings == null || settings.current() == null ? sessionTabs : settings.current().toolbarTabs();
+    }
+
+    /**
+     * Moves {@code plugin}'s tab to the front, which selects it, saves that, and rebuilds the bar.
      *
      * <p>The rebuild is asked for rather than done here: this class builds the bar and does not own where it
      * hangs. {@link UIManager} wires {@link #setOnRebuildBar} to the same {@code setCenter} it uses when a
      * project's plugins change, which is the one path that swaps a live node into the scene graph.
      */
-    private void hideGroups(Set<ToolbarGroup> hidden) {
-        if (settings == null) return;
-        settings.update(settings.current().withHiddenToolbarGroups(ToolbarVisibility.wire(hidden)));
+    private void selectTab(List<PluginBar> ordered, PluginCoordinate plugin) {
+        List<String> next = PluginTabs.picked(ordered, plugin);
+        if (settings == null || settings.current() == null) sessionTabs = next;
+        else settings.update(settings.current().withToolbarTabs(next));
         run(onRebuildBar);
     }
 
-    /**
-     * One thing on the bar: an item and the node built from it, or a node the host built by hand.
-     *
-     * <p>The second case is not a loose end. A {@link ToolbarItem} describes a button, and the resolution
-     * read-out is not one, so the placement model has to hold a bare {@link Node} beside a described one.
-     * Making the record cover a read-out would add a member with exactly one implementor.
-     */
-    private record Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item,
-                          PluginCoordinate owner, String ownerName) {
-
-        /** Studio's own: no owning plugin. */
-        Placed(ToolbarGroup group, int order, String id, Node node, ToolbarItem item) {
-            this(group, order, id, node, item, null, null);
-        }
-    }
-
-    /**
-     * The caption that opens one owner's section — "Studio", or a plugin's own name — led by a divider when a
-     * section comes before it. A label, not a button: it names whose buttons follow and does nothing.
-     */
-    private static Node sectionCaption(String owner, boolean divided) {
-        Label caption = new Label(owner);
-        caption.getStyleClass().add("toolbar-section-caption");
-        caption.setMinWidth(Region.USE_PREF_SIZE);
-        if (!divided) return caption;
-        javafx.scene.control.Separator divider = new javafx.scene.control.Separator(javafx.geometry.Orientation.VERTICAL);
-        divider.getStyleClass().add("toolbar-section-divider");
-        HBox box = new HBox(6, divider, caption);
-        box.setAlignment(Pos.CENTER_LEFT);
-        return box;
-    }
+    /** One button on the bar and the item it was built from, so {@link #refreshItems()} can re-read it. */
+    private record Placed(ToolbarItem item, Button button) {}
 
     /** What is currently on the bar, in draw order, so {@link #refreshItems()} can re-read the suppliers. */
     private List<Placed> items = List.of();
 
-    /** Builds {@code item}'s button, records where it goes, and hands the button back for any pinning. */
+    /** Builds {@code item}'s button and records it for {@link #refreshItems()}. */
     private Button place(List<Placed> into, ActionContext ctx, ToolbarItem item) {
         Button button = ToolbarItems.button(item, ctx);
-        into.add(new Placed(item.group(), item.order(), item.id(), button, item));
+        into.add(new Placed(item, button));
         return button;
     }
 
@@ -430,9 +341,7 @@ public class ToolbarManager {
      * already redraw parts of the bar rather than on a timer.
      */
     private void refreshItems() {
-        for (Placed p : items) {
-            if (p.item() != null && p.node() instanceof Button button) ToolbarItems.refresh(button, p.item());
-        }
+        for (Placed p : items) ToolbarItems.refresh(p.button(), p.item());
     }
 
     /**
@@ -447,22 +356,10 @@ public class ToolbarManager {
     }
 
     /**
-     * "🖵 W×H": the primary screen's resolution.
-     *
-     * <p>It used to lead with "Std W×H", the project's standard capture resolution, which the editor has
-     * stopped holding (2026-09-01) — that size describes the pictures, so the plugin that takes them owns it
-     * and states it on its own toolbar item. What is left is a fact about this machine, which is the host's.
-     */
-    private String resolutionText() {
-        javafx.geometry.Rectangle2D sb = javafx.stage.Screen.getPrimary().getBounds();
-        return "🖵 " + (int) sb.getWidth() + "×" + (int) sb.getHeight();
-    }
-
-    /**
      * Creates the right-side group: Compile, Run, Debug, Follow, Stop, Step, Continue — the whole "make this bot
      * go" sequence in the order you'd use it.
      *
-     * <p>An {@link OverflowBar}, like {@link #createCaptureGroup()}, and for the same reason turned inside out:
+     * <p>An {@link OverflowBar}, like the rows of {@link #createCentre()}, and for the same reason turned inside out:
      * as an {@code HBox} this cluster held one line at any width, so a narrow window took the space out of the
      * <em>centre</em> group instead, which then wrapped onto three or four rows and pushed the bar's height up.
      * Wrapping here lets the two groups share the shortfall a row at a time.

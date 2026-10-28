@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Which windows the overlay offers to dock beside: the open ones only.
  *
  * <p>Headless: {@code candidates} is pure and {@code ask} is the only part that needs a toolkit, which is the
- * same split {@code BlockTree} and {@code ToolbarVisibility} were given.
+ * same split {@code BlockTree} and {@code PluginTabs} were given.
  */
 @DisplayNameGeneration(ReplaceUnderscores.class)
 class OverlayWindowPickerTest {

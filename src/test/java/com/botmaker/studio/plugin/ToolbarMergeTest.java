@@ -1,7 +1,6 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioPlugin;
-import com.botmaker.plugin.api.toolbar.ToolbarGroup;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.host.LoadedPlugin;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -15,12 +14,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * How two plugins' toolbar items compose into one bar.
+ * How plugins' toolbar items compose: one tab per plugin on the bar (2026-10-28), the overlay's items apart.
  *
  * <p>Every rule here is one <b>with no visible symptom when it is wrong</b>, which is why it is tested rather
  * than left to the eye: a bar in a slightly different order reads as somebody's preference, and a button
- * silently absent reads as a feature that was never written. The three are the group refusal, the tie-break
- * that makes the order independent of discovery order, and a plugin failing alone.
+ * silently absent reads as a feature that was never written. They are the order, the tie-break that makes it
+ * independent of discovery order, a plugin failing alone, and the split between the bar and the overlay.
  */
 @DisplayNameGeneration(ReplaceUnderscores.class)
 class ToolbarMergeTest {
@@ -37,8 +36,12 @@ class ToolbarMergeTest {
         })));
     }
 
-    private static ToolbarItem item(String id, ToolbarGroup group, int order) {
-        return ToolbarItem.id(id).label(id).tooltip(id).in(group, order).onPress(() -> c -> { });
+    private static ToolbarItem bar(String id, int order) {
+        return ToolbarItem.id(id).label(id).tooltip(id).onBar(order).onPress(() -> c -> { });
+    }
+
+    private static ToolbarItem overlay(String id, int order) {
+        return ToolbarItem.id(id).label(id).tooltip(id).inOverlay(order).onPress(() -> c -> { });
     }
 
     private static List<String> ids(List<ToolbarItem> items) {
@@ -48,48 +51,29 @@ class ToolbarMergeTest {
     }
 
     @Test
-    void items_sort_by_group_then_by_their_own_order() {
+    void a_plugins_items_sort_by_their_own_order() {
         List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(
-                fake("a", List.of(
-                        item("tools-late", ToolbarGroup.TOOLS, 90),
-                        item("project-early", ToolbarGroup.PROJECT, 10),
-                        item("project-late", ToolbarGroup.PROJECT, 20),
-                        item("run", ToolbarGroup.RUN, 5)))));
+                fake("a", List.of(bar("late", 90), bar("early", 10), bar("middle", 20)))));
 
-        assertEquals(List.of("project-early", "project-late", "run", "tools-late"), ids(merged));
+        assertEquals(List.of("early", "middle", "late"), ids(merged));
     }
 
     /**
-     * Two plugins claiming the same slot are ordered by their own ids, not by which one
-     * {@code ServiceLoader} happened to find first — the same reasoning that makes the value catalog refuse
-     * a clash rather than let load order decide it.
+     * Two plugins are ordered by name, then by coordinate, never by which one the loader happened to find
+     * first — the same reasoning that makes the value catalog refuse a clash rather than let load order
+     * decide it.
      */
     @Test
-    void a_tie_breaks_on_the_plugin_id_rather_than_on_discovery_order() {
+    void plugins_order_by_name_rather_than_by_discovery_order() {
         List<ToolbarItem> zebraFirst = PluginHost.mergeToolbarItems(List.of(
-                fake("zebra", List.of(item("z", ToolbarGroup.RUN, 10))),
-                fake("alpha", List.of(item("a", ToolbarGroup.RUN, 10)))));
+                fake("zebra", List.of(bar("z", 10))),
+                fake("alpha", List.of(bar("a", 10)))));
         List<ToolbarItem> alphaFirst = PluginHost.mergeToolbarItems(List.of(
-                fake("alpha", List.of(item("a", ToolbarGroup.RUN, 10))),
-                fake("zebra", List.of(item("z", ToolbarGroup.RUN, 10)))));
+                fake("alpha", List.of(bar("a", 10))),
+                fake("zebra", List.of(bar("z", 10)))));
 
         assertEquals(List.of("a", "z"), ids(zebraFirst));
         assertEquals(ids(alphaFirst), ids(zebraFirst), "the bar must not depend on which plugin loaded first");
-    }
-
-    /**
-     * {@link ToolbarGroup#STUDIO} is the host's own section and a plugin item asking for it is dropped, not
-     * re-homed. Quietly moving it would put a plugin's button where a user reads the application rather than
-     * their project.
-     */
-    @Test
-    void the_studio_group_is_refused_and_the_plugins_other_items_survive() {
-        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(
-                fake("a", List.of(
-                        item("sneaky", ToolbarGroup.STUDIO, 1),
-                        item("honest", ToolbarGroup.TOOLS, 1)))));
-
-        assertEquals(List.of("honest"), ids(merged));
     }
 
     /** A plugin that cannot list its buttons costs its own and nothing else — never the project. */
@@ -97,7 +81,7 @@ class ToolbarMergeTest {
     void a_plugin_that_throws_does_not_cost_the_others_their_items() {
         List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(
                 broken("broken"),
-                fake("good", List.of(item("kept", ToolbarGroup.RUN, 1)))));
+                fake("good", List.of(bar("kept", 1)))));
 
         assertEquals(List.of("kept"), ids(merged));
     }
@@ -111,66 +95,55 @@ class ToolbarMergeTest {
     }
 
     /**
-     * With no project bound the bar carries no plugin items at all.
-     *
-     * <p>This assertion has now been inverted twice, and both inversions are the same fact seen from
-     * different sides. It first said the bundled set offered nothing — a guard against the bar showing the
-     * Pilot button twice while the pilot was still Studio's. When the pilot moved to the SDK plugin
-     * (2026-08-30) it said the opposite, that the bundled set must contribute it. On 2026-09-02 Studio
-     * stopped depending on the SDK altogether, so it bundles no plugin and the bar is empty again — but for
-     * the opposite reason: not because the host builds these buttons, because nothing is loaded until a
-     * project is.
+     * With no project bound the bar carries no plugin items at all: Studio bundles no plugin, and nothing is
+     * loaded until a project is.
      */
     @Test
     void an_unbound_host_contributes_no_plugin_items() {
         assertTrue(PluginHost.plugins().isEmpty(), "Studio bundles no plugin: " + PluginHost.plugins());
         assertTrue(PluginHost.toolbarItems().isEmpty(),
                 "the bar carries plugin items with nothing loaded: " + ids(PluginHost.toolbarItems()));
+        assertTrue(PluginHost.barItemsByPlugin().isEmpty());
     }
 
     /**
-     * {@code OVERLAY} is a group a plugin may claim, unlike {@code STUDIO}.
-     *
-     * <p>Worth its own case because the two refusals read alike and are opposites: {@code STUDIO} is the
-     * host's own section and an item asking for it is dropped with the plugin named, while {@code OVERLAY} is
-     * a section a plugin is <em>meant</em> to claim — it simply has a different reader.
+     * Each plugin with bar items gets one tab, in name order, holding its bar items only and knowing its jar.
+     * Tested because an item the grouping loses is a button silently absent.
      */
     @Test
-    void an_overlay_item_is_merged_like_any_other() {
-        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(fake("com.example.one", List.of(
-                item("point-here", ToolbarGroup.OVERLAY, 10),
-                item("cut", ToolbarGroup.TOOLS, 20)))));
-
-        assertEquals(List.of("cut", "point-here"), ids(merged),
-                "OVERLAY sorts after TOOLS, which is its declaration order");
-    }
-
-    /**
-     * One filter, two readers — the main bar takes every group but {@code OVERLAY}, the HUD takes only that
-     * one. Tested because a group nobody reads is an item silently absent, which is the failure this whole
-     * file exists for.
-     */
-    @Test
-    void itemsIn_answers_one_group_only() {
-        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(fake("com.example.one", List.of(
-                item("point-here", ToolbarGroup.OVERLAY, 10),
-                item("cut", ToolbarGroup.TOOLS, 20)))));
-
-        assertEquals(List.of("point-here"), ids(PluginHost.itemsIn(merged, ToolbarGroup.OVERLAY)));
-        assertEquals(List.of("cut"), ids(PluginHost.itemsIn(merged, ToolbarGroup.TOOLS)));
-        assertTrue(PluginHost.itemsIn(merged, ToolbarGroup.RUN).isEmpty());
-    }
-
-    /** The bar draws one section per plugin, so every item has to arrive knowing whose it is. */
-    @Test
-    void each_item_keeps_the_plugin_that_offered_it() {
+    void bar_items_group_into_one_tab_per_plugin() {
         List<PluginHost.OwnedItem> owned = PluginHost.mergeOwnedToolbarItems(List.of(
-                fake("zebra", List.of(item("z", ToolbarGroup.TOOLS, 10))),
-                fake("alpha", List.of(item("a", ToolbarGroup.PROJECT, 10)))));
+                fake("zebra", List.of(bar("z2", 20), bar("z1", 10))),
+                fake("alpha", List.of(bar("a", 10), overlay("point", 10)))));
 
-        assertEquals(List.of("a", "z"), owned.stream().map(o -> o.item().id()).toList());
+        List<PluginHost.PluginBar> bars = PluginHost.barItemsByPlugin(owned);
+
         assertEquals(List.of(TestPlugins.coordinate("alpha"), TestPlugins.coordinate("zebra")),
-                owned.stream().map(PluginHost.OwnedItem::plugin).toList());
-        assertEquals("alpha", owned.getFirst().pluginName());
+                bars.stream().map(PluginHost.PluginBar::plugin).toList());
+        assertEquals(List.of("a"), ids(bars.get(0).items()));
+        assertEquals(List.of("z1", "z2"), ids(bars.get(1).items()));
+        assertEquals("alpha", bars.getFirst().name());
+        assertEquals(owned.getFirst().jar(), bars.getFirst().jar());
+    }
+
+    /** A plugin whose only items are the overlay's has nothing on the bar, so it gets no tab. */
+    @Test
+    void a_plugin_with_overlay_items_only_has_no_tab() {
+        List<PluginHost.OwnedItem> owned = PluginHost.mergeOwnedToolbarItems(List.of(
+                fake("overlay-only", List.of(overlay("point", 10))),
+                fake("bar", List.of(bar("open", 10)))));
+
+        assertEquals(List.of(TestPlugins.coordinate("bar")),
+                PluginHost.barItemsByPlugin(owned).stream().map(PluginHost.PluginBar::plugin).toList());
+    }
+
+    /** One filter, two readers — the bar takes the bar's items, the overlay editor takes only its own. */
+    @Test
+    void overlay_items_answers_the_overlays_items_only() {
+        List<ToolbarItem> merged = PluginHost.mergeToolbarItems(List.of(fake("com.example.one", List.of(
+                overlay("point-here", 10),
+                bar("cut", 20)))));
+
+        assertEquals(List.of("point-here"), ids(PluginHost.overlayItems(merged)));
     }
 }

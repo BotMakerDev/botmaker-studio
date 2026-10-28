@@ -306,15 +306,15 @@ public class UIManager implements ProjectWindow {
         // is still opening (no bar yet) or after it has closed (no window to put one in).
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, event -> {
             if (disposed || topBar == null) return;
-            topBar.setCenter(toolbarManager.createCaptureGroup());
+            topBar.setCenter(toolbarManager.createCentre());
         }, true);
 
-        // Hiding a toolbar group changes what is *on* the bar, so it rebuilds it the same way installing a
-        // plugin does — same call, same guards. Not an event: the menu is this bar's own, so there is nobody
+        // Picking a plugin tab changes what is *on* the bar, so it rebuilds it the same way installing a
+        // plugin does — same call, same guards. Not an event: the tabs are this bar's own, so there is nobody
         // else to tell, and a SettingsChangedEvent would rebuild the bar on every unrelated settings write.
         toolbarManager.setOnRebuildBar(() -> {
             if (disposed || topBar == null) return;
-            topBar.setCenter(toolbarManager.createCaptureGroup());
+            topBar.setCenter(toolbarManager.createCentre());
         });
 
         eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, event -> {
@@ -391,7 +391,7 @@ public class UIManager implements ProjectWindow {
         // Breathing room against the window edge, mirroring the padding createEditGroup() applies on its side.
         rightContainer.setPadding(new Insets(0, 10, 0, 0));
 
-        OverflowBar captureControls = toolbarManager.createCaptureGroup();
+        Node captureControls = toolbarManager.createCentre();
 
         BorderPane topBar = new BorderPane();
         this.topBar = topBar;

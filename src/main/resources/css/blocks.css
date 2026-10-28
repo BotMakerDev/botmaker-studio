@@ -229,23 +229,39 @@
     -fx-padding: 8 6 8 6;
 }
 
-/* The resolution readout (ToolbarManager) — a bare Label sharing a wrap row with buttons. Without the
-   buttons' own vertical padding it is the shortest node in the row, so it centres against them and its
-   descenders sit outside the height the row was measured at. */
-.toolbar-resolution {
-    -fx-padding: 4 6 4 6;
+/* The plugin row's tabs (PluginTabs, 2026-10-28): one per plugin with bar buttons, the selected one first and
+   underlined in the accent, quiet otherwise so the buttons after them read as the row's content. Token-driven,
+   like the bar, so both themes follow. */
+.plugin-tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 4 4 0 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0 0 2 0;
+    -fx-text-fill: -bm-muted;
+    -fx-padding: 3 8 3 6;
+    -fx-graphic-text-gap: 6;
+    -fx-cursor: hand;
 }
 
-/* One owner's section on the toolbar (ToolbarManager.sectionCaption): "Studio", then each plugin's name,
-   quiet so it reads as a heading of the buttons after it rather than as one of them. */
-.toolbar-section-caption {
+.plugin-tab:hover {
+    -fx-background-color: -bm-band;
+    -fx-text-fill: -fx-text-background-color;
+}
+
+.plugin-tab-selected {
+    -fx-border-color: -bm-accent;
+    -fx-text-fill: -fx-text-background-color;
+    -fx-font-weight: bold;
+}
+
+.plugin-tab-more {
+    -fx-border-color: -bm-divider;
+    -fx-border-width: 0 0 0 1;
+}
+
+.plugin-tab-coordinate {
     -fx-text-fill: -bm-muted;
     -fx-font-size: 0.85em;
-    -fx-padding: 4 2 4 2;
-}
-
-.toolbar-section-divider .line {
-    -fx-border-color: -bm-divider;
 }
 
 /* The status line — the window's last row, under the split panes (UIManager). */

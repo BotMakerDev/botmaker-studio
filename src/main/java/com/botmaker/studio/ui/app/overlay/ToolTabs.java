@@ -17,7 +17,7 @@ import java.util.function.Supplier;
 
 /**
  * The panel's tool tabs: each plugin's {@link OverlayTool} panes first, then <b>Actions</b> (the
- * {@code ToolbarGroup.OVERLAY} items) and <b>Blocks</b> (the palette).
+ * {@code inOverlay} items) and <b>Blocks</b> (the palette).
  *
  * <p>A tool's pane is built once per opening of the panel, as the contract says; one that throws costs only
  * its own tab, which says so. Actions is rebuilt on {@link #refreshActions}, since a code update can change

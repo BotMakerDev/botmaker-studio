@@ -23,6 +23,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **The toolbar is two rows** (2026-10-28): the top row holds Studio's own buttons only (⚙ Settings, 🎚 Parameters,
+  🐞 Debug output, 👁 Preview, ⧉ Overlay); under it, one tab per plugin that has toolbar buttons, with its icon and
+  name, then the selected plugin's buttons in that plugin's order. The tabs most recently picked come first; the
+  ones that do not fit go into a `» N more` list you can filter by typing. The selected tab is remembered per
+  project (`settings.json` `toolbarTabs`).
+- The overlay editor's Actions tab hides its plugin actions from a right-click and shows them again from the link
+  left in their place (`overlayActionsHidden`), instead of the toolbar's group menu.
 - **What's new for every plugin**: the upgrade dialog reads `META-INF/botmaker/changelog.md`, which
   `botmaker-plugin-parent` copies from any plugin's `CHANGELOG.md`, instead of the SDK-only `whats-new.md`, which
   it still reads in an SDK released before.
@@ -38,6 +45,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Removed
 
+- The toolbar's screen resolution read-out, its owner sections and its right-click menu of groups; a project's
+  hidden groups (`hiddenToolbarGroups`) are ignored.
 - The empty bundled plugin set: a project whose classpath loads nothing binds no plugin, and the catalog id check
   after loading is gone (the catalog pins the coordinate itself).
 

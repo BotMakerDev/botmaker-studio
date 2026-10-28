@@ -10,7 +10,7 @@ import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.plugin.api.toolbar.Pressed;
-import com.botmaker.plugin.api.toolbar.ToolbarGroup;
+import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.core.BodyBlock;
@@ -46,7 +46,6 @@ import com.botmaker.studio.services.overlay.ProbeEngine;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.services.trial.TrialCaller;
 import com.botmaker.studio.ui.app.trial.TrialMenu;
-import com.botmaker.studio.ui.app.ToolbarVisibility;
 import com.botmaker.studio.ui.app.run.DesktopLayer;
 import com.botmaker.studio.ui.app.run.RunBarDock;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
@@ -58,7 +57,10 @@ import javafx.geometry.Side;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -71,7 +73,6 @@ import java.awt.image.BufferedImage;
 import java.lang.reflect.Executable;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -793,25 +794,37 @@ public final class OverlayEditor {
         return at == null ? null : probed.get(at);
     }
 
-    /** The Actions tab: every {@code ToolbarGroup.OVERLAY} item, with the toolbar's show/hide menu. */
+    /**
+     * The Actions tab: every plugin's overlay item, or, when the project hid them, the one link that shows
+     * them again. Right-clicking the row hides it; the panel has no menu bar, so the switch has to be here.
+     */
     private Node actionsRow() {
-        Node row = OverlayItemRow.build(PluginHost.itemsIn(ToolbarGroup.OVERLAY), itemContext(), hiddenGroups());
-        if (row == null) return null;
-        // The panel has no menu bar, so the row carries the same menu the main toolbar does — otherwise a user
-        // who hid a group from the bar could not get it back without leaving the game.
+        List<ToolbarItem> items = PluginHost.overlayItems();
+        if (items.isEmpty()) return null;
+        if (actionsHidden()) {
+            Hyperlink show = new Hyperlink("Actions are hidden for this project — show them");
+            show.setOnAction(e -> setActionsHidden(false));
+            return show;
+        }
+        Node row = OverlayItemRow.build(items, itemContext());
+        MenuItem hide = new MenuItem("Hide the actions");
+        hide.setOnAction(e -> setActionsHidden(true));
+        ContextMenu menu = new ContextMenu(hide);
         row.setOnContextMenuRequested(e -> {
-            ToolbarVisibility.menu(hiddenGroups(), next -> {
-                settings.update(settings.current().withHiddenToolbarGroups(ToolbarVisibility.wire(next)));
-                tools.refreshActions();
-            }).show(row, e.getScreenX(), e.getScreenY());
+            menu.show(row, e.getScreenX(), e.getScreenY());
             e.consume();
         });
         return row;
     }
 
-    private Set<ToolbarGroup> hiddenGroups() {
-        return settings == null ? EnumSet.noneOf(ToolbarGroup.class)
-                : ToolbarVisibility.hidden(settings.current().hiddenToolbarGroups());
+    private boolean actionsHidden() {
+        return settings != null && settings.current() != null && settings.current().overlayActionsHidden();
+    }
+
+    private void setActionsHidden(boolean hidden) {
+        if (settings == null || settings.current() == null) return;
+        settings.update(settings.current().withOverlayActionsHidden(hidden));
+        tools.refreshActions();
     }
 
     /**
