@@ -20,8 +20,18 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Region;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.DoStatement;
+import org.eclipse.jdt.core.dom.EnhancedForStatement;
 import org.eclipse.jdt.core.dom.Expression;
+import org.eclipse.jdt.core.dom.ForStatement;
+import org.eclipse.jdt.core.dom.IfStatement;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.SwitchStatement;
+import org.eclipse.jdt.core.dom.TryStatement;
+import org.eclipse.jdt.core.dom.WhileStatement;
 
 import java.util.List;
 
@@ -189,6 +199,8 @@ public abstract class AbstractCodeBlock implements CodeBlock {
             // it is, this names which block declared it. Both are needed, because a component id is unique
             // within a spec and not across the file.
             com.botmaker.studio.core.component.ComponentNodes.stampBlock(uiNode, id);
+            // What a screen reader and the ui driver call the block (2026-10-28), unless the block named it.
+            if (uiNode.getAccessibleText() == null) uiNode.setAccessibleText(accessibleText());
 
             for (BlockDecorator decorator : DECORATORS) {
                 decorator.decorate(uiNode, this, context);
@@ -197,6 +209,32 @@ public abstract class AbstractCodeBlock implements CodeBlock {
             if (errorMessage != null) setError(errorMessage);
         }
         return uiNode;
+    }
+
+    /**
+     * The block's kind and its heading, as {@code If x > 3}: what its node is called. A heading, never the body: a
+     * class flattened once per block it holds made a big file quadratic.
+     */
+    private String accessibleText() {
+        String kind = getClass().getSimpleName().replaceFirst("Block$", "");
+        ASTNode heading = switch (astNode) {
+            case MethodDeclaration method -> method.getName();
+            case AbstractTypeDeclaration type -> type.getName();
+            case IfStatement statement -> statement.getExpression();
+            case WhileStatement statement -> statement.getExpression();
+            case DoStatement statement -> statement.getExpression();
+            case ForStatement statement -> statement.getExpression();
+            case EnhancedForStatement statement -> statement.getExpression();
+            case SwitchStatement statement -> statement.getExpression();
+            case Block ignored -> null;
+            case TryStatement ignored -> null;
+            case null -> null;
+            // A lambda's or anonymous class's body would be flattened whole: a short node only.
+            default -> astNode.getLength() <= 120 ? astNode : null;
+        };
+        String source = heading == null ? "" : heading.toString().strip().lines().findFirst().orElse("");
+        if (source.length() > 60) source = source.substring(0, 60) + "…";
+        return source.isEmpty() ? kind : kind + " " + source;
     }
 
     @Override

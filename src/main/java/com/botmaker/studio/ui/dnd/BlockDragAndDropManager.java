@@ -113,6 +113,7 @@ public class BlockDragAndDropManager {
     // --- Drag sources ---
 
     public void makeDraggable(Node node, BlockType blockType) {
+        if (node.getAccessibleText() == null) node.setAccessibleText("palette " + blockType.displayName());
         node.setOnDragDetected(event -> {
             Dragboard db = node.startDragAndDrop(TransferMode.COPY);
             ClipboardContent content = new ClipboardContent();

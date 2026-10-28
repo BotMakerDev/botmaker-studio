@@ -12,9 +12,11 @@ import javafx.scene.SnapshotParameters;
 import javafx.scene.control.ButtonBase;
 import javafx.scene.control.ComboBoxBase;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Control;
 import javafx.scene.control.IndexedCell;
 import javafx.scene.control.Labeled;
 import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuButton;
@@ -24,8 +26,15 @@ import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
+import javafx.scene.control.TableColumnBase;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.Tooltip;
+import javafx.scene.control.TreeCell;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.CheckBox;
@@ -49,9 +58,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -61,6 +73,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -68,7 +82,9 @@ import java.util.stream.Collectors;
  * the Run window and every dialog itself. Only in a dev Studio started with {@code BOTMAKER_MCP_UI=1}: an installed
  * Studio never serves it, and with the flag on it presses trust prompts too (the user's call).
  *
- * <p>{@code read} numbers what a window shows; a ref holds until the next {@code read}. Every scene access runs on the
+ * <p>{@code read} numbers what a window shows; a control keeps its ref while it is shown (2026-10-28). Lists, tables
+ * and trees are read from their model, every row and not only those scrolled to, and a control with no text says its
+ * accessible text, tooltip, id or style class. Every scene access runs on the
  * FX thread; a press is fired there without waiting for it, since a press may open a dialog that waits for its own
  * answer. Keys, right and double clicks, scrolls and drags are events {@link UiInput} fires as a user's would arrive
  * (2026-10-28).
@@ -84,8 +100,14 @@ final class UiTools {
     static final String FLAG_PROPERTY = "botmaker.mcp.ui";
     private static final String WINDOW = "a window's number from windows, or part of its title; the focused one "
             + "when left out";
+    private static final String FIND = "else the text it shows";
     /** At most this many lines in one read; the rest is counted. */
     private static final int MOST_LINES = 400;
+    /** At most this many rows of one list, table or tree, unless a read finds; and a name's longest. */
+    private static final int MOST_ROWS = 100;
+    private static final int LONGEST_NAME = 60;
+    /** Where {@link Tooltip#install} keeps a node's tooltip, which only a {@code Control} has a getter for. */
+    private static final String TOOLTIP_KEY = "javafx.scene.control.Tooltip";
     private static final long SETTLE_MS = 400;
     /** Studio is idle once what its windows show holds this long with no progress spinning, ... */
     private static final long QUIET_MS = 300;
@@ -111,18 +133,26 @@ final class UiTools {
 
         @Describe("what a window shows, each control with a ref; a label its width cuts short says cut")
         record Read(@Describe(value = WINDOW, optional = true) String window,
-                    @Describe(value = "true lists the menu bar's items too", optional = true) Boolean menus)
-                implements Ui {
+                    @Describe(value = "true lists the menu bar's items too", optional = true) Boolean menus,
+                    @Describe(value = "only this ref's part", optional = true) Integer within,
+                    @Describe(value = "only lines holding this", optional = true) String find) implements Ui {
         }
 
-        @Describe("press a button, link, menu item, tab, check box, list item or clickable area")
-        record Press(@Describe("a ref from read") int ref,
+        @Describe("press a button, link, menu item, tab, check box, row or clickable area")
+        record Press(@Describe(value = "a ref from read", optional = true) Integer ref,
+                     @Describe(value = FIND, optional = true) String find,
                      @Describe(value = "right opens its menu", optional = true) Mouse button,
                      @Describe(value = "2: a double click", optional = true) Integer count) implements Ui {
         }
 
         @Describe("put text in a field, or pick a choice box's item by its text")
-        record Type(int ref, @Describe("the text") String text) implements Ui {
+        record Type(@Describe(value = "a ref", optional = true) Integer ref,
+                    @Describe(value = FIND, optional = true) String find,
+                    @Describe("the text") String text) implements Ui {
+        }
+
+        @Describe("open or close a tree row")
+        record Expand(int ref) implements Ui {
         }
 
         @Describe("keys, as Ctrl+Shift+A or Escape")
@@ -180,8 +210,23 @@ final class UiTools {
     private record Timed(String what, long ms) {
     }
 
-    /** What the last read numbered: a {@link Node}, {@link MenuItem} or {@link Tab}. FX thread only. */
+    /** A list's, table's or tree's row, read from its model: the item, the {@code nth} equal one, or a {@link TreeItem}. */
+    private record Row(Control view, Object item, int nth) {
+    }
+
+    /** How a read goes: the menu bar's items too, and only the lines holding {@code find} (null: every line). */
+    private record Reading(boolean menus, String find) {
+    }
+
+    /**
+     * What reads numbered, still shown: a {@link Node}, {@link Row}, {@link MenuItem} or {@link Tab}, each keeping its
+     * number across reads ({@link #numbers}); a menu item only until a read leaves it out. FX thread only.
+     */
     private final Map<Integer, Object> refs = new HashMap<>();
+    private final Map<Object, Integer> numbers = new HashMap<>();
+    /** What the read in progress numbered, and the last number given. FX thread only. */
+    private final Set<Object> numberedNow = new HashSet<>();
+    private int numbered;
     /** The window the refs are in; null before the first read. FX thread only. */
     private Window lastRead;
     /** The newest {@link UiEvents} event an answer has reported, over every endpoint: a new one repeats none. */
@@ -211,8 +256,8 @@ final class UiTools {
 
     AssistantTool<AssistantTool.OneOf<Ui>> tool() {
         return AssistantTool.named("ui")
-                .describedAs("Studio's own windows: list, read, press, type, key, scroll, drag, look, wait; answers "
-                        + "say what changed, new errors and stalls. Dev Studio only.")
+                .describedAs("Studio's own windows: list, read, press, type, key, scroll, drag, expand, look, wait; "
+                        + "answers say what changed, new errors and stalls. Dev Studio only.")
                 .takesOneOf(Ui.class)
                 .handledBy((action, context) -> reported(handle(action)));
     }
@@ -221,11 +266,13 @@ final class UiTools {
         try {
             return switch (action) {
                 case Ui.Windows ignored -> AgentReply.text(onFx(UiTools::windows));
-                case Ui.Read read -> AgentReply.text(onFx(() -> read(read.window(), Boolean.TRUE.equals(read.menus()))));
-                case Ui.Press press -> AgentReply.text(press(press.ref(),
+                case Ui.Read read -> AgentReply.text(onFx(() -> read(read.window(), Boolean.TRUE.equals(read.menus()),
+                        read.within(), read.find())));
+                case Ui.Press press -> AgentReply.text(press(press.ref(), press.find(),
                         press.button() == Mouse.RIGHT ? MouseButton.SECONDARY : MouseButton.PRIMARY,
                         press.count() == null ? 1 : press.count()));
-                case Ui.Type type -> AgentReply.text(typed(type.ref(), type.text()));
+                case Ui.Type type -> AgentReply.text(typed(type.ref(), type.find(), type.text()));
+                case Ui.Expand expand -> AgentReply.text(expand(expand.ref()));
                 case Ui.Key key -> AgentReply.text(key(key.ref(), key.keys()));
                 case Ui.Scroll scroll -> AgentReply.text(scroll(scroll.ref(), scroll.pages()));
                 case Ui.Drag drag -> AgentReply.text(drag(drag.from(), drag.to()));
@@ -319,38 +366,115 @@ final class UiTools {
 
     /** {@code menus}: the menu bar's items too, which run to thousands of characters in the editor. */
     String read(String which, boolean menus) {
-        return read(window(which), menus);
+        return read(which, menus, null, null);
     }
 
-    /** {@code window} read, its controls numbered from r1; the refs held until now are dropped. FX thread. */
+    /** {@code within}: only that ref's part, in its own window; {@code find}: only the lines holding it. FX thread. */
+    String read(String which, boolean menus, Integer within, String find) {
+        Reading how = new Reading(menus, find == null || find.isBlank() ? null : find.strip());
+        if (within == null) return read(window(which), how, null);
+        Node part = node(within, "has no part to read");
+        return read(part.getScene().getWindow(), how, part);
+    }
+
     private String read(Window window, boolean menus) {
-        refs.clear();
+        return read(window, new Reading(menus, null), null);
+    }
+
+    /**
+     * {@code window} read, or only its {@code part}; a control keeps the ref an earlier read gave it, and refs to
+     * what is no longer shown are dropped. FX thread.
+     */
+    private String read(Window window, Reading how, Node part) {
+        numberedNow.clear();
         lastRead = window;
         List<String> lines = new ArrayList<>();
-        lines.add(describe(showing().indexOf(window) + 1, window));
-        if (window instanceof ContextMenu menu) {
+        if (part != null) {
+            walk(part, how, lines);
+        } else if (window instanceof ContextMenu menu) {
             items(menu.getItems(), "", lines);
         } else if (window.getScene() != null) {
-            walk(window.getScene().getRoot(), menus, lines);
+            walk(window.getScene().getRoot(), how, lines);
+        }
+        Map<Control, Map<Object, Integer>> counts = new HashMap<>();
+        refs.values().removeIf(target -> !numberedNow.contains(target)
+                && !(target instanceof Row row ? shown(row, counts) : shown(target)));
+        numbers.keySet().removeIf(target -> !refs.containsKey(numbers.get(target)));
+        if (how.find() != null) {
+            String lower = how.find().toLowerCase(Locale.ROOT);
+            lines = new ArrayList<>(lines.stream().filter(l -> l.toLowerCase(Locale.ROOT).contains(lower)).toList());
+            if (lines.isEmpty()) lines.add("No line holds \"" + how.find() + "\".");
         }
         if (lines.size() > MOST_LINES) {
             int more = lines.size() - MOST_LINES;
             lines = new ArrayList<>(lines.subList(0, MOST_LINES));
             lines.add("… " + more + " more lines");
         }
+        String header = describe(showing().indexOf(window) + 1, window);
+        lines.addFirst(part == null ? header : header + ", within " + named(part));
         return String.join("\n", lines);
     }
 
+    /** {@code target}'s ref: the one it already has, else the next. */
     private int ref(Object target) {
-        int next = refs.size() + 1;
-        refs.put(next, target);
-        return next;
+        int number = numbers.computeIfAbsent(target, ignored -> ++numbered);
+        refs.put(number, target);
+        numberedNow.add(target);
+        return number;
     }
 
-    private void walk(Node node, boolean menus, List<String> lines) {
+    /**
+     * Whether {@code target} is still shown: in a shown window, it and what holds it visible (a tab not selected
+     * hides its content). A menu item is held only by the read that lists it.
+     */
+    private static boolean shown(Object target) {
+        return switch (target) {
+            case Node node -> {
+                if (node.getScene() == null || node.getScene().getWindow() == null
+                        || !node.getScene().getWindow().isShowing()) {
+                    yield false;
+                }
+                for (Node at = node; at != null; at = at.getParent()) {
+                    if (!at.isVisible()) yield false;
+                }
+                yield true;
+            }
+            case Tab tab -> tab.getTabPane() != null && shown(tab.getTabPane());
+            case Row row -> shown(row.view()) && index(row) >= 0;
+            default -> false;
+        };
+    }
+
+    /**
+     * {@link #shown(Object)} for many rows at once: each list's or table's items counted once in {@code counts}, so
+     * keeping a big list's rows costs one pass, not one per row.
+     */
+    private static boolean shown(Row row, Map<Control, Map<Object, Integer>> counts) {
+        if (!shown(row.view())) return false;
+        if (row.view() instanceof TreeView<?> tree) {
+            // Up its parents, not getRow, which counts the rows above it.
+            if (!(row.item() instanceof TreeItem<?> item)) return false;
+            for (TreeItem<?> up = item.getParent(); up != null; up = up.getParent()) {
+                if (!up.isExpanded()) return false;
+                item = up;
+            }
+            return item == tree.getRoot();
+        }
+        Map<Object, Integer> count = counts.computeIfAbsent(row.view(), view -> {
+            Map<Object, Integer> made = new HashMap<>();
+            List<?> items = view instanceof TableView<?> table ? table.getItems()
+                    : view instanceof ListView<?> list ? list.getItems() : List.of();
+            for (Object item : items) made.merge(item, 1, Integer::sum);
+            return made;
+        });
+        return count.getOrDefault(row.item(), 0) > row.nth();
+    }
+
+    private void walk(Node node, Reading how, List<String> lines) {
         if (node == null || !node.isVisible()) return;
         String off = node.isDisabled() ? " (off)" : "";
         if (node.getStyleClass().stream().anyMatch(c -> c.endsWith("card"))) lines.add("-- card");
+        boolean menus = how.menus();
         switch (node) {
             case MenuBar bar when !menus -> {
                 lines.add("menu bar " + bar.getMenus().stream().map(Menu::getText).toList()
@@ -367,12 +491,29 @@ final class UiTools {
                             + (tab.isSelected() ? " (selected)" : "") + (tab.isDisabled() ? " (off)" : ""));
                 }
                 Tab selected = tabs.getSelectionModel().getSelectedItem();
-                if (selected != null) walk(selected.getContent(), menus, lines);
+                if (selected != null) walk(selected.getContent(), how, lines);
                 return;
             }
             case TitledPane pane -> {
                 lines.add("r" + ref(pane) + " section \"" + pane.getText() + "\"" + (pane.isExpanded() ? "" : " (closed)"));
-                if (pane.isExpanded()) walk(pane.getContent(), menus, lines);
+                if (pane.isExpanded()) walk(pane.getContent(), how, lines);
+                return;
+            }
+            case ListView<?> list -> {
+                rows(list, list.getItems(), "list", off, how, lines);
+                return;
+            }
+            case TableView<?> table -> {
+                rows(table, table.getItems(), "table " + table.getVisibleLeafColumns().stream()
+                        .map(TableColumnBase::getText).toList(), off, how, lines);
+                return;
+            }
+            case TreeView<?> tree -> {
+                lines.add("tree" + off);
+                Map<Integer, String> shown = cellTexts(tree);
+                int[] left = {how.find() == null ? MOST_ROWS : Integer.MAX_VALUE};
+                if (tree.getRoot() != null) branch(tree, tree.getRoot(), tree.isShowRoot() ? 0 : -1, shown, left, lines);
+                if (left[0] < 0) lines.add("… more rows; read with find picks one");
                 return;
             }
             case TextInputControl field -> {
@@ -397,7 +538,7 @@ final class UiTools {
             }
             case Labeled labeled -> {
                 labeled(labeled, off, lines);
-                if (labeled.getGraphic() != null && !(labeled instanceof ButtonBase)) walk(labeled.getGraphic(), menus, lines);
+                if (labeled.getGraphic() != null && !(labeled instanceof ButtonBase)) walk(labeled.getGraphic(), how, lines);
                 return;
             }
             case Text text -> {
@@ -405,14 +546,165 @@ final class UiTools {
                 return;
             }
             default -> {
-                if (node.getOnMouseClicked() != null || node.getOnMousePressed() != null) {
-                    lines.add("r" + ref(node) + " click" + off);
+                // A part Studio named for screen readers is listed even when its handlers are added, not set.
+                boolean clicks = node.getOnMouseClicked() != null || node.getOnMousePressed() != null;
+                if (clicks || quoted(node.getAccessibleText()) != null) {
+                    String name = name(node);
+                    lines.add("r" + ref(node) + (clicks ? " click" : " part") + (name == null ? "" : " " + name) + off);
                 }
             }
         }
         if (node instanceof Parent parent) {
-            for (Node child : parent.getChildrenUnmodifiable()) walk(child, menus, lines);
+            for (Node child : parent.getChildrenUnmodifiable()) walk(child, how, lines);
         }
+    }
+
+    /**
+     * A list's or table's rows from its model, not its cells, which are only those scrolled to: each says what its
+     * cell shows when one does, else its item. At most {@link #MOST_ROWS} unless the read finds.
+     */
+    private void rows(Control view, List<?> items, String kind, String off, Reading how, List<String> lines) {
+        lines.add(kind + " " + items.size() + (items.size() == 1 ? " row" : " rows") + off);
+        Map<Integer, String> shown = cellTexts(view);
+        int listed = how.find() == null ? Math.min(items.size(), MOST_ROWS) : items.size();
+        Map<Object, Integer> seen = new HashMap<>();
+        for (int i = 0; i < listed; i++) {
+            Object item = items.get(i);
+            String text = shown.containsKey(i) ? quoted(shown.get(i))
+                    : view instanceof TableView<?> table ? quoted(columns(table, i)) : quoted(said(item));
+            int nth = seen.merge(item, 1, Integer::sum) - 1;
+            lines.add("r" + ref(new Row(view, item, nth)) + " row " + (text == null ? "(not shown)" : text)
+                    + (selected(view, i) ? " (selected)" : ""));
+        }
+        if (items.size() > listed) lines.add("… " + (items.size() - listed) + " more rows; read with find picks one");
+    }
+
+    /** {@code item} and, while it is open, its children, each a row indented by its depth; -1 is a hidden root. */
+    private void branch(TreeView<?> tree, TreeItem<?> item, int depth, Map<Integer, String> shown, int[] left,
+                        List<String> lines) {
+        if (depth >= 0) {
+            if (left[0]-- <= 0) return;
+            int row = rowOf(tree, item);
+            String text = shown.containsKey(row) ? quoted(shown.get(row)) : quoted(said(item.getValue()));
+            String mark = item.isLeaf() ? "" : item.isExpanded() ? "[-] " : "[+] ";
+            lines.add("r" + ref(new Row(tree, item, 0)) + " row " + "  ".repeat(depth) + mark
+                    + (text == null ? "(not shown)" : text) + (selected(tree, row) ? " (selected)" : ""));
+        }
+        if (depth >= 0 && !item.isExpanded()) return;
+        for (TreeItem<?> child : item.getChildren()) branch(tree, child, depth + 1, shown, left, lines);
+    }
+
+    /** {@code item}'s row in {@code tree}, -1 when it is not in it or inside a closed row. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static int rowOf(TreeView<?> tree, TreeItem<?> item) {
+        return ((TreeView) tree).getRow(item);
+    }
+
+    private static String columns(TableView<?> table, int index) {
+        return table.getVisibleLeafColumns().stream().map(c -> String.valueOf(c.getCellData(index)))
+                .collect(Collectors.joining(" | "));
+    }
+
+    /** What an item says of itself, or null when that is only its class and hash. */
+    private static String said(Object item) {
+        String text = String.valueOf(item).replace('\n', ' ');
+        return text.matches("[\\w.$]+@\\p{XDigit}+") ? null : text;
+    }
+
+    /** The text each of {@code view}'s own filled cells shows, by its row. */
+    private static Map<Integer, String> cellTexts(Control view) {
+        Map<Integer, String> texts = new HashMap<>();
+        for (Node node : view.lookupAll(".indexed-cell")) {
+            if (node instanceof IndexedCell<?> cell && owns(view, cell) && !cell.isEmpty() && cell.isVisible()) {
+                String text = texts(cell);
+                if (!text.isBlank()) texts.putIfAbsent(cell.getIndex(), text);
+            }
+        }
+        return texts;
+    }
+
+    private static boolean owns(Control view, IndexedCell<?> cell) {
+        return switch (cell) {
+            case ListCell<?> c -> c.getListView() == view;
+            case TreeCell<?> c -> c.getTreeView() == view;
+            case TableRow<?> c -> c.getTableView() == view;
+            default -> false;
+        };
+    }
+
+    private static boolean selected(Control view, int index) {
+        return index >= 0 && switch (view) {
+            case ListView<?> list -> list.getSelectionModel().isSelected(index);
+            case TableView<?> table -> table.getSelectionModel().isSelected(index);
+            case TreeView<?> tree -> tree.getSelectionModel().isSelected(index);
+            default -> false;
+        };
+    }
+
+    /** {@code row}'s index in its view now; -1 when it is gone, or inside a closed tree row. */
+    private static int index(Row row) {
+        if (row.view() instanceof TreeView<?> tree) return row.item() instanceof TreeItem<?> item ? rowOf(tree, item) : -1;
+        List<?> items = switch (row.view()) {
+            case ListView<?> list -> list.getItems();
+            case TableView<?> table -> table.getItems();
+            default -> List.of();
+        };
+        int nth = row.nth();
+        for (int i = 0; i < items.size(); i++) {
+            if (Objects.equals(items.get(i), row.item()) && nth-- == 0) return i;
+        }
+        return -1;
+    }
+
+    /** The texts a cell shows, its own and its graphic's, or its children's when it has neither. */
+    private static String texts(Node node) {
+        List<String> parts = new ArrayList<>();
+        texts(node, parts);
+        return String.join(" ", parts).replace('\n', ' ');
+    }
+
+    private static void texts(Node node, List<String> parts) {
+        if (node == null || !node.isVisible()) return;
+        switch (node) {
+            case TextInputControl field -> {
+                parts.add(field instanceof PasswordField ? "••••" : field.getText());
+                return;
+            }
+            case Labeled labeled when labeled.getGraphic() != null || quoted(labeled.getText()) != null -> {
+                if (quoted(labeled.getText()) != null) parts.add(labeled.getText().strip());
+                texts(labeled.getGraphic(), parts);
+                return;
+            }
+            case Text text -> {
+                if (quoted(text.getText()) != null) parts.add(text.getText().strip());
+                return;
+            }
+            default -> {
+            }
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) texts(child, parts);
+        }
+    }
+
+    /**
+     * What names a node with no text of its own: its accessible text, its tooltip's first line, {@code #id}, or a
+     * part's first style class; null for none.
+     */
+    static String name(Node node) {
+        String said = quoted(node.getAccessibleText());
+        if (said == null && node.getProperties().get(TOOLTIP_KEY) instanceof Tooltip tip) said = quoted(tip.getText());
+        if (said != null) return said;
+        if (node.getId() != null && !node.getId().isBlank()) return "#" + node.getId();
+        if (node instanceof Control) return null;
+        return node.getStyleClass().stream().findFirst().map(c -> "." + c).orElse(null);
+    }
+
+    /** {@code text}'s first line in quotes, cut at {@link #LONGEST_NAME}; null for none. */
+    private static String quoted(String text) {
+        if (text == null || text.isBlank()) return null;
+        String line = text.strip().lines().findFirst().orElse("");
+        return "\"" + (line.length() > LONGEST_NAME ? line.substring(0, LONGEST_NAME) + "…" : line) + "\"";
     }
 
     private void labeled(Labeled labeled, String off, List<String> lines) {
@@ -430,7 +722,9 @@ final class UiTools {
         boolean pressable = !kind.equals("label");
         String shown = shownText(labeled);
         String cut = shown != null && !shown.equals(text) && !text.isBlank() ? " cut \"" + shown + "\"" : "";
-        lines.add((pressable ? "r" + ref(labeled) + " " : "") + kind + " \"" + text + "\"" + cut + off);
+        // An icon button says its tooltip or accessible text instead.
+        String said = text.isBlank() ? Objects.requireNonNullElse(name(labeled), "\"\"") : "\"" + text + "\"";
+        lines.add((pressable ? "r" + ref(labeled) + " " : "") + kind + " " + said + cut + off);
     }
 
     /** What {@code labeled} draws, which an ellipsis shortens when its width is too small; null before its skin. */
@@ -458,11 +752,40 @@ final class UiTools {
     private Object target(int ref) {
         Object target = refs.get(ref);
         if (target == null) throw new IllegalArgumentException("No ref r" + ref + "; read the window again.");
-        if (target instanceof Node node && (node.getScene() == null || node.getScene().getWindow() == null
-                || !node.getScene().getWindow().isShowing())) {
+        if ((target instanceof Node || target instanceof Row) && !shown(target)) {
             throw new IllegalArgumentException("r" + ref + " is gone from its window; read it again.");
         }
         return target;
+    }
+
+    /**
+     * {@code ref}, else the one ref in the window {@code read} picks whose line holds {@code find}: the line saying
+     * it exactly when several hold it. FX thread.
+     */
+    private int resolve(Integer ref, String find) {
+        if (ref != null) return ref;
+        if (find == null || find.isBlank()) throw new IllegalArgumentException("Say a ref, or find with the text it shows.");
+        String asked = find.strip();
+        String lower = asked.toLowerCase(Locale.ROOT);
+        // A read cuts a name at LONGEST_NAME, so a longer text is looked for by its start.
+        String probe = lower.length() > LONGEST_NAME ? lower.substring(0, LONGEST_NAME) : lower;
+        List<String> read = List.of(read(window(null), new Reading(false, probe), null).split("\n"));
+        List<String> hits = read.stream().skip(1)
+                .filter(l -> l.matches("r\\d+ .*") && names(l).stream().anyMatch(n -> n.contains(probe))).toList();
+        if (hits.isEmpty()) {
+            throw new IllegalArgumentException("No ref in " + read.getFirst() + " shows \"" + asked + "\"; read lists "
+                    + "what it shows.");
+        }
+        // A name read cut at LONGEST_NAME is exact when it starts the text asked for.
+        List<String> exact = hits.stream().filter(l -> names(l).stream().anyMatch(n -> n.equals(lower)
+                || n.endsWith("…") && lower.startsWith(n.substring(0, n.length() - 1)))).toList();
+        List<String> picked = exact.size() == 1 ? exact : hits.size() == 1 ? hits : List.of();
+        if (picked.isEmpty()) {
+            throw new IllegalArgumentException("\"" + asked + "\" is in " + hits.size() + " places; say a ref:\n"
+                    + String.join("\n", hits.subList(0, Math.min(hits.size(), 10))));
+        }
+        String line = picked.getFirst();
+        return Integer.parseInt(line.substring(1, line.indexOf(' ')));
     }
 
     /** Whether a press is in flight, which an endpoint's close waits for. */
@@ -481,20 +804,51 @@ final class UiTools {
         }
     }
 
-    String press(int ref) {
-        return press(ref, MouseButton.PRIMARY, 1);
+    /** What a read line names, lower case: its quoted texts and its {@code #id}, not its kind words. */
+    private static List<String> names(String line) {
+        List<String> names = new ArrayList<>();
+        Matcher said = NAMES.matcher(line);
+        while (said.find()) names.add((said.group(1) != null ? said.group(1) : said.group(2)).toLowerCase(Locale.ROOT));
+        return names;
     }
 
-    /** A press of {@code button}, {@code count} times; a plain press fires a control as its own action does. */
+    private static final Pattern NAMES = Pattern.compile("\"([^\"]*)\"|(#\\S+)");
+
+    String press(int ref) {
+        return press(ref, null, MouseButton.PRIMARY, 1);
+    }
+
     String press(int ref, MouseButton button, int count) {
+        return press(ref, null, button, count);
+    }
+
+    /**
+     * A press of {@code button}, {@code count} times, at {@code ref} or the ref showing {@code find}; a plain press
+     * fires a control as its own action does.
+     */
+    String press(Integer ref, String find, MouseButton button, int count) {
         if (count < 1 || count > 2) throw new IllegalArgumentException("Say a count of 1 or 2.");
         boolean plain = button == MouseButton.PRIMARY && count == 1;
         String how = button == MouseButton.SECONDARY ? "right-click" : count == 2 ? "double-click" : "press";
         String said = button == MouseButton.SECONDARY ? "Right-clicked" : count == 2 ? "Double-clicked" : "Pressed";
         return drive(() -> {
-            String what = named(target(ref));
-            Runnable run = plain ? action(ref) : clicks(ref, button, count);
-            return new Act(how + " " + what, said + " r" + ref + " " + what, run);
+            int at = resolve(ref, find);
+            String what = named(target(at));
+            Runnable run = plain ? action(at) : clicks(at, button, count);
+            return new Act(how + " " + what, said + " r" + at + " " + what, run);
+        });
+    }
+
+    /** A tree row {@code ref} opened, or closed when open. */
+    String expand(int ref) {
+        return drive(() -> {
+            if (!(target(ref) instanceof Row(TreeView<?> _, TreeItem<?> item, int _))) {
+                throw new IllegalArgumentException("r" + ref + " " + named(target(ref)) + " is no tree row.");
+            }
+            if (item.isLeaf()) throw new IllegalArgumentException("r" + ref + " " + named(item) + " has no rows in it.");
+            boolean open = item.isExpanded();
+            return new Act((open ? "close " : "open ") + named(target(ref)),
+                    (open ? "Closed r" : "Opened r") + ref + " " + named(target(ref)), () -> item.setExpanded(!open));
         });
     }
 
@@ -514,7 +868,11 @@ final class UiTools {
     /** {@code ref} brought into view in its scroll panes, or the wheel turned {@code pages} at it. */
     String scroll(int ref, Double pages) {
         return drive(() -> {
-            Node node = node(ref, "cannot scroll");
+            if (target(ref) instanceof Row row && pages == null) {
+                return new Act("scroll to " + named(row), "Brought r" + ref + " " + named(row) + " into view",
+                        () -> scrollTo(row));
+            }
+            Node node = target(ref) instanceof Row row ? row.view() : node(ref, "cannot scroll");
             String what = "r" + ref + " " + named(node);
             if (pages != null) {
                 if (!UiInput.wheels(node)) {
@@ -587,9 +945,15 @@ final class UiTools {
 
     /** {@link #type} on the FX thread, then what it changed once Studio is idle. */
     String typed(int ref, String text) {
+        return typed(ref, null, text);
+    }
+
+    /** {@link #type} at {@code ref} or the ref showing {@code find}. */
+    String typed(Integer ref, String find, String text) {
+        int at = onFx(() -> resolve(ref, find));
         Shown before = onFx(this::shown);
-        String what = onFx(() -> named(target(ref)));
-        String held = onFx(() -> type(ref, text));
+        String what = onFx(() -> named(target(at)));
+        String held = onFx(() -> type(at, text));
         double took = awaitIdle();
         timed("type into " + what, took);
         return held + " " + capitalised(idle(took)) + ".\n" + onFx(() -> changes(before));
@@ -639,7 +1003,7 @@ final class UiTools {
             if (!before.lines().contains(unnumberedAfter.get(i))) lines.add("+ " + afterLines.get(i));
         }
         if (lines.isEmpty()) return out.append("Nothing changed in ").append(afterLines.getFirst()).append('.').toString();
-        out.append("In ").append(afterLines.getFirst()).append(", refs renumbered:\n");
+        out.append("In ").append(afterLines.getFirst()).append(":\n");
         int shownLines = Math.min(lines.size(), MOST_CHANGES);
         out.append(String.join("\n", lines.subList(0, shownLines)));
         if (lines.size() > shownLines) out.append("\n… ").append(lines.size() - shownLines).append(" more; read lists all");
@@ -807,14 +1171,22 @@ final class UiTools {
     /** What a press names in its answer: the target's kind and text. */
     private static String named(Object target) {
         String text = switch (target) {
-            case MenuItem item -> item.getText();
-            case Tab tab -> tab.getText();
-            case Labeled labeled -> labeled.getText();
+            case MenuItem item -> quoted(item.getText());
+            case Tab tab -> quoted(tab.getText());
+            case Row row -> quoted(said(row.item() instanceof TreeItem<?> item ? item.getValue() : row.item()));
+            case TreeItem<?> item -> quoted(said(item.getValue()));
+            case Labeled labeled when quoted(labeled.getText()) != null -> quoted(labeled.getText());
+            case Node node -> name(node);
             default -> null;
         };
-        String kind = target instanceof MenuItem ? "menu" : target instanceof Tab ? "tab"
-                : target.getClass().getSimpleName().toLowerCase(Locale.ROOT);
-        return text == null || text.isBlank() ? "(" + kind + ")" : "(" + kind + " \"" + text + "\")";
+        String kind = switch (target) {
+            case MenuItem ignored -> "menu";
+            case Tab ignored -> "tab";
+            case Row ignored -> "row";
+            case TreeItem<?> ignored -> "row";
+            default -> target.getClass().getSimpleName().toLowerCase(Locale.ROOT);
+        };
+        return text == null ? "(" + kind + ")" : "(" + kind + " " + text + ")";
     }
 
     /** What pressing {@code ref} does. FX thread. */
@@ -832,21 +1204,63 @@ final class UiTools {
                 case TitledPane pane -> () -> pane.setExpanded(!pane.isExpanded());
                 case MenuButton button -> button::show;
                 case ButtonBase button -> button::fire;
-                case ListCell<?> cell -> clicks(ref, MouseButton.PRIMARY, 1);
+                case Row ignored -> clicks(ref, MouseButton.PRIMARY, 1);
                 case Node node -> () -> UiInput.click(node, MouseButton.PRIMARY, 1);
                 default -> throw new IllegalArgumentException("r" + ref + " cannot be pressed.");
         };
     }
 
-    /** {@code count} clicks of {@code button} at {@code ref}, a list item selected first. FX thread. */
+    /** {@code count} clicks of {@code button} at {@code ref}; a row is selected, scrolled to and its cell clicked. */
     private Runnable clicks(int ref, MouseButton button, int count) {
+        if (target(ref) instanceof Row row) {
+            boolean plain = button == MouseButton.PRIMARY && count == 1;
+            return () -> {
+                IndexedCell<?> cell = scrollTo(row);
+                int index = index(row);
+                // A right-click on a selected row keeps the selection, as a real one does.
+                if (button != MouseButton.SECONDARY || !selected(row.view(), index)) select(row.view(), index);
+                row.view().requestFocus();
+                if (cell != null) {
+                    UiInput.click(cell, button, count);
+                } else if (!plain) {
+                    throw new IllegalStateException("its list draws no cell for it, so only its selection changed");
+                }
+            };
+        }
         Node node = node(ref, "takes only a plain press");
-        return () -> {
-            if (node instanceof ListCell<?> cell && cell.getListView() != null) {
-                cell.getListView().getSelectionModel().select(cell.getIndex());
+        return () -> UiInput.click(node, button, count);
+    }
+
+    /** {@code row} scrolled into view and laid out there: its cell, or null when its view draws none. FX thread. */
+    private static IndexedCell<?> scrollTo(Row row) {
+        int index = index(row);
+        if (index < 0) throw new IllegalArgumentException("That row is gone; read it again.");
+        switch (row.view()) {
+            case ListView<?> list -> list.scrollTo(index);
+            case TableView<?> table -> table.scrollTo(index);
+            case TreeView<?> tree -> tree.scrollTo(index);
+            default -> {
             }
-            UiInput.click(node, button, count);
-        };
+        }
+        row.view().applyCss();
+        row.view().layout();
+        for (Node node : row.view().lookupAll(".indexed-cell")) {
+            if (node instanceof IndexedCell<?> cell && owns(row.view(), cell) && cell.getIndex() == index
+                    && cell.isVisible() && !cell.isEmpty()) {
+                return cell;
+            }
+        }
+        return null;
+    }
+
+    private static void select(Control view, int index) {
+        switch (view) {
+            case ListView<?> list -> list.getSelectionModel().clearAndSelect(index);
+            case TableView<?> table -> table.getSelectionModel().clearAndSelect(index);
+            case TreeView<?> tree -> tree.getSelectionModel().clearAndSelect(index);
+            default -> {
+            }
+        }
     }
 
     String type(int ref, String text) {

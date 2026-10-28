@@ -1,16 +1,27 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
+import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.collections.FXCollections;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TabPane;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.MouseButton;
@@ -30,6 +41,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -256,6 +268,156 @@ class UiToolsTest extends FxHeadlessTest {
     }
 
     @Test
+    void aListIsReadFromItsModelAndAPressedRowIsSelectedInView() {
+        ListView<String> list = new ListView<>(FXCollections.observableArrayList(
+                IntStream.range(0, 300).mapToObj(i -> "item " + i).toList()));
+        list.setPrefHeight(60);
+        AtomicInteger doubled = new AtomicInteger();
+        list.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) doubled.incrementAndGet();
+        });
+        add(list);
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read(null));
+        assertTrue(read.contains("list 300 rows") && read.contains("row \"item 99\""), read);
+        assertTrue(read.contains("… 200 more rows"), read);
+        assertFalse(read.contains("\"item 250\""), read);
+
+        String found = UiTools.onFx(() -> ui.read(null, false, null, "item 250"));
+        assertTrue(found.lines().anyMatch(l -> l.matches("r\\d+ row \"item 250\"")), found);
+        String answer = ui.press(null, "item 250", MouseButton.PRIMARY, 1);
+        assertTrue(answer.startsWith("Pressed r") && answer.contains("(row \"item 250\")"), answer);
+        assertEquals(250, UiTools.onFx(() -> list.getSelectionModel().getSelectedIndex()));
+        assertTrue(UiTools.onFx(() -> ui.read(null, false, null, "item 250")).contains("(selected)"));
+
+        ui.press(null, "item 251", MouseButton.PRIMARY, 2);
+        assertEquals(1, doubled.get());
+        assertEquals(251, UiTools.onFx(() -> list.getSelectionModel().getSelectedIndex()));
+    }
+
+    @Test
+    void aTreeSaysWhichRowsAreOpenAndExpandOpensOne() {
+        TreeItem<String> firestone = new TreeItem<>("Firestone");
+        firestone.getChildren().add(new TreeItem<>("Screens"));
+        TreeItem<String> root = new TreeItem<>("Bots");
+        root.getChildren().addAll(firestone, new TreeItem<>("Idle"));
+        root.setExpanded(true);
+        TreeView<String> tree = new TreeView<>(root);
+        tree.setPrefHeight(80);
+        add(tree);
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read(null));
+        assertTrue(read.contains("row [-] \"Bots\""), read);
+        assertTrue(read.contains("row   [+] \"Firestone\"") && read.contains("row   \"Idle\""), read);
+        assertFalse(read.contains("Screens"), read);
+
+        String opened = ui.expand(refOf(read, "row   [+] \"Firestone\""));
+        assertTrue(opened.startsWith("Opened r") && opened.contains("+ r") && opened.contains("\"Screens\""), opened);
+        assertTrue(UiTools.onFx(firestone::isExpanded));
+        assertThrows(IllegalArgumentException.class, () -> ui.expand(refOf(read, "row   \"Idle\"")));
+        assertThrows(IllegalArgumentException.class, () -> ui.expand(refOf(read, "button \"Archive\"")));
+    }
+
+    @Test
+    void aTableRowSaysItsColumns() {
+        TableView<String> table = new TableView<>(FXCollections.observableArrayList("Firestone", "Idle"));
+        TableColumn<String, String> name = new TableColumn<>("Name");
+        name.setCellValueFactory(row -> new SimpleStringProperty(row.getValue()));
+        TableColumn<String, Integer> size = new TableColumn<>("Size");
+        size.setCellValueFactory(row -> new SimpleObjectProperty<>(row.getValue().length()));
+        table.getColumns().addAll(List.of(name, size));
+        add(table);
+        String read = UiTools.onFx(() -> new UiTools().read(null));
+        assertTrue(read.contains("table [Name, Size] 2 rows"), read);
+        assertTrue(read.matches("(?s).*row \"Firestone 9\".*|.*row \"Firestone \\| 9\".*"), read);
+    }
+
+    @Test
+    void aControlWithNoTextSaysItsTooltipAccessibleTextOrId() {
+        Button run = new Button();
+        run.setTooltip(new Tooltip("Run the bot\nF5"));
+        Region card = new Region();
+        card.setAccessibleText("card Start");
+        Region minimap = new Region();
+        minimap.setId("minimap");
+        minimap.setOnMouseClicked(e -> { });
+        add(new VBox(run, card, minimap));
+        String read = UiTools.onFx(() -> new UiTools().read(null));
+        assertTrue(read.contains("button \"Run the bot\""), read);
+        assertTrue(read.contains("part \"card Start\""), read);
+        assertTrue(read.contains("click #minimap"), read);
+    }
+
+    @Test
+    void aControlKeepsItsRefAcrossReadsAndChanges() {
+        UiTools ui = new UiTools();
+        int archive = refOf(UiTools.onFx(() -> ui.read(null)), "button \"Archive\"");
+        add(new Label("Later"));
+        assertEquals(archive, refOf(UiTools.onFx(() -> ui.read(null)), "button \"Archive\""));
+        int add = refOf(UiTools.onFx(() -> ui.read(null)), "button \"Add\"");
+        String answer = ui.press(add);
+        assertFalse(answer.contains("renumbered"), answer);
+        ui.press(archive);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals(1, archived.get());
+    }
+
+    @Test
+    void readWithinAPartOrFindingATextAndPressOrTypeByText() {
+        Region panel = new VBox(new Button("Inner"));
+        panel.setAccessibleText("panel");
+        add(panel);
+        UiTools ui = new UiTools();
+        int part = refOf(UiTools.onFx(() -> ui.read(null)), "part \"panel\"");
+        String within = UiTools.onFx(() -> ui.read(null, false, part, null));
+        assertTrue(within.lines().findFirst().orElseThrow().endsWith("within (vbox \"panel\")"), within);
+        assertTrue(within.contains("button \"Inner\"") && !within.contains("Archive"), within);
+        String found = UiTools.onFx(() -> ui.read(null, false, null, "arch"));
+        assertEquals(2, found.lines().count(), found);
+        assertTrue(UiTools.onFx(() -> ui.read(null, false, null, "nowhere")).contains("No line holds \"nowhere\"."));
+
+        ui.press(null, "Archive", MouseButton.PRIMARY, 1);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals(1, archived.get());
+        IllegalArgumentException several = assertThrows(IllegalArgumentException.class,
+                () -> ui.press(null, "o", MouseButton.PRIMARY, 1));
+        assertTrue(several.getMessage().contains("places; say a ref") && several.getMessage().contains("\"Open\""),
+                several.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> ui.press(null, "Nowhere", MouseButton.PRIMARY, 1));
+        ui.typed(null, "Name", "Firestone");
+        assertTrue(UiTools.onFx(() -> ui.read(null)).contains("field \"Firestone\""));
+    }
+
+    @Test
+    void aTextLongerThanAReadShowsIsFoundByItsWholeText() {
+        String whole = "Download every picture this bot needs from the catalog before running it";
+        AtomicInteger pressed = new AtomicInteger();
+        Button longOne = new Button(whole);
+        longOne.setOnAction(e -> pressed.incrementAndGet());
+        add(new VBox(longOne, new Button("Download every picture")));
+        new UiTools().press(null, whole, MouseButton.PRIMARY, 1);
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals(1, pressed.get());
+    }
+
+    @Test
+    void aRefInATabNoLongerShownIsRefused() {
+        Tab first = new Tab("First", new Button("Inside"));
+        Tab second = new Tab("Second", new Label("Elsewhere"));
+        TabPane tabs = new TabPane(first, second);
+        add(tabs);
+        UiTools ui = new UiTools();
+        int inside = refOf(UiTools.onFx(() -> ui.read(null)), "button \"Inside\"");
+        UiTools.onFx(() -> {
+            tabs.getSelectionModel().select(second);
+            return null;
+        });
+        WaitForAsyncUtils.waitForFxEvents();
+        UiTools.onFx(() -> ui.read(null));
+        assertThrows(IllegalArgumentException.class, () -> ui.press(inside));
+    }
+
+    @Test
     void aRightClickOpensTheMenuWhoseItemsArePressable() {
         UiTools ui = new UiTools();
         int archive = refOf(UiTools.onFx(() -> ui.read("my bots")), "button \"Archive\"");
@@ -377,7 +539,8 @@ class UiToolsTest extends FxHeadlessTest {
     void itStaysSmallForTheAssistantToRead() {
         var tool = new UiTools().tool();
         int chars = tool.description().length() + McpTools.schemaOf(tool.schema()).length();
-        // 1,500 until perf and profile came, 1,800 until key, scroll and drag (2026-10-28).
-        assertTrue(chars < 2_400, "ui is " + chars + " characters");
+        // 1,500 until perf and profile came, 1,800 until key, scroll and drag, 2,400 until expand, within and find
+        // (2026-10-28).
+        assertTrue(chars < 2_600, "ui is " + chars + " characters");
     }
 }

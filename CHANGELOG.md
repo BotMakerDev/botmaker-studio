@@ -25,6 +25,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - `ui` sends keys (`Ctrl+Shift+A`, `Escape`; menu accelerators hear them), right-clicks a control to open its
   menu, double-clicks, scrolls a control into view or by pages, and drags one control onto another. A drag that
   needs the system's drag and drop (blocks, keyboard chips, parameter grips) is refused, naming what to use.
+- `ui read` lists every row of a list, table or tree from its model, not only the rows scrolled to, with the
+  selection and each tree row open (`[-]`) or closed (`[+]`); pressing a row scrolls to it and selects it, and
+  `expand` opens or closes a tree row. A control with no text says its accessible text, tooltip or id; blocks and
+  palette entries now carry an accessible name. A control keeps its ref across reads. `read` takes `within` (one
+  part) and `find` (lines holding a text), and `press` and `type` take the text a control shows instead of a ref.
 
 ## [1.10.1] — 2026-10-28
 
