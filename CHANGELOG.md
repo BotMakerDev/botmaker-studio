@@ -10,6 +10,15 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- A dev Studio's `ui` tool (`BOTMAKER_MCP_UI=1`) finds bugs as it drives. A press or a type waits until the
+  windows hold still and says what changed: lines gained and lost, or a newly opened window read whole. Every
+  answer ends with the errors Studio hit since the last one: uncaught exceptions and `stderr` lines, each with
+  its first BotMaker frame. `wait` takes `gone`, and `log` lists the newest errors.
+
 ## [1.10.1] — 2026-10-28
 
 ### Added

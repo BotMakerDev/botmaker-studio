@@ -6,6 +6,7 @@ import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
 import com.botmaker.studio.assist.BotGuard;
 import com.botmaker.studio.assist.HomeEndpoint;
+import com.botmaker.studio.assist.UiEvents;
 import com.botmaker.studio.config.AppPaths;
 import com.botmaker.studio.config.Constants;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -108,6 +109,8 @@ public class BotMakerStudio extends Application {
     @Override
     public void start(Stage primaryStage) {
         this.primaryStage = primaryStage;
+        // A dev Studio's ui tool reports every error from here on (BOTMAKER_MCP_UI); nothing otherwise.
+        UiEvents.install();
         // Before any window is shown: from here on every window gets the stylesheet and the theme class as it
         // appears, including the popups (context menus, tooltips, dropdowns) that no call site can reach.
         ThemedWindows.install();

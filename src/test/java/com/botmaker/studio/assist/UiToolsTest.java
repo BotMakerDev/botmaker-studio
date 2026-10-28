@@ -14,6 +14,8 @@ import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
 import org.testfx.util.WaitForAsyncUtils;
 
+import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
@@ -39,8 +41,25 @@ class UiToolsTest extends FxHeadlessTest {
         TextField field = new TextField();
         field.setPromptText("Name");
         Menu file = new Menu("File", null, new MenuItem("My Bots"));
+        VBox root = new VBox(new MenuBar(file), name, archive, field);
+        Button add = new Button("Add");
+        add.setOnAction(e -> root.getChildren().add(new Label("Added")));
+        Button open = new Button("Open");
+        open.setOnAction(e -> {
+            Stage dialog = new Stage();
+            dialog.setTitle("Confirm");
+            Button ok = new Button("OK");
+            ok.setOnAction(done -> dialog.close());
+            dialog.setScene(new Scene(new VBox(ok), 120, 60));
+            dialog.show();
+        });
+        Button broken = new Button("Broken");
+        broken.setOnAction(e -> {
+            throw new IllegalStateException("no bot");
+        });
+        root.getChildren().addAll(add, open, broken);
         stage.setTitle("My bots");
-        stage.setScene(new Scene(new VBox(new MenuBar(file), name, archive, field), 300, 200));
+        stage.setScene(new Scene(root, 300, 300));
         stage.show();
     }
 
@@ -63,7 +82,7 @@ class UiToolsTest extends FxHeadlessTest {
         UiTools ui = new UiTools();
         String read = UiTools.onFx(() -> ui.read("my bots"));
         int archive = refOf(read, "button \"Archive\"");
-        assertTrue(ui.press(archive).startsWith("Pressed r" + archive + " (button \"Archive\")."));
+        assertTrue(ui.press(archive).startsWith("Pressed r" + archive + " (button \"Archive\");"));
         WaitForAsyncUtils.waitForFxEvents();
         assertEquals(1, archived.get());
         assertFalse(UiTools.pressing());
@@ -110,6 +129,66 @@ class UiToolsTest extends FxHeadlessTest {
         });
         assertThrows(IllegalArgumentException.class, () -> ui.press(archive));
         assertThrows(IllegalArgumentException.class, () -> ui.press(99));
+    }
+
+    @Test
+    void aPressSaysWhatItAddedWithItsRefs() {
+        UiTools ui = new UiTools();
+        int add = refOf(UiTools.onFx(() -> ui.read("my bots")), "button \"Add\"");
+        String answer = ui.press(add);
+        assertTrue(answer.contains("settled after"), answer);
+        assertTrue(answer.contains("+ label \"Added\""), answer);
+        assertFalse(answer.contains("button \"Archive\""), answer);
+    }
+
+    @Test
+    void aPressThatOpensAWindowReadsIt() {
+        UiTools ui = new UiTools();
+        int open = refOf(UiTools.onFx(() -> ui.read("my bots")), "button \"Open\"");
+        String answer = ui.press(open);
+        assertTrue(answer.contains("Opened") && answer.contains("\"Confirm\""), answer);
+        int ok = refOf(answer, "button \"OK\"");
+        String closed = ui.press(ok);
+        assertTrue(closed.contains("Closed: \"Confirm\""), closed);
+    }
+
+    @Test
+    void aPressWhoseHandlerThrowsSaysWhereItFailed() {
+        UiTools ui = new UiTools();
+        int broken = refOf(UiTools.onFx(() -> ui.read("my bots")), "button \"Broken\"");
+        IllegalStateException failed = assertThrows(IllegalStateException.class, () -> ui.press(broken));
+        assertTrue(failed.getMessage().contains("IllegalStateException: no bot at UiToolsTest"), failed.getMessage());
+    }
+
+    @Test
+    void waitGoneAnswersOnceNoWindowShowsTheText() {
+        assertTrue(UiTools.waitFor("Archive", 0.3, true).contains("still shows"));
+        assertTrue(UiTools.waitFor("Nowhere at all", 1.0, true).contains("was not shown"));
+    }
+
+    @Test
+    void aStackTraceOnStderrKeepsItsFirstLineCausesAndFirstBotMakerFrame() {
+        long before = UiEvents.last();
+        for (String line : List.of("java.lang.NullPointerException: name",
+                "\tat java.base/java.util.Objects.requireNonNull(Objects.java:259)",
+                "\tat com.botmaker.studio.ui.app.RunHome.open(RunHome.java:40)",
+                "\tat com.botmaker.studio.ui.app.RunHome.show(RunHome.java:12)",
+                "\t... 4 more")) {
+            UiEvents.stderr(line);
+        }
+        List<String> lines = UiEvents.after(before).stream().map(UiEvents.Event::text).toList();
+        assertEquals(List.of("java.lang.NullPointerException: name",
+                "  at com.botmaker.studio.ui.app.RunHome.open(RunHome.java:40)"), lines);
+    }
+
+    @Test
+    void anUncaughtExceptionIsSummedUpWithItsCause() {
+        long before = UiEvents.last();
+        UiEvents.uncaught("JavaFX Application Thread",
+                new IllegalStateException("could not open", new IOException("gone")));
+        String text = UiEvents.after(before).getFirst().line();
+        assertTrue(text.startsWith("uncaught on JavaFX Application Thread: IllegalStateException: could not open"
+                + " ← IOException: gone at UiToolsTest."), text);
     }
 
     @Test

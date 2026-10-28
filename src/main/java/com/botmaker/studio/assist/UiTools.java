@@ -54,9 +54,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 /**
  * {@code ui}: Studio's own windows, read and driven as a user would (2026-10-25), so Claude can try the bot list,
@@ -66,6 +68,10 @@ import java.util.function.UnaryOperator;
  * <p>{@code read} numbers what a window shows; a ref holds until the next {@code read}. Every scene access runs on the
  * FX thread; a press is fired there without waiting for it, since a press may open a dialog that waits for its own
  * answer.
+ *
+ * <p>Built to find bugs as well as to drive (2026-10-28): a press or a type waits until what the windows show holds
+ * still, then answers with what changed (a window opened is read whole), and every answer ends with the errors
+ * {@link UiEvents} caught since the last one said.
  */
 final class UiTools {
 
@@ -76,8 +82,18 @@ final class UiTools {
     /** At most this many lines in one read; the rest is counted. */
     private static final int MOST_LINES = 400;
     private static final long SETTLE_MS = 400;
+    /** Studio is idle once what its windows show holds this long with no progress spinning, ... */
+    private static final long QUIET_MS = 300;
+    /** ... looked at this often, and waited for at most this long. */
+    private static final long IDLE_POLL_MS = 100;
+    private static final long MOST_IDLE_MS = 5_000;
+    /** What {@link #walk} writes for an indeterminate progress indicator. */
+    private static final String SPINNING = "progress working";
+    /** At most this many changed lines, and this many problems, in one answer. */
+    private static final int MOST_CHANGES = 40;
+    private static final int MOST_EVENTS = 10;
     /** The longest an endpoint's close waits for a press, and the moment after for its answer to go out. */
-    private static final long MOST_PRESS_MS = 3_000;
+    private static final long MOST_PRESS_MS = MOST_IDLE_MS + 1_000;
     private static final long SENT_MS = 150;
     /** Presses in flight, over every endpoint's {@code ui}. */
     private static final AtomicInteger PRESSING = new AtomicInteger();
@@ -109,12 +125,21 @@ final class UiTools {
 
         @Describe("wait until a text shows in any window or title")
         record Wait(@Describe("the text") String text,
-                    @Describe(value = "seconds, 10 when left out", optional = true) Double seconds) implements Ui {
+                    @Describe(value = "seconds, 10 when left out", optional = true) Double seconds,
+                    @Describe(value = "true: until it goes", optional = true) Boolean gone) implements Ui {
+        }
+
+        @Describe("Studio's newest errors")
+        record Log(@Describe(value = "how many, 30 when left out", optional = true) Integer lines) implements Ui {
         }
     }
 
     /** What the last read numbered: a {@link Node}, {@link MenuItem} or {@link Tab}. FX thread only. */
     private final Map<Integer, Object> refs = new HashMap<>();
+    /** The window the refs are in; null before the first read. FX thread only. */
+    private Window lastRead;
+    /** The newest {@link UiEvents} event an answer has reported, over every endpoint: a new one repeats none. */
+    private static final AtomicLong SEEN = new AtomicLong();
 
     /** Whether this Studio serves {@code ui}: the flag set, and not an installed Studio. */
     static boolean enabled() {
@@ -131,25 +156,28 @@ final class UiTools {
 
     AssistantTool<AssistantTool.OneOf<Ui>> tool() {
         return AssistantTool.named("ui")
-                .describedAs("Studio's own windows: list, read, press, type, look at, wait for. Dev Studio only.")
+                .describedAs("Studio's own windows: list, read, press, type, look, wait; answers say what changed "
+                        + "and new errors. Dev Studio only.")
                 .takesOneOf(Ui.class)
-                .handledBy((action, context) -> {
-                    try {
-                        return switch (action) {
-                            case Ui.Windows ignored -> AgentReply.text(onFx(UiTools::windows));
-                            case Ui.Read read -> AgentReply.text(onFx(() -> read(read.window(),
-                                    Boolean.TRUE.equals(read.menus()))));
-                            case Ui.Press press -> AgentReply.text(press(press.ref()));
-                            case Ui.Type type -> AgentReply.text(onFx(() -> type(type.ref(), type.text())));
-                            case Ui.Look look -> look(look.window(), look.scale());
-                            case Ui.Wait wait -> AgentReply.text(waitFor(wait.text(), wait.seconds()));
-                        };
-                    } catch (IllegalArgumentException refused) {
-                        return AgentReply.refused("REFUSED: " + refused.getMessage());
-                    } catch (RuntimeException failed) {
-                        return AgentReply.refused("Studio could not do that: " + failed.getMessage());
-                    }
-                });
+                .handledBy((action, context) -> withEvents(handle(action)));
+    }
+
+    private AgentReply handle(Ui action) {
+        try {
+            return switch (action) {
+                case Ui.Windows ignored -> AgentReply.text(onFx(UiTools::windows));
+                case Ui.Read read -> AgentReply.text(onFx(() -> read(read.window(), Boolean.TRUE.equals(read.menus()))));
+                case Ui.Press press -> AgentReply.text(press(press.ref()));
+                case Ui.Type type -> AgentReply.text(typed(type.ref(), type.text()));
+                case Ui.Look look -> look(look.window(), look.scale());
+                case Ui.Wait wait -> AgentReply.text(waitFor(wait.text(), wait.seconds(), Boolean.TRUE.equals(wait.gone())));
+                case Ui.Log log -> AgentReply.text(log(log.lines()));
+            };
+        } catch (IllegalArgumentException refused) {
+            return AgentReply.refused("REFUSED: " + refused.getMessage());
+        } catch (RuntimeException failed) {
+            return AgentReply.refused("Studio could not do that: " + failed.getMessage());
+        }
     }
 
     /** {@code quit_studio} on the home endpoint: Studio's main window asked to close, a moment after the answer. */
@@ -225,8 +253,13 @@ final class UiTools {
 
     /** {@code menus}: the menu bar's items too, which run to thousands of characters in the editor. */
     String read(String which, boolean menus) {
-        Window window = window(which);
+        return read(window(which), menus);
+    }
+
+    /** {@code window} read, its controls numbered from r1; the refs held until now are dropped. FX thread. */
+    private String read(Window window, boolean menus) {
         refs.clear();
+        lastRead = window;
         List<String> lines = new ArrayList<>();
         lines.add(describe(showing().indexOf(window) + 1, window));
         if (window instanceof ContextMenu menu) {
@@ -386,8 +419,10 @@ final class UiTools {
         PRESSING.incrementAndGet();
         try {
             String[] what = new String[1];
+            Shown[] before = new Shown[1];
             Runnable act = onFx(() -> {
                 what[0] = named(target(ref));
+                before[0] = shown();
                 return action(ref);
             });
             AtomicReference<RuntimeException> failed = new AtomicReference<>();
@@ -399,14 +434,147 @@ final class UiTools {
                     failed.set(e);
                 }
             });
-            settle();
+            double took = awaitIdle();
             if (failed.get() != null) {
-                throw new IllegalStateException("pressing r" + ref + " failed: " + failed.get().getMessage());
+                throw new IllegalStateException("pressing r" + ref + " failed: " + UiEvents.summary(failed.get()));
             }
-            return "Pressed r" + ref + " " + what[0] + ". Windows now:\n" + onFx(UiTools::windows);
+            return "Pressed r" + ref + " " + what[0] + "; " + idle(took) + ".\n" + onFx(() -> changes(before[0]));
         } finally {
             PRESSING.decrementAndGet();
         }
+    }
+
+    /** {@link #type} on the FX thread, then what it changed once Studio is idle. */
+    String typed(int ref, String text) {
+        Shown before = onFx(this::shown);
+        String held = onFx(() -> type(ref, text));
+        double took = awaitIdle();
+        return held + " " + capitalised(idle(took)) + ".\n" + onFx(() -> changes(before));
+    }
+
+    // ---- what an action changed ---------------------------------------------------------------------------
+
+    /** The windows shown, and what the window the refs are in shows, without its refs. */
+    private record Shown(List<Window> windows, Window read, List<String> lines) {
+    }
+
+    /** FX thread. */
+    private Shown shown() {
+        Window read = lastRead != null && lastRead.isShowing() ? lastRead : null;
+        return new Shown(showing(), read, read == null ? List.of() : unnumbered(new UiTools().read(read, false)));
+    }
+
+    /**
+     * What changed since {@code before}: a window opened is read whole, its refs this answer's; else the lines the
+     * read window gained (with refs) and lost; else that nothing changed. FX thread.
+     */
+    private String changes(Shown before) {
+        List<Window> now = showing();
+        StringBuilder out = new StringBuilder();
+        List<Window> closed = before.windows().stream().filter(w -> !now.contains(w)).toList();
+        if (!closed.isEmpty()) {
+            out.append("Closed: ").append(closed.stream().map(w -> w instanceof PopupWindow ? "a menu" : "\"" + title(w) + "\"")
+                    .collect(Collectors.joining(", "))).append('\n');
+        }
+        List<Window> opened = now.stream().filter(w -> !before.windows().contains(w)).toList();
+        if (!opened.isEmpty()) {
+            if (opened.size() > 1) out.append("Opened ").append(opened.size()).append(" windows; the newest:\n");
+            return out.append("Opened ").append(read(opened.getLast(), false)).toString();
+        }
+        Window target = before.read() != null && before.read().isShowing() ? before.read() : null;
+        if (target == null) {
+            return out.append(now.isEmpty() ? "No window is shown." : "Windows now:\n" + windows()).toString();
+        }
+        String after = read(target, false);
+        List<String> afterLines = List.of(after.split("\n"));
+        List<String> unnumberedAfter = unnumbered(after);
+        List<String> lines = new ArrayList<>();
+        for (String line : before.lines()) {
+            if (!unnumberedAfter.contains(line)) lines.add("- " + line);
+        }
+        for (int i = 0; i < afterLines.size(); i++) {
+            if (!before.lines().contains(unnumberedAfter.get(i))) lines.add("+ " + afterLines.get(i));
+        }
+        if (lines.isEmpty()) return out.append("Nothing changed in ").append(afterLines.getFirst()).append('.').toString();
+        out.append("In ").append(afterLines.getFirst()).append(", refs renumbered:\n");
+        int shownLines = Math.min(lines.size(), MOST_CHANGES);
+        out.append(String.join("\n", lines.subList(0, shownLines)));
+        if (lines.size() > shownLines) out.append("\n… ").append(lines.size() - shownLines).append(" more; read lists all");
+        return out.toString();
+    }
+
+    private static List<String> unnumbered(String read) {
+        return List.of(read.split("\n")).stream().map(line -> line.replaceFirst("^r\\d+ ", "")).toList();
+    }
+
+    /**
+     * Until what every window shows has held still for {@link #QUIET_MS} with no progress spinning, at most
+     * {@link #MOST_IDLE_MS}: the seconds it took, or -1 when it never held.
+     */
+    static double awaitIdle() {
+        long start = System.nanoTime();
+        long until = start + MOST_IDLE_MS * 1_000_000;
+        String last = null;
+        long stillSince = start;
+        while (System.nanoTime() < until) {
+            String now = onFx(UiTools::everything);
+            long at = System.nanoTime();
+            if (!now.equals(last)) {
+                last = now;
+                stillSince = at;
+            } else if (at - stillSince >= QUIET_MS * 1_000_000 && !now.contains(SPINNING)) {
+                return (stillSince - start) / 1e9;
+            }
+            try {
+                Thread.sleep(IDLE_POLL_MS);
+            } catch (InterruptedException stopped) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return -1;
+    }
+
+    /** What every shown window shows, refs left out. FX thread. */
+    private static String everything() {
+        UiTools reader = new UiTools();
+        return showing().stream().map(w -> reader.read(w, false).replaceAll("(?m)^r\\d+ ", ""))
+                .collect(Collectors.joining("\n"));
+    }
+
+    private static String idle(double seconds) {
+        return seconds < 0 ? "still changing after " + MOST_IDLE_MS / 1000 + " s"
+                : String.format(Locale.ROOT, "settled after %.1f s", seconds);
+    }
+
+    private static String capitalised(String text) {
+        return text.isEmpty() ? text : Character.toUpperCase(text.charAt(0)) + text.substring(1);
+    }
+
+    // ---- what went wrong ----------------------------------------------------------------------------------
+
+    /** {@code reply}, then what went wrong in Studio since the last answer said. */
+    private AgentReply withEvents(AgentReply reply) {
+        List<UiEvents.Event> events = UiEvents.after(SEEN.get());
+        if (events.isEmpty()) return reply;
+        SEEN.accumulateAndGet(events.getLast().seq(), Math::max);
+        int listed = Math.min(events.size(), MOST_EVENTS);
+        StringBuilder out = new StringBuilder("Studio reported " + events.size() + " problem"
+                + (events.size() == 1 ? "" : "s") + " since the last answer:");
+        for (UiEvents.Event event : events.subList(events.size() - listed, events.size())) {
+            out.append("\n  ").append(event.line());
+        }
+        if (events.size() > listed) out.append("\n  (").append(events.size() - listed).append(" older; log lists them)");
+        return reply.and(AgentReply.text(out.toString()));
+    }
+
+    /** {@code log}: the newest problems Studio reported, whether or not an answer said them. */
+    private String log(Integer lines) {
+        int count = lines == null ? 30 : Math.max(1, Math.min(UiEvents.KEPT, lines));
+        List<UiEvents.Event> events = UiEvents.newest(count);
+        SEEN.accumulateAndGet(UiEvents.last(), Math::max);
+        if (events.isEmpty()) return "Studio reported no problem.";
+        return events.stream().map(e -> "#" + e.seq() + " " + e.line()).collect(Collectors.joining("\n"));
     }
 
     /** What a press names in its answer: the target's kind and text. */
@@ -520,17 +688,20 @@ final class UiTools {
         return AgentReply.text((String) taken[0]).and(AgentReply.image(out));
     }
 
-    private static String waitFor(String text, Double seconds) {
+    static String waitFor(String text, Double seconds, boolean gone) {
         if (text == null || text.isBlank()) throw new IllegalArgumentException("Say what text to wait for.");
         double limit = seconds == null ? 10 : Math.max(0.2, Math.min(180, seconds));
         String lower = text.strip().toLowerCase(Locale.ROOT);
         long start = System.nanoTime();
         long until = start + (long) (limit * 1e9);
+        String where = null;
         while (System.nanoTime() < until) {
-            String where = onFx(() -> find(lower));
-            if (where != null) {
-                return "\"" + text.strip() + "\" showed after " + String.format(Locale.ROOT, "%.1f",
-                        (System.nanoTime() - start) / 1e9) + " s, in " + where + ".";
+            String found = onFx(() -> find(lower));
+            if (found != null) where = found;
+            String after = String.format(Locale.ROOT, "%.1f", (System.nanoTime() - start) / 1e9) + " s";
+            if (!gone && found != null) return "\"" + text.strip() + "\" showed after " + after + ", in " + found + ".";
+            if (gone && found == null) {
+                return "\"" + text.strip() + "\" " + (where == null ? "was not shown" : "went after " + after) + ".";
             }
             try {
                 Thread.sleep(200);
@@ -539,6 +710,7 @@ final class UiTools {
                 break;
             }
         }
+        if (gone) return "\"" + text.strip() + "\" still shows after " + limit + " s, in " + where + ".";
         return "No \"" + text.strip() + "\" after " + limit + " s. Windows:\n" + onFx(UiTools::windows);
     }
 
@@ -572,14 +744,6 @@ final class UiTools {
     }
 
     // ---- the FX thread ------------------------------------------------------------------------------------
-
-    private static void settle() {
-        try {
-            Thread.sleep(SETTLE_MS);
-        } catch (InterruptedException stopped) {
-            Thread.currentThread().interrupt();
-        }
-    }
 
     /** {@code call} on the FX thread, its answer back; its refusal stays a refusal. */
     static <T> T onFx(Callable<T> call) {
