@@ -22,9 +22,7 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 - **Quick Documentation on hover**; today it is F1 on the selected block only.
 - **13 tests skip without the SDK plugin bound** (`TestSupport.assumeSdkPluginBound`); a way to run them —
   an SDK on the test classpath — is the platform rule's question.
-- **Decoupling ledger leftovers**: `WhatsNew` reads `META-INF/botmaker/whats-new.md`, a convention only the
-  SDK's pom implements, so a second plugin's report is empty (a contract question); the upgrade dialog is
-  still the SDK's; `LibraryService.updateLibraries` is SDK-keyed, so `apply` refuses any other coordinate;
+- **Decoupling ledger leftovers**: the upgrade dialog is still the SDK's; `LibraryService.updateLibraries` is SDK-keyed, so `apply` refuses any other coordinate;
   the docs stack (`resolveSdkSourcesJar`) is coordinate-specific.
 - **The Errors tab steals focus on every compile** with an error; the alternative is raising it only when the
   *set* of errors changes (needs a diff and a definition of change). Left as-is by the maintainer's call

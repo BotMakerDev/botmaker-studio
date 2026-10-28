@@ -315,8 +315,9 @@ point of it.**
     caller. Defaulting a **void** call is deleting it, since there is no value to stand in for, so the two
     actions meet there.
   - **The dialog opens with what the release *gives* you.** `Report.added` is a diff-derived list of API
-    names, which is not a reason to upgrade. The SDK ships its whole `CHANGELOG.md` inside its jar as
-    `META-INF/botmaker/whats-new.md`; `Report.highlights()` holds the sections in `(from, to]`, newest first,
+    names, which is not a reason to upgrade. A plugin ships its whole `CHANGELOG.md` inside its jar as
+    `META-INF/botmaker/changelog.md` (`botmaker-plugin-parent` copies it; `whats-new.md`, SDK only, until
+    2026-10-28); `Report.highlights()` holds the sections in `(from, to]`, newest first,
     rendered above every cost section, with the exhaustive API diff still below it. Absent file → exactly the
     old dialog, which is the standing rule that every new reader degrades.
   - **The author's own sentence reaches the user verbatim.** `@ReplacedBy(note=…)` is preferred over Studio's

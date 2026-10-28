@@ -170,6 +170,13 @@ class PluginUpgradeServiceTest {
     }
 
     @Test
+    void anSdkReleasedBeforeTheRenameIsReadUnderItsOldName(@TempDir Path tmp) throws IOException {
+        Path jar = UpgradeFixtures.jarOf(tmp, "new", newSdk(), Map.of(WhatsNew.SDK_ENTRY, CHANGELOG));
+        assertEquals(List.of("2.0.0", "1.5.0"), WhatsNew.between(jar, "1.0.0", "2.0.0").stream()
+                .map(PluginUpgradeService.Highlight::version).toList());
+    }
+
+    @Test
     void aJarThatCarriesNoChangelogReadsExactlyAsItDidBefore(@TempDir Path tmp) throws IOException {
         // The standing rule. Every SDK up to v1.0.26 is this case, so it is the common one, not the edge.
         assertTrue(WhatsNew.between(UpgradeFixtures.jarOf(tmp, "new", newSdk(), Map.of()), "1.0.0", "2.0.0")

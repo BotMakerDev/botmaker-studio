@@ -2,6 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.Dialogs;
 import com.botmaker.plugin.api.History;
+import com.botmaker.plugin.api.PluginLog;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.Theme;
 import com.botmaker.plugin.api.source.PluginValues;
@@ -135,6 +136,12 @@ public final class HostServices implements StudioServices {
     @Override
     public void status(String message) {
         HostRuns.status(message);
+    }
+
+    /** Each line attributed to the plugin whose class wrote it ({@link PluginLogs}), shown in the Plugins window. */
+    @Override
+    public PluginLog log() {
+        return PluginLogs.CALLER;
     }
 
     /**

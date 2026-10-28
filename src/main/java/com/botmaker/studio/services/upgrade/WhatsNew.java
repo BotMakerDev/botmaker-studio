@@ -1,17 +1,14 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.github.SemVer;
+import com.botmaker.studio.plugin.PluginJarFiles;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Highlight;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 
 /**
  * What the release itself says it gives you, read out of the jar the upgrade is moving to.
@@ -29,7 +26,8 @@ import java.util.jar.JarFile;
  *
  * <h2>Degradation</h2>
  *
- * <p>A jar with no {@value #ENTRY} — every SDK up to v1.0.26, and any tag cut before Phase 5 landed — yields
+ * <p>A jar with neither {@value #ENTRY} nor the SDK's older {@value #SDK_ENTRY} — any other plugin released before
+ * 2026-10-28 — yields
  * an empty list, and the dialog then looks exactly as it did before this reader existed. That is the plan's
  * standing rule, and it needs no version check: the entry's presence <em>is</em> the probe.
  *
@@ -41,10 +39,14 @@ import java.util.jar.JarFile;
 final class WhatsNew {
 
     /**
-     * Where a plugin's own build puts its {@code CHANGELOG.md}. See {@code botmaker-sdk/pom.xml} for the
-     * {@code antrun} copy that does it — the path is the convention any plugin may follow, not the SDK's.
+     * Where a plugin's build puts its {@code CHANGELOG.md}: {@code botmaker-plugin-parent} copies it for every
+     * plugin that names the parent, and the SDK's own pom does the same (2026-10-28; {@code whats-new.md} before,
+     * which only the SDK wrote).
      */
-    static final String ENTRY = "META-INF/botmaker/whats-new.md";
+    static final String ENTRY = PluginJarFiles.CHANGELOG;
+
+    /** The name every released SDK up to 2026-10-28 carries the same file under, read when {@link #ENTRY} is absent. */
+    static final String SDK_ENTRY = "META-INF/botmaker/whats-new.md";
 
     private WhatsNew() {
     }
@@ -154,14 +156,7 @@ final class WhatsNew {
      * the SDK asks Studio to <em>show</em>, and the two failure modes are nothing alike.
      */
     private static Optional<String> readEntry(Path jar) {
-        try (JarFile jarFile = new JarFile(jar.toFile())) {
-            JarEntry entry = jarFile.getJarEntry(ENTRY);
-            if (entry == null) return Optional.empty();
-            try (InputStream in = jarFile.getInputStream(entry)) {
-                return Optional.of(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-            }
-        } catch (IOException e) {
-            return Optional.empty();
-        }
+        return PluginJarFiles.read(jar, ENTRY).or(() -> PluginJarFiles.read(jar, SDK_ENTRY))
+                .map(bytes -> new String(bytes, StandardCharsets.UTF_8));
     }
 }

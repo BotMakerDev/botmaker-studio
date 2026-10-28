@@ -27,14 +27,14 @@ class ToolbarMergeTest {
 
     /** A plugin that offers exactly what it is handed. */
     private static LoadedPlugin fake(String artifactId, List<ToolbarItem> items) {
-        return TestPlugins.loaded(artifactId, StudioPlugin.declare().toolbar(() -> items));
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().toolbar(TestPlugins.holder(() -> items)));
     }
 
     /** A plugin whose item list throws — a bug in somebody else's jar, met while a project is opening. */
     private static LoadedPlugin broken(String artifactId) {
-        return TestPlugins.loaded(artifactId, StudioPlugin.declare().toolbar(() -> {
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().toolbar(TestPlugins.holder(() -> {
             throw new IllegalStateException("no");
-        }));
+        })));
     }
 
     private static ToolbarItem item(String id, ToolbarGroup group, int order) {

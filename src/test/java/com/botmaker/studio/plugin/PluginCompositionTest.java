@@ -48,14 +48,14 @@ class PluginCompositionTest {
     private static LoadedPlugin plugin(String id, Class<?>... types) {
         List<PluginType<?>> declarations = new ArrayList<>();
         for (Class<?> type : types) declarations.add(declared(type));
-        return TestPlugins.loaded(id, StudioPlugin.declare().types(() -> List.copyOf(declarations)));
+        return TestPlugins.loaded(id, StudioPlugin.declare().types(TestPlugins.holder(() -> List.copyOf(declarations))));
     }
 
     /** A plugin whose own declarations throw — a broken build, not a clash. Rejected the same way. */
     private static LoadedPlugin throwing(String id) {
-        return TestPlugins.loaded(id, StudioPlugin.declare().types(() -> {
+        return TestPlugins.loaded(id, StudioPlugin.declare().types(TestPlugins.holder(() -> {
             throw new IllegalStateException("no types here");
-        }));
+        })));
     }
 
     record Channel(String name) {}
@@ -126,7 +126,7 @@ class PluginCompositionTest {
             @Override public Channel build(List<Object> parts) { return new Channel((String) parts.getFirst()); }
         };
         LoadedPlugin plugin = TestPlugins.loaded("com.example.chat",
-                StudioPlugin.declare().parts(() -> List.of(channel)));
+                StudioPlugin.declare().types(TestPlugins.components(() -> List.of(channel))));
 
         PluginHost.Composition composed = PluginHost.compose(List.of(plugin));
 
@@ -157,7 +157,7 @@ class PluginCompositionTest {
             @Override public Channel fresh() { return null; }
         };
         LoadedPlugin plugin = TestPlugins.loaded("com.example.chat",
-                StudioPlugin.declare().types(() -> List.of(plain)));
+                StudioPlugin.declare().types(TestPlugins.holder(() -> List.of(plain))));
 
         assertEquals(List.of(), PluginHost.mergeOwnedSlotEditors(List.of(plugin)));
     }

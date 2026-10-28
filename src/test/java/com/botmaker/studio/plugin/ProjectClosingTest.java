@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,32 +26,27 @@ class ProjectClosingTest {
 
     /** A plugin that writes down that it was told. */
     private static final class Fake extends TestPlugins.Fake {
-        private final String id;
-        private final List<String> log;
-        private int told;
+        private final AtomicInteger told;
 
         Fake(String id, List<String> log) {
-            super(StudioPlugin.declare());
-            this.id = id;
-            this.log = log;
+            this(id, log, new AtomicInteger());
         }
 
-        @Override
-        public void projectClosing() {
-            told++;
-            log.add(id);
+        private Fake(String id, List<String> log, AtomicInteger told) {
+            super(StudioPlugin.declare().onProjectClosing(() -> {
+                told.incrementAndGet();
+                log.add(id);
+            }));
+            this.told = told;
         }
     }
 
     /** A bug in somebody else's jar, met on the way out of a project. */
     private static final class Broken extends TestPlugins.Fake {
         Broken() {
-            super(StudioPlugin.declare());
-        }
-
-        @Override
-        public void projectClosing() {
-            throw new IllegalStateException("no");
+            super(StudioPlugin.declare().onProjectClosing(() -> {
+                throw new IllegalStateException("no");
+            }));
         }
     }
 
@@ -67,8 +63,8 @@ class ProjectClosingTest {
         PluginHost.closeOutgoing(List.of(loaded("first", first), loaded("second", second)));
 
         assertEquals(List.of("first", "second"), log);
-        assertEquals(1, first.told, "a plugin told twice would release something it no longer holds");
-        assertEquals(1, second.told);
+        assertEquals(1, first.told.get(), "a plugin told twice would release something it no longer holds");
+        assertEquals(1, second.told.get());
     }
 
     /**

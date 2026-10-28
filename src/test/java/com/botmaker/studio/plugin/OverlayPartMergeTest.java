@@ -19,7 +19,7 @@ class OverlayPartMergeTest {
     }
 
     private static LoadedPlugin offering(String artifactId, Supplier<OverlayPart> part) {
-        return TestPlugins.loaded(artifactId, StudioPlugin.declare().overlay(part));
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().overlay(TestPlugins.holder(part)));
     }
 
     @Test

@@ -1662,6 +1662,23 @@
     -fx-font-style: italic;
 }
 
+/* Plugins ▸ Installed: the piece drawn for a plugin with no icon, in the text colour so either theme reads it;
+   and the fold a row's Log button opens, a card around the plugin's lines (.trace-cell colours them). */
+.plugin-icon-default {
+    -fx-fill: -fx-text-base-color;
+    -fx-opacity: 0.6;
+}
+.plugin-log {
+    -fx-background-color: -bm-popup-bg;
+    -fx-border-color: -bm-popup-border;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 6;
+}
+.plugin-log > .viewport {
+    -fx-background-color: transparent;
+}
+
 /*
  * One upgrade row's state: checking, then what the check answered. Severity tokens rather than colours, so
  * the three states stay apart on both themes and mean the same thing here as everywhere else in the app —

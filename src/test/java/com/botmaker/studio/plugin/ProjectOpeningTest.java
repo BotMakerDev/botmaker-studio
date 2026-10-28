@@ -9,9 +9,11 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Telling the incoming plugins <em>which</em> project they are now serving — the mirror of
@@ -30,32 +32,31 @@ class ProjectOpeningTest {
 
     /** A plugin that writes down which project it was handed. */
     private static final class Fake extends TestPlugins.Fake {
-        private final String id;
-        private final List<String> log;
-        private StudioServices held;
+        private final AtomicReference<StudioServices> handed;
 
         Fake(String id, List<String> log) {
-            super(StudioPlugin.declare());
-            this.id = id;
-            this.log = log;
+            this(id, log, new AtomicReference<>());
         }
 
-        @Override
-        public void projectOpened(StudioServices services) {
-            held = services;
-            log.add(id);
+        private Fake(String id, List<String> log, AtomicReference<StudioServices> handed) {
+            super(StudioPlugin.declare().onProjectOpened(services -> {
+                handed.set(services);
+                log.add(id);
+            }));
+            this.handed = handed;
+        }
+
+        StudioServices held() {
+            return handed.get();
         }
     }
 
     /** A bug in somebody else's jar, met on the way into a project. */
     private static final class Broken extends TestPlugins.Fake {
         Broken() {
-            super(StudioPlugin.declare());
-        }
-
-        @Override
-        public void projectOpened(StudioServices services) {
-            throw new IllegalStateException("no");
+            super(StudioPlugin.declare().onProjectOpened(services -> {
+                throw new IllegalStateException("no");
+            }));
         }
     }
 
@@ -72,8 +73,8 @@ class ProjectOpeningTest {
         PluginHost.openIncoming(List.of(loaded("first", first), loaded("second", second)), A_PROJECT);
 
         assertEquals(List.of("first", "second"), log);
-        assertSame(A_PROJECT, first.held);
-        assertSame(A_PROJECT, second.held);
+        assertSame(A_PROJECT, first.held());
+        assertSame(A_PROJECT, second.held());
     }
 
     /**
@@ -86,10 +87,13 @@ class ProjectOpeningTest {
         List<String> log = new ArrayList<>();
         Fake after = new Fake("after", log);
 
-        PluginHost.openIncoming(List.of(loaded("broken", new Broken()), loaded("after", after)), A_PROJECT);
+        LoadedPlugin broken = loaded("broken", new Broken());
+        PluginHost.openIncoming(List.of(broken, loaded("after", after)), A_PROJECT);
 
         assertEquals(List.of("after"), log);
-        assertSame(A_PROJECT, after.held);
+        assertSame(A_PROJECT, after.held());
+        assertTrue(PluginLogs.lines(broken.coordinate()).stream().anyMatch(line ->
+                line.level() == PluginLogs.Level.ERROR && line.text().contains("opening project")));
     }
 
     /** A plugin that implements neither half of the lifecycle is the ordinary case. */

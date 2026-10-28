@@ -12,7 +12,20 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **A plugin's log** (2026-10-28): what a plugin writes through `StudioServices.log()` is kept under its name.
+  Each row of Plugins & Libraries ▸ Installed has a *Log* button, with the line count, in the warning colour once
+  the plugin warned; it opens the lines in a fold under the row. Studio's standard error carries them too, the
+  plugin's name in front, and a plugin whose opening or closing step throws says so in its own log.
+- **Plugin icons**: each row shows the icon the plugin's jar carries (`META-INF/botmaker/icon.png`, its
+  `icon.png` copied by `botmaker-plugin-parent`), or a puzzle piece when it has none.
+
 ### Changed
+
+- **What's new for every plugin**: the upgrade dialog reads `META-INF/botmaker/changelog.md`, which
+  `botmaker-plugin-parent` copies from any plugin's `CHANGELOG.md`, instead of the SDK-only `whats-new.md`, which
+  it still reads in an SDK released before.
 
 - **A plugin is its pom's coordinate** (2026-10-27): Studio loads the one plugin a jar's pom names
   (`botmaker.plugin`) and knows it by `groupId:artifactId` and the pom's `<name>`; plugins have no id any more.

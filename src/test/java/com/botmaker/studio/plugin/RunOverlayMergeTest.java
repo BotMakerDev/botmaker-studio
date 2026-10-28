@@ -15,13 +15,13 @@ class RunOverlayMergeTest {
     private static final RunOverlayPart.Factory NOTHING = context -> null;
 
     private static LoadedPlugin fake(String artifactId, List<RunOverlayPart> parts) {
-        return TestPlugins.loaded(artifactId, StudioPlugin.declare().runOverlay(() -> parts));
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().runOverlay(TestPlugins.holder(() -> parts)));
     }
 
     private static LoadedPlugin broken(String artifactId) {
-        return TestPlugins.loaded(artifactId, StudioPlugin.declare().runOverlay(() -> {
+        return TestPlugins.loaded(artifactId, StudioPlugin.declare().runOverlay(TestPlugins.holder(() -> {
             throw new IllegalStateException("no");
-        }));
+        })));
     }
 
     private static List<String> owners(List<PluginHost.OwnedPart> parts) {

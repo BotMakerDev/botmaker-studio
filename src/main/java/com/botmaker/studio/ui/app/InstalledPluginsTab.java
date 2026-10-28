@@ -371,7 +371,7 @@ public final class InstalledPluginsTab {
         if (declared.isEmpty() && bundled.isEmpty()) {
             status("");
             table.add(new Label("This project declares no plugins, so there is nothing to upgrade. "
-                    + "\"Add a plugin…\" below is where one is installed."), 0, 0, 6, 1);
+                    + "\"Add a plugin…\" below is where one is installed."), 0, 0, 7, 1);
             refreshButtons();
             return;
         }
@@ -388,17 +388,21 @@ public final class InstalledPluginsTab {
         for (Declared entry : declared) {
             Row row = new Row(entry.row(), !entry.twins().isEmpty());
             rows.add(row);
-            table.add(row.name, 0, line);
+            Optional<PluginHost.LoadedJar> from = loadedFrom(entry.row(), loaded);
+            PluginRowParts.LogFold log = new PluginRowParts.LogFold(from.map(PluginHost.LoadedJar::coordinate));
+            table.add(PluginRowParts.named(row.name, from), 0, line);
             table.add(row.installed, 1, line);
-            table.add(loadedCell(loadedFrom(entry.row(), loaded), entry.row().artifact().artifactId()), 2, line);
+            table.add(loadedCell(from, entry.row().artifact().artifactId()), 2, line);
             table.add(row.versions, 3, line);
             table.add(row.action, 4, line);
             table.add(row.remove, 5, line);
+            table.add(log.button, 6, line);
             line++;
-            table.add(row.verdict, 1, line, 5, 1);
+            // One line for the fold and the verdict: a closed fold alone on a line would still cost a gap.
+            table.add(new VBox(4, log.fold, row.verdict), 0, line, 7, 1);
             line++;
             row.loadVersions();
-            if (!entry.twins().isEmpty()) table.add(twinBar(entry), 0, line++, 6, 1);
+            if (!entry.twins().isEmpty()) table.add(twinBar(entry), 0, line++, 7, 1);
         }
         for (PluginHost.LoadedJar plugin : bundled) {
             Label name = new Label(plugin.name());
@@ -408,11 +412,14 @@ public final class InstalledPluginsTab {
             how.getStyleClass().add("text-muted");
             how.setTooltip(new Tooltip("Another plugin depends on it, so its version is that plugin's to "
                     + "decide. Change the plugin that brings it instead."));
-            table.add(name, 0, line);
+            PluginRowParts.LogFold log = new PluginRowParts.LogFold(Optional.of(plugin.coordinate()));
+            table.add(PluginRowParts.named(name, Optional.of(plugin)), 0, line);
             table.add(version, 1, line);
             table.add(loadedCell(Optional.of(plugin), ""), 2, line);
             table.add(how, 3, line, 3, 1);
+            table.add(log.button, 6, line);
             line++;
+            table.add(log.fold, 0, line++, 7, 1);
         }
         showDevBar((int) rows.stream().filter(Row::refused).count());
         refreshButtons();

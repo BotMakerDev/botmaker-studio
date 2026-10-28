@@ -461,8 +461,7 @@ public final class PluginHost {
             try {
                 plugin.plugin().projectOpened(services);
             } catch (RuntimeException | Error e) {
-                System.err.println("Warning: plugin " + plugin.coordinate()
-                        + " failed to take the opening project: " + e);
+                PluginLogs.of(plugin).error("failed to take the opening project", e);
             }
         }
     }
@@ -472,8 +471,7 @@ public final class PluginHost {
             try {
                 plugin.plugin().projectClosing();
             } catch (RuntimeException | Error e) {
-                System.err.println("Warning: plugin " + plugin.coordinate()
-                        + " failed to release what it held for the closing project: " + e);
+                PluginLogs.of(plugin).error("failed to release what it held for the closing project", e);
             }
         }
     }
