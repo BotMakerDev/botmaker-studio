@@ -10,6 +10,7 @@ import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.assist.AssistedSetting;
 import com.botmaker.studio.assist.LiveBot;
+import com.botmaker.studio.assist.OnScreen;
 import com.botmaker.studio.assist.PluginMove;
 import com.botmaker.studio.assist.RunLog;
 import com.botmaker.studio.assist.StudioDriver;
@@ -45,15 +46,6 @@ import com.botmaker.studio.ui.app.trial.TrialMenu;
 import com.botmaker.studio.ui.app.trial.Trials;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.api.Runs;
-import com.botmaker.shared.github.GitHubAuth;
-import com.botmaker.shared.github.GitHubClient;
-import com.botmaker.studio.config.Constants;
-import com.botmaker.studio.project.ProjectCreator;
-import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.GitHubGallery;
-import com.botmaker.studio.sharing.HiddenBots;
-import com.botmaker.studio.sharing.NewProjects;
-import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectState;
@@ -81,10 +73,7 @@ import com.botmaker.studio.project.managed.MigrationMapping;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.managed.MigrationSummary;
 import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.stage.Window;
 import javafx.stage.WindowEvent;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -140,7 +129,6 @@ final class StudioBridge implements StudioDriver {
     private final RunLog log;
     private final Supplier<Window> owner;
     private final JitPackSearch jitpack = new JitPackSearch();
-    private final GitHubClient github = new GitHubClient();
     // The plugin index, read off the same raw CDN as Plugins & Libraries, with no account.
     private final PluginRegistry registry = new PluginRegistry();
 
@@ -150,6 +138,7 @@ final class StudioBridge implements StudioDriver {
         this.trials = trials;
         this.log = log;
         this.owner = owner;
+        this.newProject = new AssistedNewProject(registry, owner);
     }
 
     // ---- where blocks go -----------------------------------------------------------------------------------
@@ -702,10 +691,10 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
-    public String addPlugin(String id) {
+    public String addPlugin(String id, Runnable added) {
         List<PluginRegistry.Plugin> entries = registryEntries();
         if (entries.isEmpty()) throw new IllegalArgumentException("The plugin registry could not be read.");
-        PluginRegistry.Plugin plugin = registryPlugin(entries, id);
+        PluginRegistry.Plugin plugin = AssistedNewProject.registryPlugin(entries, id);
         String name = plugin.name().isBlank() ? plugin.coordinate() : plugin.name();
         List<UserLibrary> declared = ctx.libraryService().declaredLibraries();
         if (plugin.isInstalledIn(declared)) throw new IllegalArgumentException(name + " is in the bot already.");
@@ -716,22 +705,29 @@ final class StudioBridge implements StudioDriver {
         if (version.isBlank()) {
             throw new IllegalArgumentException("The catalog lists no release of " + plugin.coordinate() + ".");
         }
-        if (!userAgrees("Add a plugin?", "The assistant wants to add " + name + " " + version + " ("
-                + plugin.coordinate() + ") to this bot.\n\nA plugin runs with Studio's own permissions. Registry "
-                + "plugins are checked for loading, not reviewed for safety.")) {
-            throw new IllegalArgumentException("The user did not agree to add " + name + ".");
-        }
-        List<MavenService.Shadowed> dropped = waitFor(ctx.libraryService().installPlugin(
-                new UserLibrary(plugin.groupId(), plugin.artifactId(), version), plugin.editorLibraries()),
-                PLUGIN_WRITE_SECONDS, "add " + name);
-        String removed = MavenService.Shadowed.sentence(dropped);
-        say("The assistant added " + name + " " + version + ".");
-        return "Added " + name + " " + version + "." + (removed.isEmpty() ? "" : " " + removed)
-                + " list_palette shows what it offers.";
+        String question = "The assistant wants to add " + name + " " + version + " (" + plugin.coordinate()
+                + ") to this bot.\n\nA plugin runs with Studio's own permissions. Registry plugins are checked for "
+                + "loading, not reviewed for safety.";
+        return OnScreen.start("Adding " + name + " " + version, "Add a plugin?", () -> {
+            if (!OnScreen.agrees(owner.get(), "Add a plugin?", question)) {
+                throw new IllegalArgumentException("The user did not agree to add " + name + ".");
+            }
+            try {
+                List<MavenService.Shadowed> dropped = waitFor(ctx.libraryService().installPlugin(
+                        new UserLibrary(plugin.groupId(), plugin.artifactId(), version), plugin.editorLibraries()),
+                        PLUGIN_WRITE_SECONDS, "add " + name);
+                String removed = MavenService.Shadowed.sentence(dropped);
+                say("The assistant added " + name + " " + version + ".");
+                return "Added " + name + " " + version + "." + (removed.isEmpty() ? "" : " " + removed)
+                        + " list_palette shows what it offers.";
+            } finally {
+                added.run();
+            }
+        });
     }
 
     @Override
-    public String removePlugin(String id, boolean deleteFiles, boolean confirm) {
+    public String removePlugin(String id, boolean deleteFiles, boolean confirm, Runnable removed) {
         List<InstalledPlugin> declared = installed(registryEntries());
         InstalledPlugin plugin = declaredPlugin(declared, id);
         PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
@@ -740,20 +736,26 @@ final class StudioBridge implements StudioDriver {
         PluginHolders holders = upgrades.holders();
         String preview = removalPreview(plugin, report, holders, deleteFiles);
         if (!confirm) return preview + "\nplugins remove with confirm removes it.";
-        if (!userAgrees("Remove a plugin?", preview)) {
-            throw new IllegalArgumentException("The user did not agree to remove " + plugin.displayName() + ".");
-        }
-        PluginHolders deleted = deleteFiles ? holders : PluginHolders.NONE;
-        // A use no rule covers takes a seeded default rule, marked for review.
-        PluginUpgradeService.Repaired repaired = waitFor(upgrades.remove(plugin.editorDependencies(), deleted),
-                PLUGIN_WRITE_SECONDS, "remove " + plugin.displayName());
-        onFx(() -> {
-            deleted.forget(ctx.config(), ctx.state());
-            return null;
+        return OnScreen.start("Removing " + plugin.displayName(), "Remove a plugin?", () -> {
+            if (!OnScreen.agrees(owner.get(), "Remove a plugin?", preview)) {
+                throw new IllegalArgumentException("The user did not agree to remove " + plugin.displayName() + ".");
+            }
+            try {
+                PluginHolders deleted = deleteFiles ? holders : PluginHolders.NONE;
+                // A use no rule covers takes a seeded default rule, marked for review.
+                PluginUpgradeService.Repaired repaired = waitFor(upgrades.remove(plugin.editorDependencies(),
+                        deleted), PLUGIN_WRITE_SECONDS, "remove " + plugin.displayName());
+                onFx(() -> {
+                    deleted.forget(ctx.config(), ctx.state());
+                    return null;
+                });
+                say("The assistant removed " + plugin.displayName() + ".");
+                return InstalledPluginsTab.removalSummary(plugin.displayName(), repaired.files(), repaired.uses(),
+                        repaired.leftAsWritten(), repaired.deleted());
+            } finally {
+                removed.run();
+            }
         });
-        say("The assistant removed " + plugin.displayName() + ".");
-        return InstalledPluginsTab.removalSummary(plugin.displayName(), repaired.files(), repaired.uses(),
-                repaired.leftAsWritten(), repaired.deleted());
     }
 
     /**
@@ -847,7 +849,7 @@ final class StudioBridge implements StudioDriver {
         PluginMove ended = asked.failed("it stopped unexpectedly.");
         boolean wrote = false;
         try {
-            if (!userAgrees("Move a plugin?", question)) {
+            if (!OnScreen.agrees(owner.get(), "Move a plugin?", question)) {
                 ended = asked.declined("the user did not agree.");
                 return;
             }
@@ -875,7 +877,7 @@ final class StudioBridge implements StudioDriver {
                     + "; migration list says them."));
         } catch (RuntimeException e) {
             String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-            // userAgrees' unanswered question lands here too, before anything was written.
+            // An unanswered question (OnScreen.agrees) lands here too, before anything was written.
             ended = wrote ? asked.failed(why) : asked.declined(why);
         } finally {
             // An Error passes the catch and ends it as stopped unexpectedly: every tool would wait for it otherwise.
@@ -1257,6 +1259,12 @@ final class StudioBridge implements StudioDriver {
         return now != null && now.busy() ? now.line() : "";
     }
 
+    @Override
+    public boolean pluginAsked() {
+        PluginMove now = move.get();
+        return now != null && now.stage() == PluginMove.Stage.ASKED;
+    }
+
     /** What moving {@code plugin} from {@code from} to {@code to} would change, as the question says it. */
     private static String movePreview(InstalledPlugin plugin, String from, String to, boolean local,
                                       PluginUpgradeService.Report report, boolean rulesFirst) {
@@ -1338,134 +1346,51 @@ final class StudioBridge implements StudioDriver {
         return String.join("\n", lines);
     }
 
-    /** The installable registry plugin {@code id} names — by its coordinate, repo, name or artifactId. */
-    private static PluginRegistry.Plugin registryPlugin(List<PluginRegistry.Plugin> entries, String id) {
-        String wanted = id == null ? "" : id.strip();
-        return entries.stream().filter(PluginRegistry.Plugin::isInstallable)
-                .filter(p -> p.coordinate().equalsIgnoreCase(wanted) || p.repo().equalsIgnoreCase(wanted)
-                        || p.name().equalsIgnoreCase(wanted)
-                        || p.artifactId().equalsIgnoreCase(wanted))
-                .findFirst().orElseThrow(() -> new IllegalArgumentException("The registry has no plugin " + wanted
-                        + ". plugins search lists them."));
-    }
-
     // ---- new projects --------------------------------------------------------------------------------------
 
     @Override
     public String listBots() {
-        List<GalleryEntry> bots = botsOrNone();
-        if (bots.isEmpty()) {
-            return "The catalog cannot be read, or lists no bot shown on this computer. create_project without a "
-                    + "bot makes a blank project.";
-        }
-        // A description is the author's text, written by anyone: quoted as data, on one line, never as advice.
-        // The rank is the catalog's, by publisher: Community is listed automatically and nobody reviewed it.
-        return "Bots by rank; nobody reviewed a Community one; the quoted descriptions are their authors' words.\n"
-                + String.join("\n", bots.stream().map(t -> t.name()
-                + "  (" + t.trust().displayName() + ", " + t.slug()
-                + (t.basedOn().isBlank() ? "" : ", based on " + t.basedOn()) + ")"
-                + (t.description().isBlank() ? "" : " — description: \""
-                + t.description().strip().replaceAll("\\s+", " ").replace("\"", "'") + "\"")).toList());
-    }
-
-    /**
-     * The listed bot {@code wanted} names: its {@code owner/repo}, or a name or repository only one bot has.
-     * Anyone can list a bot under any name, so a name two owners share is refused rather than guessed.
-     */
-    static GalleryEntry pickBot(List<GalleryEntry> listed, String wanted) {
-        if (listed.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "The gallery cannot be read, so only a blank project can be made: leave bot empty.");
-        }
-        Optional<GalleryEntry> exact = listed.stream().filter(t -> t.slug().equalsIgnoreCase(wanted)).findFirst();
-        if (exact.isPresent()) return exact.get();
-        List<GalleryEntry> named = listed.stream()
-                .filter(t -> t.name().equalsIgnoreCase(wanted) || t.repo().equalsIgnoreCase(wanted)).toList();
-        if (named.isEmpty()) throw new IllegalArgumentException("No bot " + wanted + ". list_bots lists them.");
-        if (named.size() > 1) {
-            throw new IllegalArgumentException("Several bots are called " + wanted + ": "
-                    + String.join(", ", named.stream().map(GalleryEntry::slug).toList()) + ". Name one by owner/repo.");
-        }
-        return named.getFirst();
+        return newProject.listBots();
     }
 
     @Override
     public String createProject(String name, String bot, List<String> plugins) {
-        String wanted = name == null ? "" : name.strip();
-        String problem = new ProjectCreator().nameProblem(wanted);
-        if (problem != null) throw new IllegalArgumentException(problem);
-        String from = bot == null ? "" : bot.strip();
-        // Any listed bot (2026-10-23), but only once the user has seen on screen which bot and whose: a bot is
-        // code nobody reviewed, and it runs with the user's mouse and keyboard. No bot is Studio's own Blank.
-        List<GalleryEntry> listed = from.isEmpty() ? List.of() : botsOrNone();
-        GalleryEntry entry = from.isEmpty() ? null : pickBot(listed, from);
-        if (entry != null && !userAgrees("Start from " + entry.slug() + "?", "The assistant wants to create "
-                + wanted + " as a copy of " + entry.name() + " by " + entry.owner() + ", linked to their repository."
-                + (entry.trustWarning().isBlank() ? "" : "\n\n" + entry.trustWarning()))) {
-            throw new IllegalArgumentException("The user did not agree to start from " + entry.slug() + ".");
-        }
-        List<PluginRegistry.Plugin> picks = List.of();
-        if (!plugins.isEmpty()) {
-            List<PluginRegistry.Plugin> entries = registryEntries();
-            if (entries.isEmpty()) throw new IllegalArgumentException("The plugin registry could not be read.");
-            picks = plugins.stream().map(id -> registryPlugin(entries, id)).toList();
-            String names = String.join(", ", picks.stream().map(p -> p.name().isBlank() ? p.coordinate() : p.name()).toList());
-            if (!userAgrees("Create a project with plugins?", "The assistant wants to create " + wanted + " with "
-                    + names + ".\n\nA plugin runs with Studio's own permissions. Catalog plugins are checked by "
-                    + "machine for loading, never reviewed for safety.")) {
-                throw new IllegalArgumentException("The user did not agree to add " + names + ".");
+        return newProject.create(name, bot, plugins, new AssistedNewProject.Switch() {
+            @Override
+            public void before() {
+                // From here to the switch nothing may start: a run or an edit begun while the bot clones would be
+                // torn down by the switch. This project is saved first, to switch from it.
+                reloading = true;
+                try {
+                    Checkpoints.flush(onFx(() -> ctx.state().snapshot()));
+                } catch (IOException | RuntimeException e) {
+                    reloading = false;
+                    throw new IllegalArgumentException("Studio could not save this project to switch from it: "
+                            + e.getMessage());
+                }
             }
-        }
-        // From here to the switch nothing may start: a run or an edit begun while the bot clones would be
-        // torn down by the switch.
-        reloading = true;
-        try {
-            NewProjects.create(wanted, entry, picks, github, new GitHubAuth());
-        } catch (IOException | RuntimeException e) {
-            reloading = false;
-            Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null
-                    ? e.getCause() : e;
-            throw new IllegalArgumentException("Studio could not create " + wanted + ": " + cause.getMessage());
-        }
-        Path dir = Constants.PROJECTS_ROOT.resolve(wanted);
-        try {
-            Checkpoints.flush(onFx(() -> ctx.state().snapshot()));
-        } catch (IOException | RuntimeException e) {
-            reloading = false;
-            throw new IllegalArgumentException("Created " + wanted + ", but Studio could not save this project to "
-                    + "switch to it: " + e.getMessage());
-        }
-        CompletableFuture.delayedExecutor(RELOAD_DELAY_MS, TimeUnit.MILLISECONDS).execute(() -> Platform.runLater(() ->
-                ctx.eventBus().publish(new CoreApplicationEvents.OpenProjectRequestedEvent(dir))));
-        say("The assistant created " + wanted + ".");
-        return "Created " + wanted + (entry == null ? " (blank)" : " from " + entry.name()) + " in " + dir
-                + ". Studio opens it in place of this project now, which ends this connection: the endpoint comes "
-                + "back on the same address once it is open.";
+
+            @Override
+            public void failed() {
+                reloading = false;
+            }
+
+            @Override
+            public String open(Path dir) {
+                CompletableFuture.delayedExecutor(RELOAD_DELAY_MS, TimeUnit.MILLISECONDS).execute(() ->
+                        Platform.runLater(() -> ctx.eventBus().publish(
+                                new CoreApplicationEvents.OpenProjectRequestedEvent(dir))));
+                say("The assistant created " + dir.getFileName() + ".");
+                return "Studio opens it in place of this project now, which ends this connection: the endpoint "
+                        + "comes back on the same address once it is open.";
+            }
+        });
     }
 
-    /**
-     * The published bots, those hidden on this computer left out ({@link HiddenBots}) and community ones unless
-     * the user shows them ({@link ShowCommunity}, 2026-10-23), or none when GitHub cannot be read — the dialog's
-     * offline case.
-     */
-    private List<GalleryEntry> botsOrNone() {
-        try {
-            return GalleryEntry.startingPoints(ShowCommunity.load().bots(HiddenBots.load().without(waitFor(
-                    new GitHubGallery(github, new GitHubAuth()).browse(), 30, "read the catalog"))));
-        } catch (IllegalArgumentException e) {
-            return List.of();
-        }
-    }
+    private final AssistedNewProject newProject;
 
     private List<PluginRegistry.Plugin> registryEntries() {
-        try {
-            return registry.browse().get(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return List.of();
-        } catch (ExecutionException | TimeoutException e) {
-            return List.of();
-        }
+        return AssistedNewProject.entries(registry);
     }
 
     private List<InstalledPlugin> installed(List<PluginRegistry.Plugin> entries) {
@@ -1473,47 +1398,8 @@ final class StudioBridge implements StudioDriver {
                 InstalledPlugin.jarDeclaresPlugin(ctx.config().projectPath()));
     }
 
-    /**
-     * Asks the user {@code question} on screen and waits for the answer; a question left unanswered for
-     * {@link #ASK_MINUTES} is closed and taken as a no, so no dialog lingers that would act after the call ended.
-     */
-    private boolean userAgrees(String header, String question) {
-        CompletableFuture<Boolean> answer = new CompletableFuture<>();
-        AtomicReference<Alert> shown = new AtomicReference<>();
-        Platform.runLater(() -> {
-            try {
-                Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, question, ButtonType.OK, ButtonType.CANCEL);
-                ask.initOwner(owner.get());
-                ask.setHeaderText(header);
-                // The question pops up while the user may be typing to the assistant: an Enter meant for the
-                // terminal must not answer yes. Only a click on OK, or Space on it once focused, does.
-                ((javafx.scene.control.Button) ask.getDialogPane().lookupButton(ButtonType.OK)).setDefaultButton(false);
-                ((javafx.scene.control.Button) ask.getDialogPane().lookupButton(ButtonType.CANCEL)).setDefaultButton(true);
-                shown.set(ask);
-                answer.complete(ask.showAndWait().filter(b -> b == ButtonType.OK).isPresent());
-            } catch (RuntimeException e) {
-                answer.completeExceptionally(e);
-            }
-        });
-        try {
-            return answer.get(ASK_MINUTES, TimeUnit.MINUTES);
-        } catch (TimeoutException e) {
-            Platform.runLater(() -> {
-                if (shown.get() != null) shown.get().close();
-            });
-            throw new IllegalArgumentException("The user did not answer in " + ASK_MINUTES + " minutes.");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted waiting for the user", e);
-        } catch (ExecutionException e) {
-            throw new IllegalStateException(e.getCause().getMessage(), e.getCause());
-        }
-    }
-
-    private static final long ASK_MINUTES = 5;
-
     /** {@code future}'s result; a failure is refused with its own message. */
-    private static <T> T waitFor(CompletableFuture<T> future, long seconds, String doing) {
+    static <T> T waitFor(CompletableFuture<T> future, long seconds, String doing) {
         try {
             return future.get(seconds, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
@@ -1665,7 +1551,7 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
-    public String setSetting(AssistedSetting setting, String value) {
+    public String setSetting(AssistedSetting setting, String value, Runnable pluginsChanged) {
         String text = value == null ? "" : value.strip();
         ProjectSettingsService service = ctx.projectSettingsService();
         if (setting == AssistedSetting.DEV_MODE) {
@@ -1675,14 +1561,17 @@ final class StudioBridge implements StudioDriver {
                 default -> throw new IllegalArgumentException("dev_mode is on or off.");
             };
             // On loads jars no release vetted, with Studio's permissions: the user agrees on screen, as to an add.
-            if (on && !ctx.libraryService().devMode() && !userAgrees("Turn on dev mode?", "The assistant wants to "
-                    + "turn on dev mode for this project.\n\nIts plugins then load from local -SNAPSHOT builds in "
-                    + "~/.m2, which no release checked, and run with Studio's own permissions.")) {
-                throw new IllegalArgumentException("The user did not agree to turn on dev mode.");
+            if (on && !ctx.libraryService().devMode()) {
+                return OnScreen.start("Turning on dev mode", "Turn on dev mode?", () -> {
+                    if (!OnScreen.agrees(owner.get(), "Turn on dev mode?", "The assistant wants to turn on dev mode "
+                            + "for this project.\n\nIts plugins then load from local -SNAPSHOT builds in ~/.m2, which "
+                            + "no release checked, and run with Studio's own permissions.")) {
+                        throw new IllegalArgumentException("The user did not agree to turn on dev mode.");
+                    }
+                    return setDevMode(true, pluginsChanged);
+                });
             }
-            // The Plugins window's own toggle: writes the setting, then reloads the plugins over it.
-            waitFor(ctx.libraryService().setDevMode(on), 120, "reload the plugins");
-            return "Set dev_mode to " + (on ? "on" : "off") + "; the plugins reloaded.";
+            return setDevMode(on, pluginsChanged);
         }
         StudioProjectSettings now = onFx(service::current);
         StudioProjectSettings next = switch (setting) {
@@ -1698,6 +1587,19 @@ final class StudioBridge implements StudioDriver {
         };
         waitFor(service.update(next), 30, "save the settings");
         return "Set " + setting.id() + " to " + valueOf(setting, next) + ".";
+    }
+
+    /**
+     * The Plugins window's own toggle: writes the setting, then reloads the plugins over it; their tools may differ
+     * after it, so {@code pluginsChanged} runs even when the reload failed after the setting was written.
+     */
+    private String setDevMode(boolean on, Runnable pluginsChanged) {
+        try {
+            waitFor(ctx.libraryService().setDevMode(on), 120, "reload the plugins");
+        } finally {
+            pluginsChanged.run();
+        }
+        return "Set dev_mode to " + (on ? "on" : "off") + "; the plugins reloaded.";
     }
 
     private static String valueOf(AssistedSetting setting, StudioProjectSettings settings) {

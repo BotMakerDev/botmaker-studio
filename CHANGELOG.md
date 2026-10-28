@@ -34,6 +34,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   Studio shows goes through one place (`ui/Choosers`), plugins' too, and a chooser left waiting for the user is
   named in the next `ui` answer. A plugin's file chooser now opens over the window the user is in.
 - Plugins can ask for a save chooser (`Dialogs.saveFile`).
+- On the bot list, a dev Studio's endpoint lists My bots (`list_projects`), opens one in the editor or the
+  Runner (`open_project`), and makes a new one (`list_bots`, `create_project`), so a session needs no click to
+  reach a project. The editor of a project a dev Studio opens serves its tools at once.
+
+### Changed
+
+- An assistant's call that asks the user on screen answers as soon as the question is up, instead of waiting
+  for the user and timing out the client: adding or removing a plugin, a new project from a bot or with
+  plugins, and turning on dev mode, as moving a plugin's version already did. Tools that change the bot wait
+  until it ends, `ui` can press the question's buttons, and the next answer of any tool says how it ended.
 
 ## [1.10.1] — 2026-10-28
 

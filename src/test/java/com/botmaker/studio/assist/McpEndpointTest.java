@@ -37,11 +37,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -164,15 +167,18 @@ class McpEndpointTest {
             return "created";
         }
 
-        @Override public String addPlugin(String id) {
+        @Override public String addPlugin(String id, Runnable added) {
             asked.add("add " + id);
             more = true;
+            added.run();
             return "added";
         }
-        @Override public String removePlugin(String id, boolean deleteFiles, boolean confirm) {
+        @Override public String removePlugin(String id, boolean deleteFiles, boolean confirm, Runnable removed) {
             asked.add("remove " + id + " " + deleteFiles + " " + confirm);
-            if (confirm) more = false;
-            return confirm ? "removed" : "would remove";
+            if (!confirm) return "would remove";
+            more = false;
+            removed.run();
+            return "removed";
         }
         @Override public String setPluginVersion(String id, String version, boolean rulesFirst, boolean confirm,
                                                  Runnable moved) {
@@ -447,6 +453,39 @@ class McpEndpointTest {
         assertEquals("saved", text(call("versions", "{\"action\":\"checkpoint\",\"label\":\"x\"}")));
         assertEquals(List.of("move sdk 1.4.5-SNAPSHOT false", "move sdk 1.4.5-SNAPSHOT true", "checkpoint x"),
                 driver.asked);
+    }
+
+    @Test
+    void aCallThatAsksOnScreenAnswersAtOnceAndALaterAnswerSaysHowItEnded() throws Exception {
+        initialize();
+        OnScreen.forget();
+        CountDownLatch answered = new CountDownLatch(1);
+        String started = OnScreen.start("Adding Farm", "Add a plugin?", () -> {
+            try {
+                answered.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return "Added Farm 1.0.";
+        });
+        assertTrue(started.contains("\"Add a plugin?\"") && !started.contains("ui press"),
+                "ui is named only where it is served: " + started);
+        try {
+            JsonNode edit = call("versions", "{\"action\":\"checkpoint\",\"label\":\"x\"}");
+            assertTrue(isError(edit) && text(edit).contains("asked on screen \"Add a plugin?\" (Adding Farm)"),
+                    "an action that writes the bot waits for the question: " + edit);
+            assertThrows(IllegalArgumentException.class, () -> OnScreen.start("Removing Farm", "Remove?", () -> ""),
+                    "one question at a time");
+            assertEquals("stopped", text(call("stop", "{}")), "a tool that touches neither answers");
+        } finally {
+            answered.countDown();
+        }
+        for (int i = 0; i < 100 && !OnScreen.busy().isEmpty(); i++) Thread.sleep(20);
+        JsonNode after = call("stop", "{}");
+        assertEquals("The question on screen ended. Added Farm 1.0.",
+                after.path("result").path("content").path(1).path("text").asText(), after.toString());
+        assertEquals(1, call("stop", "{}").path("result").path("content").size(), "said once");
+        assertEquals("saved", text(call("versions", "{\"action\":\"checkpoint\",\"label\":\"x\"}")));
     }
 
     @Test

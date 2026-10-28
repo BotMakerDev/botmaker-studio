@@ -98,13 +98,13 @@ class StartingPointsTest {
         GalleryEntry miner = new GalleryEntry("miner", "carol", "miner-bot", "", List.of());
         List<GalleryEntry> listed = List.of(alices, bobs, miner);
 
-        assertEquals(bobs, StudioBridge.pickBot(listed, "Bob/Farm"));
-        assertEquals(miner, StudioBridge.pickBot(listed, "miner"));
-        assertEquals(miner, StudioBridge.pickBot(listed, "miner-bot"));
+        assertEquals(bobs, AssistedNewProject.pickBot(listed, "Bob/Farm"));
+        assertEquals(miner, AssistedNewProject.pickBot(listed, "miner"));
+        assertEquals(miner, AssistedNewProject.pickBot(listed, "miner-bot"));
         IllegalArgumentException twice = assertThrows(IllegalArgumentException.class,
-                () -> StudioBridge.pickBot(listed, "farm"));
+                () -> AssistedNewProject.pickBot(listed, "farm"));
         assertEquals("Several bots are called farm: alice/farm, bob/farm. Name one by owner/repo.", twice.getMessage());
-        assertThrows(IllegalArgumentException.class, () -> StudioBridge.pickBot(listed, "nope"));
-        assertThrows(IllegalArgumentException.class, () -> StudioBridge.pickBot(List.of(), "farm"));
+        assertThrows(IllegalArgumentException.class, () -> AssistedNewProject.pickBot(listed, "nope"));
+        assertThrows(IllegalArgumentException.class, () -> AssistedNewProject.pickBot(List.of(), "farm"));
     }
 }

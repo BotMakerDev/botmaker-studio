@@ -172,22 +172,19 @@ final class ProjectTools {
                             case Versions.Checkpoint checkpoint -> driver.checkpoint(checkpoint.label());
                             case Versions.Revert revert -> idle(log, () -> driver.revert(revert.version()));
                         }),
-                // A move ends after its answer; a failed one may have written the pom, so its end serves the tools
-                // anew either way.
+                // An add, a move or a removal the user is asked about ends after its answer; a failed move may have
+                // written the pom, so its end serves the tools anew either way.
                 saidOneOf("plugins",
                         "The plugins the bot is built from, which bring the palette's calls, the slots' types and "
                                 + "tools of their own: list, search the registry, add, set_version, remove.",
                         Plugins.class, action -> switch (action) {
                             case Plugins.List list -> driver.listPlugins();
                             case Plugins.Search search -> driver.searchPlugins(given(search.query()));
-                            case Plugins.Add add -> changed(pluginsChanged, driver.addPlugin(add.id()));
+                            case Plugins.Add add -> driver.addPlugin(add.id(), pluginsChanged);
                             case Plugins.SetVersion move -> driver.setPluginVersion(move.id(), move.version(),
                                     yes(move.rulesFirst()), yes(move.confirm()), pluginsChanged);
-                            case Plugins.Remove remove -> {
-                                boolean confirm = yes(remove.confirm());
-                                String done = driver.removePlugin(remove.id(), yes(remove.deleteFiles()), confirm);
-                                yield confirm ? changed(pluginsChanged, done) : done;
-                            }
+                            case Plugins.Remove remove -> driver.removePlugin(remove.id(), yes(remove.deleteFiles()),
+                                    yes(remove.confirm()), pluginsChanged);
                         }),
                 said("plugin_guide",
                         "Read how the bot's plugins lay a bot out, each in its own words: where each kind of work "
@@ -224,16 +221,9 @@ final class ProjectTools {
                         DeleteField.class, call -> driver.deleteField(given(call.file()), call.field())),
                 said("get_settings", "List the project settings you may change, each with its value and what it "
                         + "takes.", driver::settings),
+                // dev_mode reloads the plugins, whose tools may differ after it: the driver serves them anew.
                 said("set_setting", "Change a project setting.",
-                        Setting.class, call -> {
-                            // dev_mode reloads the plugins, whose tools may differ after it — even when the
-                            // reload failed after the setting was written.
-                            try {
-                                return driver.setSetting(call.key(), call.value());
-                            } finally {
-                                if (call.key() == AssistedSetting.DEV_MODE) pluginsChanged.run();
-                            }
-                        }),
+                        Setting.class, call -> driver.setSetting(call.key(), call.value(), pluginsChanged)),
                 said("list_bots", "List the published bots create_project can start from.",
                         driver::listBots),
                 said("create_project",
@@ -241,14 +231,12 @@ final class ProjectTools {
                                 + "this one. The switch ends this connection: reconnect once the new project is "
                                 + "open, and tell the user before.",
                         NewProject.class, call -> idle(log, () -> driver.createProject(call.name(),
-                                given(call.bot()), Arrays.stream(given(call.plugins()).split(","))
-                                        .map(String::strip).filter(s -> !s.isEmpty()).toList()))));
+                                given(call.bot()), pluginIds(call.plugins())))));
     }
 
-    /** {@code answer}, after telling the endpoint the plugins may have changed. */
-    private static String changed(Runnable pluginsChanged, String answer) {
-        pluginsChanged.run();
-        return answer;
+    /** {@link NewProject#plugins}'s ids, comma-separated, as a list; none when left out. */
+    static List<String> pluginIds(String plugins) {
+        return Arrays.stream(given(plugins).split(",")).map(String::strip).filter(s -> !s.isEmpty()).toList();
     }
 
     /** {@code given} as a yes or no; no when left out. */

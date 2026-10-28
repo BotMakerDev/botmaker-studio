@@ -183,6 +183,11 @@ public interface StudioDriver {
         return "";
     }
 
+    /** Whether that move's question is on screen and not yet answered: {@code ui} may press its buttons. */
+    default boolean pluginAsked() {
+        return false;
+    }
+
     /** The plugins the bot's pom declares, each with its version and whether it loaded. */
     default String listPlugins() {
         throw new IllegalArgumentException("Studio has no plugins here.");
@@ -193,16 +198,20 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio has no plugin registry here.");
     }
 
-    /** Adds the registry's plugin {@code id} to the pom, once the user agrees on screen. */
-    default String addPlugin(String id) {
+    /**
+     * Asks the user on screen to add the registry's plugin {@code id} to the pom and answers at once
+     * ({@link OnScreen}); once they agree it is added, and {@code added} runs.
+     */
+    default String addPlugin(String id, Runnable added) {
         throw new IllegalArgumentException("Studio cannot add a plugin here.");
     }
 
     /**
-     * What removing the declared plugin {@code id} would change, or, when {@code confirm}, removes it: a version
-     * first, the calls into it repaired, and its files deleted when {@code deleteFiles}.
+     * What removing the declared plugin {@code id} would change, or, when {@code confirm}, asks the user on screen
+     * and answers at once ({@link OnScreen}); once they agree it is removed — a version first, the calls into it
+     * repaired, and its files deleted when {@code deleteFiles} — and {@code removed} runs.
      */
-    default String removePlugin(String id, boolean deleteFiles, boolean confirm) {
+    default String removePlugin(String id, boolean deleteFiles, boolean confirm, Runnable removed) {
         throw new IllegalArgumentException("Studio cannot remove a plugin here.");
     }
 
@@ -302,8 +311,11 @@ public interface StudioDriver {
         throw new IllegalArgumentException("Studio has no settings here.");
     }
 
-    /** Sets the project setting {@code setting} to {@code value}. */
-    default String setSetting(AssistedSetting setting, String value) {
+    /**
+     * Sets the project setting {@code setting} to {@code value}; {@code pluginsChanged} runs once dev mode reloaded
+     * the plugins. Dev mode turned on is asked on screen first, the call answering at once ({@link OnScreen}).
+     */
+    default String setSetting(AssistedSetting setting, String value, Runnable pluginsChanged) {
         throw new IllegalArgumentException("Studio has no settings here.");
     }
 
@@ -315,7 +327,7 @@ public interface StudioDriver {
     /**
      * Creates the project {@code name} as New Project does — cloned from the published bot {@code bot} once the
      * user agrees on screen, linked to its author, or blank when it is empty, with the registry's {@code plugins} declared — then opens
-     * it in place of this one.
+     * it in place of this one. A call that asks answers at once ({@link OnScreen}).
      */
     default String createProject(String name, String bot, List<String> plugins) {
         throw new IllegalArgumentException("Studio cannot create a project here.");

@@ -164,19 +164,26 @@ public final class RunHome implements ProjectWindow {
     }
 
     /**
+     * My bots as the home shows them: the root's projects, the remembered ones and the unpacked {@code .bmk}s, with
+     * the catalog's kept tags. Off the FX thread: it opens each bot's repository.
+     */
+    public static List<MyBot> myBots() {
+        var opened = ProjectPreferences.recentOpenTimes();
+        return MyBots.scan(MyBots.folders(new ProjectManager(), ProjectPreferences.recentDirectories(),
+                        UnpackedBots.newest(UnpackedBots.root())),
+                dir -> MyBots.read(dir, opened),
+                MyBots.latestTags(CatalogClient.session().kept().bots()));
+    }
+
+    /**
      * Studio's home: the root's projects and the remembered ones, with the catalog's kept tags for the
      * "<tag> available" badge, read again once the catalog answers; the catalog's bots under them.
      */
     public static RunHome studio(Stage stage, Actions actions) {
-        ProjectManager projects = new ProjectManager();
         GitHubAuth auth = new GitHubAuth();
         BotInstaller installer = new BotInstaller(new GitHubGallery(new GitHubClient(), auth));
         RunHome home = new RunHome(stage, actions, () -> {
-            var opened = ProjectPreferences.recentOpenTimes();
-            List<MyBot> found = MyBots.scan(MyBots.folders(projects, ProjectPreferences.recentDirectories(),
-                            UnpackedBots.newest(UnpackedBots.root())),
-                    dir -> MyBots.read(dir, opened),
-                    MyBots.latestTags(CatalogClient.session().kept().bots()));
+            List<MyBot> found = myBots();
             syncProgramsMenu(found);
             return found;
         }, new GetBots.Shelf() {

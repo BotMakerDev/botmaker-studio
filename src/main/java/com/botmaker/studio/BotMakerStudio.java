@@ -150,6 +150,10 @@ public class BotMakerStudio extends Application {
         LinkScheme.registerOnWindows();
         // A dev Studio's ui tool, from the first window on (BOTMAKER_MCP_UI); nothing otherwise.
         HomeEndpoint.mainWindow(primaryStage);
+        HomeEndpoint.shell((dir, runner) -> {
+            if (runner) openAs(primaryStage, dir, true, false);
+            else editProject(primaryStage, dir, false);
+        });
         HomeEndpoint.serve();
         if (bmk.isPresent()) {
             // A second launch is a Studio of its own (2026-10-25): it opens the file on the loading page (N12).

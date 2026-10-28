@@ -97,7 +97,8 @@ final class AssistantPane {
         build();
         serve.setSelected(mcpConfig.enabled());
         copySetup.setDisable(!mcpConfig.enabled());
-        if (mcpConfig.enabled()) ensureEndpoint(e -> { });
+        // A dev Studio Claude drives (BOTMAKER_MCP_UI) serves each project it opens, as the home serves the bot list.
+        if (mcpConfig.enabled() || HomeEndpoint.driven()) ensureEndpoint(e -> { });
         else mcpStatus.setText("Opening a tool starts the endpoint; tick this to keep it for other clients.");
         findTools();
     }
@@ -178,7 +179,7 @@ final class AssistantPane {
     private void sessionsChanged() {
         boolean none = sessions.getTabs().isEmpty();
         root.setCenter(none ? placeholder : sessions);
-        if (none && !serve.isSelected()) stopEndpoint();
+        if (none && !serve.isSelected() && !HomeEndpoint.driven()) stopEndpoint();
     }
 
     private static Node spacer() {
@@ -350,7 +351,7 @@ final class AssistantPane {
         copySetup.setDisable(!on);
         if (on) {
             ensureEndpoint(e -> { });
-        } else if (sessions.getTabs().isEmpty()) {
+        } else if (sessions.getTabs().isEmpty() && !HomeEndpoint.driven()) {
             stopEndpoint();
             mcpStatus.setText("Opening a tool starts the endpoint; tick this to keep it for other clients.");
         }

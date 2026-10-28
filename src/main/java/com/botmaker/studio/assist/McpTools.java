@@ -146,7 +146,9 @@ public final class McpTools {
     /**
      * {@code tool}, refused while the project is about to reload ({@link StudioDriver#reloading}), and, but for
      * the tools in {@link #WHILE_MOVING}, while a plugin move is asked or runs ({@link StudioDriver#pluginMoving}):
-     * the move rewrites the bot's files and the pom under them. Each call's time is kept in {@link #TIMES}.
+     * the move rewrites the bot's files and the pom under them; the same while a question is on screen
+     * ({@link OnScreen#busy}), whose answer is followed by what it starts. Every answer is followed by how an asked
+     * call ended ({@link #withNews}). Each call's time is kept in {@link #TIMES}.
      */
     private static SyncToolSpecification guarded(StudioDriver driver, SyncToolSpecification tool) {
         String name = tool.tool().name();
@@ -159,10 +161,16 @@ public final class McpTools {
                     answer = result("REFUSED: Studio is switching the project (after a revert, or to a project "
                             + "create_project made). Reconnect and call again once it is open.", true);
                 } else {
-                    String moving = passes ? "" : driver.pluginMoving();
-                    answer = moving.isEmpty() ? tool.callHandler().apply(exchange, request)
-                            : result("REFUSED: " + moving + " Wait for it: plugins list says when it is done.", true);
+                    boolean presses = name.equals(UI);
+                    String moving = passes || presses && driver.pluginAsked() ? "" : driver.pluginMoving();
+                    String asked = passes || presses && OnScreen.asking() ? "" : OnScreen.busy();
+                    answer = !moving.isEmpty()
+                            ? result("REFUSED: " + moving + " Wait for it: plugins list says when it is done.", true)
+                            : !asked.isEmpty()
+                            ? result("REFUSED: " + asked + " Wait for it: an answer after it says how it ended.", true)
+                            : tool.callHandler().apply(exchange, request);
                 }
+                answer = withNews(answer);
                 return answer;
             } finally {
                 // A handler that threw counts as an error.
@@ -170,6 +178,22 @@ public final class McpTools {
                         textChars(answer), images(answer));
             }
         }).build();
+    }
+
+    /** {@code answer}, followed by how the calls that asked on screen ended since the last answer ({@link OnScreen}). */
+    static CallToolResult withNews(CallToolResult answer) {
+        if (answer == null) return null;
+        List<String> news = OnScreen.news();
+        if (news.isEmpty()) return answer;
+        List<McpSchema.Content> content = new ArrayList<>(answer.content() == null ? List.of() : answer.content());
+        content.add(new McpSchema.TextContent(String.join("\n", news)));
+        return CallToolResult.builder().content(content).isError(answer.isError()).build();
+    }
+
+    /** {@code tool} with {@link #withNews}: the home's tools, which nothing else wraps. */
+    static SyncToolSpecification withNews(SyncToolSpecification tool) {
+        return SyncToolSpecification.builder().tool(tool.tool())
+                .callHandler((exchange, request) -> withNews(tool.callHandler().apply(exchange, request))).build();
     }
 
     /** How many characters of text {@code answer} gives the assistant to read; 0 for none. */
@@ -193,10 +217,13 @@ public final class McpTools {
 
     /**
      * The tools, and the actions of a tool of several ({@code "plugins list"}), that touch neither the bot's files
-     * nor its plugins, so they answer while a plugin moves.
+     * nor its plugins, so they answer while a plugin moves or a question is on screen ({@link OnScreen}).
      */
     static final Set<String> WHILE_MOVING = Set.of("plugins list", "plugins search", "versions list",
             "list_bots", "plugin_guide", "get_settings", "run_state", "read_trace", "stop", "quit_studio");
+
+    /** The tool that presses a question's buttons: it passes while a question is up, not while what it asked runs. */
+    private static final String UI = "ui";
 
     /** The action a call chose, as the contract reads it; empty for a tool of one action. */
     private static String actionOf(CallToolRequest request) {
