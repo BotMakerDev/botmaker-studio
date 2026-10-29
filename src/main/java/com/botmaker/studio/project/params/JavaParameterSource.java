@@ -144,9 +144,6 @@ public final class JavaParameterSource {
                 .description(string(members, "description"))
                 .category(string(members, "category"))
                 .visibility(Visibility.fromId(string(members, "visibility")))
-                .options(strings(members, "options"))
-                .bounds(number(members, "min", Double.NEGATIVE_INFINITY),
-                        number(members, "max", Double.POSITIVE_INFINITY))
                 .build();
         return new JavaParameter(file, className, row, form, initializer, note.isEmpty(), note, "", "");
     }
@@ -218,30 +215,6 @@ public final class JavaParameterSource {
     private static String string(Map<String, Object> members, String name) {
         Object value = members.get(name);
         return value instanceof String text ? text : "";
-    }
-
-    /**
-     * A bound. A string is read too: {@code @Param}'s bounds were text until 2026-09-22, and a bot written
-     * against plugin-basics' annotation says {@code min = "1"} — the same bound, which it still is.
-     */
-    private static double number(Map<String, Object> members, String name, double absent) {
-        Object value = members.get(name);
-        if (value instanceof Double number) return number;
-        if (value instanceof String text && !text.isBlank()) {
-            try {
-                return Double.parseDouble(text.strip());
-            } catch (NumberFormatException notANumber) {
-                return absent;
-            }
-        }
-        return absent;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static List<String> strings(Map<String, Object> members, String name) {
-        Object value = members.get(name);
-        if (value instanceof List<?> list) return List.copyOf((List<String>) list);
-        return value instanceof String single ? List.of(single) : List.of();
     }
 
     /** The source text a node occupies, exactly as written — whitespace, comments and all. */

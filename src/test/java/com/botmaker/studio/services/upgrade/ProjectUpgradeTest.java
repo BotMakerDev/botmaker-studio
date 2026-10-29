@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -171,8 +172,42 @@ class ProjectUpgradeTest {
         String summary = new ProjectUpgrade.Result(List.of(new ProjectUpgrade.Moved("SDK", "1", "2")), 0, 0,
                 List.of(), List.of("Outcomes (@SdkValue(SdkValue.Id.OUTCOMES)) is no longer one of the plugin's"
                 + " values, so it was removed."), List.of()).summary();
-        assertTrue(summary.contains("Repaired the plugin's values: Outcomes (@SdkValue(SdkValue.Id.OUTCOMES)) is no"
+        assertTrue(summary.contains("Repaired: Outcomes (@SdkValue(SdkValue.Id.OUTCOMES)) is no"
                 + " longer one of the plugin's values, so it was removed."), summary);
+    }
+
+    private static final String PARAMS = """
+            package com.mybot;
+
+            import com.botmaker.plugin.api.params.Param;
+
+            public class Subject1 {
+                @Param(category = "Limits", min = 1)
+                public static int attempts = 3;
+            }
+            """;
+
+    /**
+     * Contract 0.14 took {@code min}, {@code max} and {@code options} off {@code @Param} (2026-10-29): both an
+     * upgrade and Migrate first take them off the bot, count the file, and say which fields — no {@code @Migrate}
+     * rule can rewrite an annotation member, so nothing else would.
+     */
+    @Test
+    void bothPathsTakeTheRemovedParamMembersOff(@TempDir Path tmp) throws Exception {
+        for (boolean migrateFirst : List.of(false, true)) {
+            Path root = tmp.resolve(migrateFirst ? "first" : "run");
+            PluginUpgradeService service = UpgradeFixtures.serviceOver(root, BOT, PARAMS);
+            List<ProjectUpgrade.Row> rows = List.of(new ProjectUpgrade.Row(service, "2.0.0"));
+
+            ProjectUpgrade.Result result = (migrateFirst ? ProjectUpgrade.moveOnly(rows, new Recorder())
+                    : ProjectUpgrade.run(rows, new Recorder())).get();
+
+            String source = Files.readString(root.resolve("project/src/main/java/com/mybot/Subject1.java"));
+            assertFalse(source.contains("min ="), source);
+            assertTrue(source.contains("category = \"Limits\""), source);
+            assertTrue(result.filesRewritten() >= 1, result.summary());
+            assertTrue(result.summary().contains("attempts"), result.summary());
+        }
     }
 
     @Test

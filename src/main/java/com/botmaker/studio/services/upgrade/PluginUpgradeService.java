@@ -15,6 +15,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.project.managed.ManagedRepairs;
 import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -366,6 +367,11 @@ public final class PluginUpgradeService {
      */
     public Repaired repairCode(Map<String, String> versions) {
         return repair(movedTo(versions), "the move to " + String.join(", ", versions.values()));
+    }
+
+    /** {@link JavaParameters#stripRemovedMembers} over this project: one sentence per file it changed. */
+    public List<String> stripRemovedParamMembers() {
+        return JavaParameters.stripRemovedMembers(config, state);
     }
 
     /** The same for this plugin's departure, its {@code editorDependencies} going with it. */

@@ -1427,25 +1427,10 @@ final class StudioBridge implements StudioDriver {
             ParameterRow row = p.row();
             lines.add(p.qualified() + "  " + row.typeName() + " = " + (p.editable() ? row.value() : p.initializer())
                     + "  [" + row.categoryOrGeneral() + "]"
-                    + (row.options().isEmpty() ? "" : "  one of " + row.options())
-                    + (range(row).isEmpty() ? "" : "  " + range(row))
                     + (row.description().isBlank() ? "" : " — " + row.description().strip())
                     + (p.editable() ? "" : "  (not set here: " + p.note() + ")"));
         }
         return String.join("\n", lines);
-    }
-
-    /** {@code row}'s declared bounds as a phrase, {@code ""} when it declares none. */
-    private static String range(ParameterRow row) {
-        boolean low = !Double.isInfinite(row.min());
-        boolean high = !Double.isInfinite(row.max());
-        if (low && high) return "from " + bound(row.min()) + " to " + bound(row.max());
-        if (low) return "at least " + bound(row.min());
-        return high ? "at most " + bound(row.max()) : "";
-    }
-
-    private static String bound(double value) {
-        return value == Math.rint(value) ? String.valueOf((long) value) : String.valueOf(value);
     }
 
     @Override
@@ -1461,13 +1446,6 @@ final class StudioBridge implements StudioDriver {
                 throw new IllegalArgumentException("`" + text + "` is not a " + p.row().typeName() + " value.");
             }
             ParameterRow row = p.row();
-            if (!row.options().isEmpty() && row.options().stream()
-                    .noneMatch(option -> grammar.valueOf(p.form(), option).equals(read))) {
-                throw new IllegalArgumentException(p.qualified() + " takes one of " + row.options() + ".");
-            }
-            if (read.get() instanceof Number n && (n.doubleValue() < row.min() || n.doubleValue() > row.max())) {
-                throw new IllegalArgumentException(p.qualified() + " is " + range(row) + ".");
-            }
             JavaValue written = grammar.initializer(p.form(), read.get()).orElseThrow(() ->
                     new IllegalArgumentException("That value cannot be written as " + row.typeName() + "."));
             ParameterRow stored = JavaParameters.setValue(ctx.config(), ctx.state(), p, written, grammar)

@@ -44,6 +44,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   for the user and timing out the client: adding or removing a plugin, a new project from a bot or with
   plugins, and turning on dev mode, as moving a plugin's version already did. Tools that change the bot wait
   until it ends, `ui` can press the question's buttons, and the next answer of any tool says how it ended.
+- **`@Param` describes the field only** (contract 0.14, 2026-10-29): the Parameters window has no Choices row
+  (Any value / One of / Any of) and no Range row, and no longer clamps a number. An enum is still picked from its
+  constants and a list of one ticked, by the value's editor. The assistant's `list_params` and `set_param` no
+  longer speak of choices or ranges. An upgrade, and *Migrate first*, take `min`, `max` and `options` off every
+  `@Param` and say which fields they changed; the summary's "Repaired the plugin's values:" now reads "Repaired:".
 
 ## [1.10.1] — 2026-10-28
 

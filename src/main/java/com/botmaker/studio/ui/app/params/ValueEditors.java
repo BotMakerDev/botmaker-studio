@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.studio.plugin.ConstantValues;
 import com.botmaker.studio.plugin.EditorContest;
@@ -38,10 +37,6 @@ import java.util.function.Supplier;
  * writes a value back through it; what this hands its caller is that context's {@code current()} tree, with
  * the imports it names. There is no second, "wire" spelling of a leaf any more, which is what stopped a
  * {@code java.awt.Color} parameter being rewritten the moment the window opened.
- *
- * <p><b>What was lost with the switch, said out loud:</b> a declared {@code @Param(min, max)} no longer
- * narrows a number's editor, because the contract has no member that carries a bound to a plugin's editor.
- * The bound is still read, still shown in the window's own column, and still the author's to keep.
  */
 public final class ValueEditors {
 
@@ -59,28 +54,15 @@ public final class ValueEditors {
         }
     }
 
-    /**
-     * What an editor may need beyond the value itself: the project a plugin's services are built for, and the
-     * range the field declares ({@code @Param(min, max)}, 2026-09-27) — carried here so every number drawn
-     * for the row, a list's elements included, is told it.
-     */
-    public record Context(ProjectConfig project, Bounds bounds) {
-
-        public Context {
-            bounds = bounds == null ? Bounds.NONE : bounds;
-        }
+    /** What an editor may need beyond the value itself: the project a plugin's services are built for. */
+    public record Context(ProjectConfig project) {
 
         public static Context of(ProjectConfig project) {
-            return new Context(project, Bounds.NONE);
+            return new Context(project);
         }
 
         public static Context none() {
-            return new Context(null, Bounds.NONE);
-        }
-
-        /** The same, with the field's declared range. */
-        public Context withBounds(Bounds range) {
-            return new Context(project, range);
+            return new Context(null);
         }
 
         /**
@@ -148,7 +130,7 @@ public final class ValueEditors {
      */
     private static Editor fromPlugin(Type leaf, String source, Context ctx, Consumer<JavaValue> onChange) {
         HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()),
-                onChange, ctx.constants()).withBounds(ctx.bounds());
+                onChange, ctx.constants());
         for (SlotEditor editor : claimants(leaf, context)) {
             try {
                 Node node = editor.create(context);
@@ -194,53 +176,6 @@ public final class ValueEditors {
         List<SlotEditor> result = new ArrayList<>();
         for (PluginHost.OwnedEditor owned : ordered) result.add(owned.editor());
         return result;
-    }
-
-    /**
-     * The picture a plugin draws beside one declared choice of its own type, or {@code null} — in which case
-     * the choice's own label is the whole of it.
-     *
-     * <p>The third place this window shows a value. {@link SlotEditor#preview} is asked with a context that
-     * is deliberately inert — {@code set} goes nowhere, because a declared choice is a value being
-     * <em>listed</em>, not one being edited — and its default is {@code null}.
-     *
-     * <p>The host drew a colour swatch and a direction arrow here itself until 2026-09-22. Both types are
-     * plugins' now, and a preview a plugin's own editor can draw is the plugin's.
-     */
-    static Node optionGraphic(Type leaf, String source, Context ctx) {
-        if (source == null || source.isBlank()) return null;
-        HostValueContext context = HostValueContext.of(leaf, source, HostServices.forProject(ctx.project()), null,
-                ctx.constants());
-        for (SlotEditor editor : claimants(leaf, context)) {
-            try {
-                Node node = editor.preview(context);
-                if (node != null) return node;
-            } catch (RuntimeException | LinkageError e) {
-                // Same rule as fromPlugin: a plugin's node is third-party code drawn inside our dialog, and
-                // one that throws costs this option its picture, never the window.
-                System.err.println("Plugin preview failed for type " + ValueTypes.sourceName(leaf) + ": " + e);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * A declared choice as the user sees it: the plugin's preview when it draws one, else the type's own
-     * editor, shown and not handled — or {@code null} when nothing draws the type, in which case the caller's
-     * label is the whole of it.
-     *
-     * <p>Never the choice's Java. {@code new com.botmaker.sdk.api.geometry.Point(1144, 342)} beside a radio
-     * button is the text the choice exists to spare the user.
-     */
-    static Node optionDisplay(Type leaf, String source, Context ctx) {
-        Node preview = optionGraphic(leaf, source, ctx);
-        if (preview != null) return preview;
-        if (source == null || source.isBlank()) return null;
-        Editor inert = fromPlugin(leaf, source, ctx, null);
-        if (inert == null) inert = ShapeFallbackView.editor(PluginHost.grammar(), leaf, source, ctx, null, 0);
-        inert.node().setMouseTransparent(true);
-        inert.node().setFocusTraversable(false);
-        return inert.node();
     }
 
     /**

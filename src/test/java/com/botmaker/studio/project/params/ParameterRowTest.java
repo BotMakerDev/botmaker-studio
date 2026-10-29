@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,7 +26,7 @@ class ParameterRowTest {
         assertThrows(IllegalArgumentException.class, () -> ParameterRow.named(null, "String"));
     }
 
-    /** Every default is the reading that keeps a project open: a value, a visibility and a range all absent. */
+    /** Every default is the reading that keeps a project open: a value and a visibility absent. */
     @Test
     void everyDefaultIsTheSafeReading() {
         ParameterRow bare = row("rest").build();
@@ -39,10 +38,6 @@ class ParameterRowTest {
         assertEquals(ParameterRow.GENERAL, bare.categoryOrGeneral());
         assertEquals(Visibility.PUBLIC, bare.visibility());
         assertTrue(bare.isPublic());
-        assertEquals(List.of(), bare.options());
-        assertFalse(bare.isBounded());
-        assertEquals(Double.NEGATIVE_INFINITY, bare.min());
-        assertEquals(Double.POSITIVE_INFINITY, bare.max());
     }
 
     /** A row with no type at all is blank rather than a {@code null} the host would trip over. */
@@ -62,23 +57,11 @@ class ParameterRowTest {
                 .build().typeName());
     }
 
-    /** One end of a range is a sentence a person says, and both ends are independent. */
-    @Test
-    void oneEndOfARangeIsEnough() {
-        ParameterRow atMost = row("attempts").bounds(Double.NEGATIVE_INFINITY, 10).build();
-
-        assertTrue(atMost.isBounded());
-        assertEquals(10, atMost.max());
-        assertEquals(Double.NEGATIVE_INFINITY, atMost.min());
-    }
-
     @Test
     void withValueKeepsEverythingElseAndEqualityIsByComponent() {
         ParameterRow declared = ParameterRow.named("rest", "java.time.Duration")
                 .value("java.time.Duration.ofSeconds(3)").description("How long to wait").category("Timing")
                 .visibility(Visibility.EDITOR_ONLY)
-                .options(List.of("java.time.Duration.ofSeconds(3)", "java.time.Duration.ofSeconds(5)"))
-                .bounds(1000, 9000)
                 .build();
 
         ParameterRow edited = declared.withValue("java.time.Duration.ofSeconds(5)");

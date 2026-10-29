@@ -216,14 +216,16 @@ class JavaParameterEditsTest {
     }
 
     @Test
-    void optionsAreWrittenAsAnArrayAndClearedWhenEmpty() {
-        String withOptions = JavaParameterEdits.setOptions(SOURCE, "Parameters", "maxAttempts",
-                List.of("one", "two"));
-        assertTrue(withOptions.contains("options = { \"one\", \"two\" }")
-                || withOptions.contains("options = {\"one\", \"two\"}"), withOptions);
+    void theRemovedMembersComeOffAndNothingElseDoes() {
+        String old = SOURCE.replace("@Param(category = \"Limits\")",
+                "@Param(min = 1, options = {\"a\"}, category = \"Limits\")");
+        JavaParameterEdits.Stripped stripped = JavaParameterEdits.stripRemovedMembers(old);
 
-        String cleared = JavaParameterEdits.setOptions(withOptions, "Parameters", "maxAttempts", List.of());
-        assertFalse(cleared.contains("options"), cleared);
+        assertFalse(stripped.source().contains("min ="), stripped.source());
+        assertFalse(stripped.source().contains("options"), stripped.source());
+        assertTrue(stripped.source().contains("category = \"Limits\""), stripped.source());
+        assertEquals(List.of("maxAttempts"), stripped.fields());
+        assertEquals(SOURCE, JavaParameterEdits.stripRemovedMembers(SOURCE).source(), "nothing to take off");
     }
 
     // ---- adding and removing --------------------------------------------------------------------------

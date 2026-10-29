@@ -275,12 +275,11 @@ public final class PickerGalleryWindow {
     // --- the sample variable each row is built from ----------------------------------------------------------
 
     /**
-     * One sample form to draw a type in: what the second column calls it, how the leaf is wrapped, and
-     * whether the row declares a set of choices.
+     * One sample form to draw a type in: what the second column calls it, and how the leaf is wrapped.
      *
      * @param plain the one sample always shown — the free value, which is what the filter box is usually for
      */
-    record Shape(String label, String suffix, boolean list, boolean map, boolean options, boolean plain) {
+    record Shape(String label, String suffix, boolean list, boolean map, boolean plain) {
 
         /** {@code type} — a canonical name, looked up exactly — wrapped the way this shape wraps it. */
         Type formOf(String type) {
@@ -292,31 +291,24 @@ public final class PickerGalleryWindow {
     }
 
     /**
-     * The five cells a type can be drawn in, which is the whole of {@link ParamValueWidgets}'s dispatch.
+     * The three cells a type can be drawn in, which is the whole of {@link ParamValueWidgets}'s dispatch (the
+     * "one of" and "any of" cells went with {@code @Param(options)}, 2026-10-29).
      *
      * <p>A map is keyed by text and never by the type being shown: the screen is about the <em>value</em>
      * editor, and a map of colours to colours would draw the same cell twice in one row.
      */
     static final List<Shape> SHAPES = List.of(
-            new Shape("free value", "", false, false, false, true),
-            new Shape("one of…", "OneOf", false, false, true, false),
-            new Shape("list of…", "List", true, false, false, false),
-            new Shape("any of…", "AnyOf", true, false, true, false),
-            new Shape("map of…", "Map", false, true, false, false));
+            new Shape("free value", "", false, false, true),
+            new Shape("list of…", "List", true, false, false),
+            new Shape("map of…", "Map", false, true, false));
 
-    /**
-     * A row of {@code type} in {@code shape}, or null when that pairing is not a thing anyone can declare —
-     * or not one this screen has choices to fill in for.
-     */
+    /** A row of {@code type} in {@code shape}. */
     static Sample sample(String type, Shape shape) {
-        List<String> options = shape.options() ? options(type) : List.of();
-        if (shape.options() && options.isEmpty()) return null;
         Type form = shape.formOf(type);
         ValueGrammar grammar = PluginHost.grammar();
         ParameterRow row = ParameterRow.named(identifier(type, shape), ValueTypes.sourceName(form))
                 .value(grammar.freshInitializer(form).map(JavaValue::source).orElse(""))
                 .visibility(Visibility.PUBLIC)
-                .options(options)
                 .build();
         return new Sample(row, form);
     }
@@ -329,24 +321,5 @@ public final class PickerGalleryWindow {
         String simple = JavaNames.simple(type).replaceAll("[^A-Za-z0-9_]", "_");
         if (simple.isEmpty() || Character.isDigit(simple.charAt(0))) simple = "v" + simple;
         return Character.toLowerCase(simple.charAt(0)) + simple.substring(1) + shape.suffix();
-    }
-
-    /**
-     * Two or three declared choices of {@code type}, for the shapes that need a set to draw — written as an
-     * author writes them into {@code @Param(options = …)}.
-     *
-     * <p>Written out rather than derived: the values have to be <em>different from each other</em> and
-     * different from the fresh one, or a row of three radio buttons all reading {@code 0} tests nothing. Only
-     * the JDK's literals have samples here: they are the only types whose values this screen can spell
-     * without knowing a plugin's vocabulary, which is the thing it is not allowed to know.
-     */
-    static List<String> options(String type) {
-        return switch (type) {
-            case "java.lang.String" -> List.of("first", "second", "third");
-            case "int", "java.lang.Integer" -> List.of("1", "2", "3");
-            case "double", "java.lang.Double" -> List.of("0.5", "1.5", "2.5");
-            case "char", "java.lang.Character" -> List.of("'a'", "'b'", "'c'");
-            default -> List.of();
-        };
     }
 }

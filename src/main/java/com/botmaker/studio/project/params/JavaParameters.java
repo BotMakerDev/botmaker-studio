@@ -8,7 +8,6 @@ import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.grammar.JavaValue;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
@@ -269,7 +268,7 @@ public final class JavaParameters {
             retype(config, state, held, wantedForm, grammar);
             held = find(config, state, className, name, grammar).orElse(null);
             if (held == null) return gone(parameter);
-            wanted = retyped(wanted, before, wantedForm, grammar);
+            wanted = retyped(wanted, before);
         }
 
         Map<String, String> members = new LinkedHashMap<>();
@@ -284,18 +283,8 @@ public final class JavaParameters {
             members.put("visibility", wanted.visibility() == Visibility.PUBLIC
                     ? Visibility.PUBLIC.id() : "");
         }
-        // An infinite bound is the annotation's default, so it removes the member rather than writing
-        // Double.NEGATIVE_INFINITY down.
-        if (Double.compare(wanted.min(), before.min()) != 0) members.put("min", bound(wanted.min()));
-        if (Double.compare(wanted.max(), before.max()) != 0) members.put("max", bound(wanted.max()));
         if (!members.isEmpty()) {
             setMembers(config, state, held, members);
-            held = find(config, state, className, name, grammar).orElse(null);
-            if (held == null) return gone(parameter);
-        }
-
-        if (!wanted.options().equals(before.options())) {
-            setOptions(config, state, held, wanted.options());
             held = find(config, state, className, name, grammar).orElse(null);
             if (held == null) return gone(parameter);
         }
@@ -311,34 +300,11 @@ public final class JavaParameters {
     }
 
     /**
-     * What survives of {@code wanted} once the field is {@code to} rather than {@code from}.
-     *
-     * <p>The value was reset by the retype, so the row's old one is not written back over it. A choice stays
-     * when it is still a value of the new type, or of its element ({@code int} to {@code List<Integer>} keeps
-     * them as the ticks), and goes otherwise — which is also how a caller hands the new type's own choices
-     * over with the retype (2026-09-27). A bound means something only for a number. Kept, a choice of the
-     * old type drew as a disabled row holding the old type's Java.
+     * What survives of {@code wanted} once the field is retyped: everything but the value, which the retype
+     * reset, so the row's old one is not written back over it.
      */
-    private static ParameterRow retyped(ParameterRow wanted, ParameterRow before, Type to, ValueGrammar grammar) {
-        ParameterRow.Builder kept = wanted.toBuilder().value(before.value())
-                .options(ChoiceMode.kept(grammar, to, wanted.options()));
-        Type leaf = ValueTypes.leaf(to);
-        if (!(leaf instanceof Class<?> cls && NUMBERS.contains(cls))) {
-            kept.bounds(Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY);
-        }
-        return kept.build();
-    }
-
-    /** The types a declared range means anything for: Java's numbers, boxed or not. */
-    public static final Set<Class<?>> NUMBERS = Set.of(
-            byte.class, short.class, int.class, long.class, float.class, double.class,
-            Byte.class, Short.class, Integer.class, Long.class, Float.class, Double.class);
-
-    /** A bound as the literal {@code @Param} takes — {@code 0}, {@code 2.5} — or {@code ""} for none. */
-    static String bound(double value) {
-        if (Double.isInfinite(value) || Double.isNaN(value)) return "";
-        if (value == Math.rint(value) && Math.abs(value) < 1e15) return Long.toString((long) value);
-        return Double.toString(value);
+    private static ParameterRow retyped(ParameterRow wanted, ParameterRow before) {
+        return wanted.toBuilder().value(before.value()).build();
     }
 
     /**
@@ -693,13 +659,6 @@ public final class JavaParameters {
                 source, parameter.className(), parameter.name(), members));
     }
 
-    /** Sets or clears {@code @Param(options = …)}. */
-    private static boolean setOptions(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                      List<String> options) {
-        return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setOptions(
-                source, parameter.className(), parameter.name(), options));
-    }
-
     // ---- plumbing ---------------------------------------------------------------------------------------
 
     /** The field called {@code name} in {@code className}, as the source reads <em>now</em>. */
@@ -729,6 +688,25 @@ public final class JavaParameters {
             return rewritten;
         });
         return changed[0];
+    }
+
+    /**
+     * Takes {@code @Param}'s removed members ({@code min}, {@code max}, {@code options}) off every field in the
+     * bot (2026-10-29), so a bot written against contract 0.13 compiles against 0.14. Answers one sentence per
+     * file changed, naming its fields; none when there was nothing to take off. Run by the upgrade pass.
+     */
+    public static List<String> stripRemovedMembers(ProjectConfig config, ProjectState state) {
+        if (config == null) return List.of();
+        List<String> said = new ArrayList<>();
+        BotSources.forEach(config, state, (visited, source) -> {
+            if (!source.contains("Param")) return null;   // a cheap skip; the parse decides what an @Param is
+            JavaParameterEdits.Stripped stripped = JavaParameterEdits.stripRemovedMembers(source);
+            if (stripped.fields().isEmpty()) return null;
+            said.add("@Param no longer takes min, max or options; removed from " + String.join(", ", stripped.fields())
+                    + " in " + visited.getFileName() + ".");
+            return stripped.source();
+        });
+        return List.copyOf(said);
     }
 
     /** Applies {@code edit} to every file — a rename, and an add whose target class could be anywhere. */

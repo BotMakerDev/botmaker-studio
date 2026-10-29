@@ -1,15 +1,12 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.project.params.Visibility;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.params.ChoiceMode;
 import com.botmaker.studio.project.params.ClockSwitch;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
@@ -637,22 +634,18 @@ public final class ParametersDialog {
             name = label;
         }
 
-        // How the value is picked sits beside the type rather than inside it (2026-09-26): any value, one of a
-        // declared set, or any number of them — the last the one mode that changes the declared type, to a
-        // List of it. The chooser shows the base type in every mode (2026-09-27): "Any of" an int is an int
-        // ticked, and the List it is written as is not the user's choice of type.
+        // The type is the whole rule about the value (2026-10-29): no choices and no range beside it. An enum is
+        // picked from its constants and a list of one ticked, by the value's own editor.
         ValueGrammar grammar = PluginHost.grammar();
-        ChoiceMode mode = ChoiceMode.of(entry.form(), v.options(), grammar);
-        Type base = ChoiceMode.base(entry.form(), v.options(), grammar);
 
         Node type;
         if (mine) {
             TypeChooser picker = typeChooser();
-            picker.setType(base);
+            picker.setType(entry.form());
             picker.setPrefWidth(180);
             picker.typeProperty().addListener((o, was, is) -> {
-                if (is == null || is.equals(base)) return;
-                retype(entry, mode, is);
+                if (is == null || is.equals(entry.form())) return;
+                retype(entry, is);
             });
             type = picker;
         } else {
@@ -697,7 +690,7 @@ public final class ParametersDialog {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         HBox head = mine ? new HBox(8, grip, name, type, spacer, drop)
                 : new HBox(8, name, type, spacer);
-        if (mine && mode == ChoiceMode.NONE) {
+        if (mine) {
             ClockSwitch.other(entry.form()).filter(grammar::known)
                     .ifPresent(other -> head.getChildren().add(head.getChildren().indexOf(type) + 1,
                             clockBar(entry)));
@@ -716,29 +709,6 @@ public final class ParametersDialog {
         grid.add(new Label("Category"), 0, row);
         grid.add(mine ? buildTagPicker(entry) : hintLabel(v.categoryOrGeneral()), 1, row);
         row++;
-
-        // An enum is its own set of choices (every day, every mouse button), so it is picked one or several,
-        // never freely, and its choices start as every constant ticked (feedback 3).
-        Type leaf = ValueTypes.leaf(entry.form());
-        List<ChoiceMode> modes = new ArrayList<>(ChoiceMode.offered(base, grammar.known(base)));
-        if (!modes.contains(mode)) modes.add(mode);
-        if (mine && modes.size() > 1) {
-            Label heading = new Label("Choices");
-            heading.setTooltip(new Tooltip("Whether the value is anything of its type, one of a set you write "
-                    + "down, or any number of them."));
-            VBox choices = new VBox(6, modeBar(entry, mode, modes));
-            if (mode != ChoiceMode.NONE) choices.getChildren().add(buildOptionsEditor(entry));
-            grid.add(heading, 0, row);
-            grid.add(choices, 1, row);
-            row++;
-        }
-
-        // Under choices the choices are the limit, so a range there would be a second one nobody can see.
-        if (mine && mode == ChoiceMode.NONE && leaf != null && isNumber(grammar, leaf)) {
-            grid.add(new Label("Range"), 0, row);
-            grid.add(buildBoundsEditor(entry), 1, row);
-            row++;
-        }
 
         grid.add(new Label("Value"), 0, row);
         Node widget = valueCell(entry);
@@ -829,38 +799,10 @@ public final class ParametersDialog {
         });
     }
 
-    /** One toggle per mode {@code entry} can be in, the current one pressed. */
-    private Node modeBar(JavaParameter entry, ChoiceMode current, List<ChoiceMode> modes) {
-        ToggleGroup group = new ToggleGroup();
-        HBox bar = new HBox();
-        bar.getStyleClass().add("choice-mode-bar");
-        for (int i = 0; i < modes.size(); i++) {
-            ChoiceMode mode = modes.get(i);
-            ToggleButton button = new ToggleButton(mode.displayName());
-            button.setToggleGroup(group);
-            button.setSelected(mode == current);
-            if (i == 0) button.getStyleClass().add("choice-mode-first");
-            if (i == modes.size() - 1) button.getStyleClass().add("choice-mode-last");
-            button.setTooltip(new Tooltip(switch (mode) {
-                case NONE -> "The value is anything of its type.";
-                case ONE -> "The value is exactly one of the choices you write down.";
-                case MANY -> "The value is any number of the choices you write down, ticked. The field is "
-                        + "declared as a List of its type.";
-            }));
-            // A pressed toggle stays pressed: clicking the current mode is not a way to have none.
-            button.setOnAction(e -> {
-                button.setSelected(true);
-                if (mode != current) switchMode(entry, mode);
-            });
-            bar.getChildren().add(button);
-        }
-        return bar;
-    }
-
     /**
      * <b>Local | UTC</b> beside a time of day's type (feedback 3): the other one retypes the field between
-     * {@code LocalTime} and {@code OffsetTime} and keeps the clock reading ({@link ClockSwitch}). Styled as the
-     * mode bar, since it is the same kind of either-or.
+     * {@code LocalTime} and {@code OffsetTime} and keeps the clock reading ({@link ClockSwitch}). Styled as a
+     * pair of toggles, the either-or it is.
      */
     private Node clockBar(JavaParameter entry) {
         boolean local = entry.form() == java.time.LocalTime.class;
@@ -894,105 +836,11 @@ public final class ParametersDialog {
     }
 
     /**
-     * Puts {@code entry} in {@code to}, as one step: the declared type, the choices, and the value.
-     *
-     * <p>What was picked carries across. The first choice written down is the value the field already had,
-     * so a parameter set to 5 that becomes "one of" starts as one of {5}, picked; ticks become the first
-     * ticked one when leaving "any of", and "any of" starts with the old value ticked.
+     * Retypes {@code entry} to {@code form}. The value is reset to the new type's fresh one: a value written for
+     * one type is not a value of another, and carrying it across would leave a bot that does not compile.
      */
-    private void switchMode(JavaParameter entry, ChoiceMode to) {
-        ParameterRow row = entry.row();
-        ValueGrammar grammar = PluginHost.grammar();
-        ChoiceMode from = ChoiceMode.of(entry.form(), row.options(), grammar);
-        Type base = ChoiceMode.base(entry.form(), row.options(), grammar);
-        Type form = to.formFor(base);
-
-        List<JavaValue> held = from == ChoiceMode.MANY
-                ? ValueWire.partsOrNone(entry.form(), row.value()).stream().map(ValueGrammar.Part::kept).toList()
-                : JavaValue.parse(row.value()).stream().toList();
-        // An enum's choices carry across as they are — none written is every constant, in either mode.
-        boolean closed = base instanceof Class<?> cls && cls.isEnum();
-        List<String> options = to == ChoiceMode.NONE ? List.of()
-                : closed || !row.options().isEmpty() ? row.options()
-                : held.stream().map(value -> optionText(grammar, base, Optional.of(value)))
-                        .filter(text -> !text.isBlank()).distinct().toList();
-
-        change("how " + row.name() + " is picked", () -> {
-            boolean retyped = !form.equals(entry.form());
-            if (!declare(entry, current -> ChoiceMode.declare(current, options), retyped ? form : null)) {
-                error("“" + row.name() + "” could not be changed.");
-                return;
-            }
-            // A retype reset the value to the new type's fresh one; what was picked goes back over it.
-            if (!retyped || held.isEmpty()) return;
-            Optional<JavaValue> value = to == ChoiceMode.MANY
-                    ? ValueWire.compose(form, List.of(held.getFirst()))
-                    : Optional.of(held.getFirst());
-            JavaParameter now = find(entry.className(), row.name());
-            if (now == null || value.isEmpty()) return;
-            // The card the retype drew holds the fresh value; flushed on the next redraw, it would write that
-            // back over the value set here.
-            valueEditors.clear();
-            JavaParameters.setValue(config, state, now, value.get());
-            reload();
-            rebuildRail();
-        });
-    }
-
-    /**
-     * Retypes {@code entry} to {@code base}, keeping how it is picked (2026-09-27).
-     *
-     * <p>The chooser speaks of the base type, so picking a new one in "Any of" writes a {@code List} of it and
-     * stays "Any of" — it used to write the pick itself, and a ticked field retyped to a leaf fell back to
-     * any value with its ticks gone. A mode the new type cannot be in (ticks over a list, any value of an enum)
-     * falls to the new type's first ({@link ChoiceMode#afterRetype}). Choices that are still values of the new type stay; when none are, the new type's
-     * own fresh value becomes the first choice, since a mode is read off its choices and none would be no mode.
-     *
-     * <p>The value is reset to the new type's fresh one: a value written for one type is not a value of
-     * another, and carrying it across would leave a bot that does not compile.
-     */
-    private void retype(JavaParameter entry, ChoiceMode mode, Type base) {
-        ValueGrammar grammar = PluginHost.grammar();
-        ChoiceMode kept = ChoiceMode.afterRetype(mode, !entry.row().options().isEmpty(), base,
-                grammar.known(base));
-        Type form = kept == ChoiceMode.MANY ? ValueTypes.listOf(base) : base;
-        List<String> surviving = ChoiceMode.kept(grammar, form, entry.row().options());
-        // An enum with no choices written down is picked from every constant, so it needs no first one.
-        boolean closed = base instanceof Class<?> cls && cls.isEnum();
-        List<String> options = kept == ChoiceMode.NONE ? List.of()
-                : !surviving.isEmpty() ? surviving
-                : closed ? List.of()
-                : firstChoice(grammar, base).map(List::of).orElse(List.of());
-        edit(entry, "the type", current -> ChoiceMode.declare(current, options), null, form);
-    }
-
-    /**
-     * The choice a field retyped into "One of" or "Any of" starts with: its type's fresh value, written as
-     * Java so a retype reads it back as a value of the new type — and, for text, a word rather than nothing.
-     */
-    private static Optional<String> firstChoice(ValueGrammar grammar, Type base) {
-        Optional<JavaValue> fresh = base == String.class
-                ? grammar.initializer(String.class, "choice")
-                : grammar.freshInitializer(base);
-        return fresh.map(JavaValue::source).filter(source -> !source.isBlank());
-    }
-
-    /** Whether a declared range means anything for {@code leaf}: one of Java's numbers, boxed or not. */
-    private static boolean isNumber(ValueGrammar grammar, Type leaf) {
-        return leaf instanceof Class<?> cls && JavaParameters.NUMBERS.contains(cls);
-    }
-
-    /**
-     * A choice as the author writes it into {@code @Param(options = …)}: the text itself for a string, the
-     * constant's name for an enum, and the value's Java for everything else — which is what
-     * {@code ParamValueWidgets.optionSource} reads back as the same value.
-     */
-    private static String optionText(ValueGrammar grammar, Type leaf, Optional<JavaValue> written) {
-        Optional<Object> value = written.flatMap(tree -> grammar.valueOf(leaf, tree.written()));
-        if (value.isEmpty()) return "";
-        if (value.get() instanceof String text) return text;
-        if (value.get() instanceof Enum<?> constant) return constant.name();
-        return grammar.initializer(leaf, value.get()).map(JavaValue::source).orElse("");
+    private void retype(JavaParameter entry, Type form) {
+        edit(entry, "the type", UnaryOperator.identity(), null, form);
     }
 
     /**
@@ -1017,241 +865,6 @@ public final class ParametersDialog {
             edit(entry, "the category", row -> row.toBuilder().category(home).build());
         });
         return picker;
-    }
-
-    /**
-     * The declared choices for a set-shaped parameter: one editable row each, plus an add row. Replacing the
-     * list is a declaration like any other, so a choice that is deleted cannot survive as a stored value
-     * nobody can see any more — the owner prunes it.
-     */
-    private Node buildOptionsEditor(JavaParameter entry) {
-        ParameterRow v = entry.row();
-        ValueGrammar grammar = PluginHost.grammar();
-        // A choice is a value of the base type — a whole list when the field is one of several lists — and a
-        // number's choices keep to its range, as its value does.
-        Type base = ChoiceMode.base(entry.form(), v.options(), grammar);
-        if (ChoiceMode.toggled(base)) return enumChoices(entry, (Class<?>) base);
-        ValueEditors.Context ctx = ValueEditors.Context.of(config).withBounds(new Bounds(v.min(), v.max()));
-        VBox box = new VBox(4);
-        List<String> options = v.options();
-        if (options.isEmpty() && base instanceof Class<?> cls && cls.isEnum()) {
-            box.getChildren().add(hintLabel("Every " + ValueTypes.sourceName(base) + " — add one to allow only "
-                    + "the ones you add."));
-        }
-
-        for (int i = 0; i < options.size(); i++) {
-            box.getChildren().add(optionRow(entry, base, ctx, options, i));
-        }
-
-        // The add row is the base type's own editor, not a text field. A choice is a value of the parameter's
-        // type, so writing one down should be the same gesture as setting one: a template comes out of the
-        // gallery with its picture, a colour off the screen, a duration as hours and minutes. Typed as text it
-        // was a name recalled from memory — and a misremembered one is a choice that silently matches nothing.
-        ValueEditors.Editor fresh = ParamValueWidgets.choiceEditor(base, null, ctx, records, null);
-        HBox.setHgrow(fresh.node(), Priority.ALWAYS);
-        Button add = new Button("Add");
-        Runnable addOption = () -> {
-            String typed = optionText(grammar, base, fresh.read().get());
-            if (typed.isBlank()) return;
-            if (options.contains(typed)) {
-                error("'" + typed + "' is already a choice here.");
-                return;
-            }
-            List<String> updated = new ArrayList<>(options);
-            updated.add(typed);
-            replaceOptions(entry, updated);
-        };
-        add.setOnAction(e -> addOption.run());        if (fresh.node() instanceof TextField field) {
-            field.setPromptText("new choice");
-            // Chained, never replaced: the editor's own Enter is what hands the typed text to its value, and
-            // without it Enter added the empty value read before that commit — nothing was declared, and the
-            // text stayed in the field to be glued onto the next choice.
-            javafx.event.EventHandler<javafx.event.ActionEvent> commit = field.getOnAction();
-            field.setOnAction(e -> {
-                if (commit != null) commit.handle(e);
-                addOption.run();
-                e.consume();
-            });
-        }
-        HBox addRow = new HBox(6, fresh.node(), add);
-        addRow.setAlignment(Pos.CENTER_LEFT);
-        box.getChildren().add(addRow);
-        return box;
-    }
-
-    /**
-     * A small enum's choices: one toggle per constant, in the enum's order, the choices the ones that are on
-     * (feedback 3). Every one on is written as no choices ({@link ChoiceMode#enumOptions}). The last one on
-     * cannot be turned off — a field picked from nothing has no value.
-     */
-    private Node enumChoices(JavaParameter entry, Class<?> constants) {
-        List<String> on = ChoiceMode.ticked(constants, entry.row().options());
-        javafx.scene.layout.FlowPane strip = new javafx.scene.layout.FlowPane(2, 2);
-        List<ToggleButton> toggles = new ArrayList<>();
-        for (Object constant : constants.getEnumConstants()) {
-            String name = ((Enum<?>) constant).name();
-            ToggleButton toggle = new ToggleButton(EnumLabels.label(name));
-            toggle.setTooltip(new Tooltip(name));
-            toggle.setUserData(name);
-            toggle.setSelected(on.contains(name));
-            toggles.add(toggle);
-        }
-        for (ToggleButton toggle : toggles) {
-            toggle.setOnAction(e -> {
-                List<String> ticked = toggles.stream().filter(ToggleButton::isSelected)
-                        .map(t -> (String) t.getUserData()).toList();
-                if (ticked.isEmpty()) {
-                    toggle.setSelected(true);
-                    error("Keep at least one choice.");
-                    return;
-                }
-                replaceOptions(entry, ChoiceMode.enumOptions(constants, ticked));
-            });
-        }
-        strip.getChildren().addAll(toggles);
-        return strip;
-    }
-
-    /**
-     * One declared choice.
-     *
-     * <p>Every choice is edited in place through its type's own picker ({@link #optionEditor}), committed on
-     * focus loss — text included since 2026-09-27, which was a bare field here and the text editor, with its
-     * multi-line ⤢, everywhere else. Until 2026-09-26 a non-text choice was a label of its Java, which for a
-     * type with no preview meant the user read {@code new …Point(1144, 342)}.
-     */
-    private Node optionRow(JavaParameter entry, Type base, ValueEditors.Context ctx,
-                           List<String> options, int at) {
-        Node shown = optionEditor(entry, base, ctx, options, at);
-
-        Button remove = new Button("✕");
-        remove.getStyleClass().add("row-icon-button");
-        remove.setOnAction(e -> {
-            List<String> updated = new ArrayList<>(options);
-            updated.remove(at);
-            replaceOptions(entry, updated);
-        });
-        HBox row = new HBox(6, shown, remove);
-        row.setAlignment(Pos.CENTER_LEFT);
-        return row;
-    }
-
-    /**
-     * A declared choice: the type's own picker — a container's own rows for one of several lists — seeded
-     * with the choice and edited in place, never the choice's Java, which is what this row used to show.
-     *
-     * <p>A change is committed when the row loses focus, not per change: a commit rewrites the file and
-     * rebuilds the card, and a spinner clicked five times is one decision. A change arriving while the row
-     * has no focus — a colour chosen in a popup, a point picked off the screen — has no focus loss coming,
-     * so it commits at once. A choice the leaf cannot read shows as written, with the remove button beside it.
-     */
-    private Node optionEditor(JavaParameter entry, Type base, ValueEditors.Context ctx,
-                              List<String> options, int at) {
-        String option = options.get(at);
-        ValueGrammar grammar = PluginHost.grammar();
-        Optional<JavaValue> written = ParamValueWidgets.optionSource(grammar, base, option);
-        if (written.isEmpty()) {
-            Label label = new Label(option);
-            label.getStyleClass().add("dialog-hint-text");
-            label.setTooltip(new Tooltip("Not a value of " + ValueTypes.sourceName(base) + ": remove it."));
-            HBox.setHgrow(label, Priority.ALWAYS);
-            return label;
-        }
-        JavaValue[] pending = {null};
-        Node[] node = {null};
-        Runnable commit = () -> {
-            JavaValue value = pending[0];
-            pending[0] = null;
-            if (value == null || value.sameJava(written.get())) return;
-            String typed = optionText(grammar, base, Optional.of(value));
-            if (typed.isBlank() || typed.equals(option)) return;
-            if (options.contains(typed)) {
-                error("'" + typed + "' is already a choice here.");
-                return;
-            }
-            List<String> updated = new ArrayList<>(options);
-            updated.set(at, typed);
-            replaceOptions(entry, updated);
-        };
-        ValueEditors.Editor editor = ParamValueWidgets.choiceEditor(base, written.get().source(), ctx, records,
-                value -> {
-                    pending[0] = value;
-                    if (node[0] == null || !node[0].isFocusWithin()) commit.run();
-                });
-        node[0] = editor.node();
-        node[0].focusWithinProperty().addListener((o, was, is) -> {
-            if (is) return;
-            // A container's rows tell nobody as they change; what they read when the focus leaves is the edit.
-            if (pending[0] == null && !ValueTypes.isLeaf(base)) pending[0] = editor.read().get().orElse(null);
-            commit.run();
-        });
-        HBox.setHgrow(node[0], Priority.ALWAYS);
-        return node[0];
-    }
-
-    /**
-     * The declared range of a number: smallest and largest, both optional and <b>independent</b>. Leaving
-     * both blank is what most numbers want and is the state a parameter starts in; filling in only one is
-     * "at most 10" or "at least 1", which is a sentence people say and which used to be unsayable here.
-     *
-     * <p>Declaring either clamps a stored value that falls outside it — the owner's rule, applied when the
-     * declaration lands — so committing a bound rebuilds the card: the widget the range describes is not the
-     * widget that was there before it.
-     *
-     * <p>There is no step field. For a whole number the step is 1 and saying so adds nothing; for a decimal
-     * it was worse than nothing — a declared step of 0.1 puts 0.05 out of the arrows' reach, making the
-     * editor a coarser instrument than the type it edits.
-     */
-    private Node buildBoundsEditor(JavaParameter entry) {
-        TextField min = boundField(boundText(entry.row().min()), "no minimum");
-        TextField max = boundField(boundText(entry.row().max()), "no maximum");
-        Runnable commit = () -> {
-            double low = bound(min.getText(), Double.NEGATIVE_INFINITY);
-            double high = bound(max.getText(), Double.POSITIVE_INFINITY);
-            JavaParameter held = find(entry.className(), entry.row().name());
-            if (held == null || (Double.compare(low, held.row().min()) == 0
-                    && Double.compare(high, held.row().max()) == 0)) {
-                return;
-            }
-            edit(held, "the range", current -> current.toBuilder().bounds(low, high).build());
-        };
-        for (TextField field : List.of(min, max)) {
-            field.focusedProperty().addListener((o, was, is) -> {
-                if (!is) commit.run();
-            });
-            field.setOnAction(e -> {
-                commit.run();
-                e.consume();
-            });
-        }
-        HBox row = new HBox(6, min, new Label("to"), max);
-        row.setAlignment(Pos.CENTER_LEFT);
-        return row;
-    }
-
-    /** A bound as its field shows it: blank for none, {@code 1} rather than {@code 1.0} for a whole one. */
-    private static String boundText(double value) {
-        if (Double.isInfinite(value) || Double.isNaN(value)) return "";
-        return value == Math.rint(value) && Math.abs(value) < 1e15 ? Long.toString((long) value)
-                : Double.toString(value);
-    }
-
-    /** What a bound field says, or {@code absent} for blank or anything that is not a number. */
-    private static double bound(String text, double absent) {
-        if (text == null || text.isBlank()) return absent;
-        try {
-            double parsed = Double.parseDouble(text.strip().replace(',', '.'));
-            return Double.isNaN(parsed) ? absent : parsed;
-        } catch (NumberFormatException e) {
-            return absent;
-        }
-    }
-
-    private static TextField boundField(String value, String prompt) {
-        TextField field = new TextField(value == null ? "" : value);
-        field.setPromptText(prompt);
-        field.setPrefColumnCount(7);
-        return field;
     }
 
     /**
@@ -1379,11 +992,6 @@ public final class ParametersDialog {
         }
     }
 
-    private void replaceOptions(JavaParameter entry, List<String> options) {
-        error("");
-        edit(entry, "the choices", current -> ChoiceMode.declare(current, options));
-    }
-
     /**
      * Declares {@code change} applied to the row {@code entry} names, and redraws.
      *
@@ -1440,8 +1048,6 @@ public final class ParametersDialog {
                 .description(row.description())
                 .category(row.category())
                 .visibility(row.visibility())
-                .options(row.options())
-                .bounds(row.min(), row.max())
                 .build();
     }
 

@@ -16,13 +16,11 @@ import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
-import org.eclipse.jdt.core.dom.ArrayInitializer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.NormalAnnotation;
-import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
@@ -138,43 +136,45 @@ public final class JavaParameterEdits {
         });
     }
 
+    /** The {@code @Param} members contract 0.14 removed (2026-10-29): rules about the value, not the field. */
+    public static final Set<String> REMOVED_MEMBERS = Set.of("min", "max", "options");
+
     /**
-     * Sets {@code @Param(options = {...})}, or removes the member when the list is empty.
-     *
-     * <p>Separate from {@link #setMembers} because this member is an array and every other one is a string;
-     * one method taking {@code Object} would be the kind of signature that compiles for a caller passing
-     * the wrong shape.
+     * {@code source} with {@link #REMOVED_MEMBERS} taken off every {@code @Param} in it, and the names of the
+     * fields that lost one — the upgrade that lets a bot written before 0.14 compile again. Nothing else in the
+     * file is touched; a file with none of them comes back as it was, with no names.
      */
-    public static String setOptions(String source, String className, String fieldName,
-                                    List<String> options) {
-        return edit(source, className, fieldName, (unit, ast, rewrite, field, fragment) -> {
-            Annotation existing = JavaParameterSource.paramAnnotation(field);
-            if (existing == null) return;
-            NormalAnnotation normal = asNormal(ast, rewrite, field, existing);
-            ListRewrite pairs = rewrite.getListRewrite(normal, NormalAnnotation.VALUES_PROPERTY);
-            MemberValuePair present = pairOf(normal, "options");
-            if (options == null || options.isEmpty()) {
-                if (present != null) pairs.remove(present, null);
-                return;
-            }
-            ArrayInitializer array = ast.newArrayInitializer();
-            for (String option : options) {
-                StringLiteral literal = ast.newStringLiteral();
-                literal.setLiteralValue(option);
-                @SuppressWarnings("unchecked")
-                List<Expression> expressions = array.expressions();
-                expressions.add(literal);
-            }
-            MemberValuePair replacement = ast.newMemberValuePair();
-            replacement.setName(ast.newSimpleName("options"));
-            replacement.setValue(array);
-            if (present != null) {
-                pairs.replace(present, replacement, null);
-            } else {
-                pairs.insertLast(replacement, null);
+    public static Stripped stripRemovedMembers(String source) {
+        CompilationUnit unit = BotParser.syntax(source);
+        ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
+        List<String> fields = new ArrayList<>();
+        unit.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(FieldDeclaration field) {
+                // True either way: an initializer's anonymous class may declare a field of its own.
+                if (!(JavaParameterSource.paramAnnotation(field) instanceof NormalAnnotation normal)) return true;
+                ListRewrite pairs = rewrite.getListRewrite(normal, NormalAnnotation.VALUES_PROPERTY);
+                boolean any = false;
+                for (Object each : normal.values()) {
+                    MemberValuePair pair = (MemberValuePair) each;
+                    if (!REMOVED_MEMBERS.contains(pair.getName().getIdentifier())) continue;
+                    pairs.remove(pair, null);
+                    any = true;
+                }
+                if (any) {
+                    for (Object fragment : field.fragments()) {
+                        fields.add(((VariableDeclarationFragment) fragment).getName().getIdentifier());
+                    }
+                }
+                return true;
             }
         });
+        return fields.isEmpty() ? new Stripped(source, List.of())
+                : new Stripped(AstRewriteHelper.applyRewrite(rewrite, source), List.copyOf(fields));
     }
+
+    /** What {@link #stripRemovedMembers} answers: the new source, and the fields it changed, in file order. */
+    public record Stripped(String source, List<String> fields) {}
 
     /**
      * Appends a new {@code @Param public static} field to {@code className}, importing what its type names.

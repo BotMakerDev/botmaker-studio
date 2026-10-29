@@ -241,7 +241,6 @@ class JavaParametersTest {
                 .category("")                       // removed: the default is already the empty answer
                 .description("Attempts before it gives up")
                 .visibility(Visibility.PUBLIC)
-                .bounds(1, 50.5)
                 .build();
         Optional<ParameterRow> stored =
                 JavaParameters.declare(config, null, entry, wanted, entry.form(), TestValues.GRAMMAR).stored();
@@ -251,28 +250,35 @@ class JavaParametersTest {
         assertFalse(source.contains("category ="), source);
         assertTrue(source.contains("description = \"Attempts before it gives up\""), source);
         assertTrue(source.contains("visibility = Param.PUBLIC"), source);
-        // A number, since @Param's bounds became double: a string here would not compile.
-        assertTrue(source.contains("min = 1,") || source.contains("min = 1)"), source);
-        assertTrue(source.contains("max = 50.5"), source);
         assertEquals(Visibility.PUBLIC, stored.get().visibility());
-        assertEquals(50.5, stored.get().max());
     }
 
+    /** The upgrade to contract 0.14 takes the removed members off, keeps the rest, and names the fields. */
     @Test
-    void anInfiniteBoundRemovesTheMember(@TempDir Path root) throws IOException {
+    void theRemovedMembersAreStrippedByTheUpgrade(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         write(config, "Parameters.java", parameters("""
-                    @Param(min = 1, max = 50)
+                    @Param(category = "Limits", min = 1, max = 50)
                     public static int maxAttempts = 10;
+
+                    @Param(options = {"fast", "slow"})
+                    public static String speed = "fast";
+
+                    @Param(description = "untouched")
+                    public static int other = 1;
                 """));
 
-        JavaParameter entry = only(config);
-        ParameterRow wanted = entry.row().toBuilder().bounds(1, Double.POSITIVE_INFINITY).build();
-        JavaParameters.declare(config, null, entry, wanted, entry.form(), TestValues.GRAMMAR);
+        List<String> said = JavaParameters.stripRemovedMembers(config, null);
 
         String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
+        assertFalse(source.contains("min ="), source);
         assertFalse(source.contains("max ="), source);
-        assertTrue(source.contains("min = 1"), source);
+        assertFalse(source.contains("options"), source);
+        assertTrue(source.contains("category = \"Limits\""), source);
+        assertTrue(source.contains("description = \"untouched\""), source);
+        assertEquals(1, said.size(), said.toString());
+        assertTrue(said.getFirst().contains("maxAttempts, speed"), said.getFirst());
+        assertEquals(List.of(), JavaParameters.stripRemovedMembers(config, null), "a second pass finds nothing");
     }
 
     @Test
@@ -292,47 +298,6 @@ class JavaParametersTest {
         assertEquals("\"\"", stored.value());
         assertTrue(Files.readString(config.mainPackageDir().resolve("Parameters.java"))
                 .contains("public static String maxAttempts"));
-    }
-
-    @Test
-    void aRetypeDropsTheChoicesAndBoundsOfTheOldType(@TempDir Path root) throws IOException {
-        ProjectConfig config = project(root);
-        write(config, "Parameters.java", parameters("""
-                    @Param(options = {"1", "5"}, min = 1, max = 5)
-                    public static int maxAttempts = 1;
-                """));
-
-        JavaParameter entry = only(config);
-        // The window retypes with the row as it stands, choices and all.
-        ParameterRow stored = JavaParameters.declare(config, null, entry, entry.row(), TestValues.TEXT,
-                TestValues.GRAMMAR).stored().orElseThrow();
-
-        // A choice written for an int is no value of a String: kept, it drew as a disabled row holding the
-        // old type's Java, and the window read as if the retype had not happened.
-        assertEquals(List.of(), stored.options());
-        assertEquals(Double.NEGATIVE_INFINITY, stored.min());
-        assertEquals(Double.POSITIVE_INFINITY, stored.max());
-        String source = Files.readString(config.mainPackageDir().resolve("Parameters.java"));
-        assertFalse(source.contains("options"), source);
-        assertFalse(source.contains("min ="), source);
-    }
-
-    @Test
-    void aRetypeCarriesTheNewTypesOwnChoices(@TempDir Path root) throws IOException {
-        ProjectConfig config = project(root);
-        write(config, "Parameters.java", parameters("""
-                    @Param(options = {"1", "5"})
-                    public static int maxAttempts = 1;
-                """));
-
-        JavaParameter entry = only(config);
-        // "One of" retyped to text: the window hands the new type's first choice over with the retype, so
-        // the field is still one of a set rather than falling back to any value.
-        ParameterRow wanted = entry.row().toBuilder().options(List.of("\"fast\"")).build();
-        ParameterRow stored = JavaParameters.declare(config, null, entry, wanted, TestValues.TEXT,
-                TestValues.GRAMMAR).stored().orElseThrow();
-
-        assertEquals(List.of("\"fast\""), stored.options());
     }
 
     // ---- values -----------------------------------------------------------------------------------------
@@ -479,8 +444,7 @@ class JavaParametersTest {
 
     private static ParameterRow renamed(ParameterRow row, String name) {
         return ParameterRow.named(name, row.typeName()).value(row.value()).description(row.description())
-                .category(row.category()).visibility(row.visibility()).options(row.options())
-                .bounds(row.min(), row.max()).build();
+                .category(row.category()).visibility(row.visibility()).build();
     }
 
     private static String parameters(String fields) {

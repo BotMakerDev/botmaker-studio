@@ -1,0 +1,41 @@
+#
+# A fatal error has been detected by the Java Runtime Environment:
+#
+#  SIGSEGV (0xb) at pc=0x00007f0e90dae539, pid=43466, tid=43500
+#
+# JRE version: OpenJDK Runtime Environment Temurin-25.0.4.1+1 (25.0.4.1+1) (build 25.0.4.1+1-LTS)
+# Java VM: OpenJDK 64-Bit Server VM Temurin-25.0.4.1+1 (25.0.4.1+1-LTS, mixed mode, sharing, tiered, compressed oops, compressed class ptrs, g1 gc, linux-amd64)
+# Problematic frame:
+# C  [libgallium-26.2.4.so+0x5ae539]
+#
+# Core dump will be written. Default location: Determined by the following: "/usr/lib/systemd/systemd-coredump %P %u %g %s %t %c %h %d %F" (alternatively, falling back to /home/benjamingroisne/IdeaProjects/botmaker/botmaker-studio/core.43466)
+#
+# JFR recording file will be written. Location: /home/benjamingroisne/IdeaProjects/botmaker/botmaker-studio/hs_err_pid43466.jfr
+#
+# If you would like to submit a bug report, please visit:
+#   https://github.com/adoptium/adoptium-support/issues
+# The crash happened outside the Java Virtual Machine in native code.
+# See problematic frame for where to report the bug.
+#
+
+---------------  S U M M A R Y ------------
+
+Command Line: -XX:StartFlightRecording=filename=/home/benjamingroisne/botmaker-profiles/studio-screens-live3-%p.jfr,settings=profile,dumponexit=true --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow com.botmaker.studio.Launcher
+
+Host: AMD Ryzen 5 5600H with Radeon Graphics, 12 cores, 13G, Fedora release 44 (Forty Four)
+Time: Mon Oct 19 09:23:00 2026 CEST elapsed time: 120.592656 seconds (0d 0h 2m 0s)
+
+---------------  T H R E A D  ---------------
+
+Current thread (0x00007f0e9408a050):  JavaThread "QuantumRenderer-0" daemon [_thread_in_native, id=43500, stack(0x00007f0ee7f00000,0x00007f0ee8000000) (1024K)]
+
+Stack: [0x00007f0ee7f00000,0x00007f0ee8000000],  sp=0x00007f0ee7ffcc30,  free space=1011k
+Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)
+C  [libgallium-26.2.4.so+0x5ae539]
+C  [libgallium-26.2.4.so+0xe2d68]
+C  [libgallium-26.2.4.so+0x11ccc7]
+C  [libgallium-26.2.4.so+0x1318ff]
+C  [libgallium-26.2.4.so+0x1011f1]
+C  [libgallium-26.2.4.so+0x10477e]
+C  [libgallium-26.2.4.so+0x10b489]
+C  [libprism_es2.so+0x61e4]  Java_com_sun_prism_es2_GLContext_nTexSubImage2D1+0xa4

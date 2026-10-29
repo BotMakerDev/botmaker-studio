@@ -5,9 +5,8 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.ui.app.params.ParametersDialog;
 import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.control.Button;
+import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
-import javafx.scene.input.KeyCode;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.junit.jupiter.api.AfterEach;
@@ -28,18 +27,16 @@ import java.util.jar.JarOutputStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * The Choices row of a text parameter in the Parameters window: what is typed in its add field is what gets
- * declared, whether the author presses Enter or clicks Add.
+ * A parameter's card in the Parameters window, driven as a user would. Its Choices row went with
+ * {@code @Param(options)} on 2026-10-29; what stays is that a card offers no choices or range, and that a
+ * parameter added from the bar is declared as the user left it.
  *
- * <p>The field is a plugin's editor, so a plugin is bound: a fixture compiled here whose text editor commits on
- * Enter and on focus loss, the way the toolkit's {@code Fields.committing} does. That commit-on-Enter is the
- * handler the window used to replace with its own, so Enter added the empty value it read before the commit
- * and did nothing, and the text stayed in the field to be glued onto the next choice.
+ * <p>The value field is a plugin's editor, so a plugin is bound: a fixture compiled here whose text editor
+ * commits on Enter and on focus loss, the way the toolkit's {@code Fields.committing} does.
  */
 class ParameterChoicesTest extends FxHeadlessTest {
 
@@ -91,7 +88,7 @@ class ParameterChoicesTest extends FxHeadlessTest {
         open(imports, "@Param", field);
     }
 
-    /** The same, with the annotation as given — {@code @Param(options = …)} for a field picked from a set. */
+    /** The same, with the annotation as given. */
     private void open(String imports, String annotation, String field) throws IOException {
         ProjectConfig config = ProjectConfig.forProject("refbot", root);
         Files.createDirectories(config.mainPackageDir());
@@ -109,11 +106,6 @@ class ParameterChoicesTest extends FxHeadlessTest {
         interact(() -> new ParametersDialog(null, config, null, null).show());
     }
 
-    /** A text parameter already picked "one of" a set holding only its own value. */
-    private void openText() throws IOException {
-        open("", "@Param(options = {\"fast\"})", "public static String mode = \"fast\";");
-    }
-
     @AfterEach
     void closeTheWindow() {
         interact(() -> List.copyOf(Window.getWindows()).forEach(w -> {
@@ -122,50 +114,12 @@ class ParameterChoicesTest extends FxHeadlessTest {
         PluginHost.unbind();
     }
 
+    /** No choices and no range on a card since 2026-10-29: a value's rules are its type's. */
     @Test
-    void enterDeclaresTheTypedChoice() throws IOException {
-        openText();
-        clickOn(addField()).write("slow");
-        type(KeyCode.ENTER);
-
-        String source = Files.readString(parameters);
-        assertTrue(source.contains("\"fast\", \"slow\""), source);
-    }
-
-    @Test
-    void enterThenAddDeclaresTwoSeparateChoices() throws IOException {
-        openText();
-        clickOn(addField()).write("slow");
-        type(KeyCode.ENTER);
-        clickOn(addField()).write("turbo");
-        clickOn(find(n -> n instanceof Button b && "Add".equals(b.getText())));
-
-        String source = Files.readString(parameters);
-        assertTrue(source.contains("\"fast\", \"slow\", \"turbo\""), source);
-    }
-
-    @Test
-    void aListOfTextTakesChoicesTheSameWay() throws IOException {
-        open("import java.util.List;\n", "@Param(options = {\"fast\"})",
-                "public static List<String> modes = List.of();");
-        clickOn(addField()).write("slow");
-        type(KeyCode.ENTER);
-
-        String source = Files.readString(parameters);
-        assertTrue(source.contains("\"fast\", \"slow\""), source);
-    }
-
-    /** A free value has no add field; "One of" declares a set holding the value it already had. */
-    @Test
-    void oneOfStartsTheSetWithTheCurrentValue() throws IOException {
-        open("", "public static String mode = \"fast\";");
-        assertEquals(null, find(n -> n instanceof TextField tf && "new choice".equals(tf.getPromptText())),
-                "a value typed freely offers no choices to add to");
-        clickOn(find(n -> n instanceof javafx.scene.control.ToggleButton b && "One of".equals(b.getText())));
-
-        String source = Files.readString(parameters);
-        assertTrue(source.contains("options = {\"fast\"}") || source.contains("options = { \"fast\" }"), source);
-        assertTrue(source.contains("String mode = \"fast\""), source);
+    void aCardOffersNoChoicesAndNoRange() throws IOException {
+        open("", "public static int attempts = 3;");
+        assertEquals(null, find(n -> n instanceof Label l && ("Choices".equals(l.getText())
+                || "Range".equals(l.getText()))));
     }
 
     /** A parameter added from the bar is shown to the user unless its tick is cleared first. */
@@ -181,25 +135,6 @@ class ParameterChoicesTest extends FxHeadlessTest {
         String source = Files.readString(parameters);
         assertTrue(source.contains("speed"), source);
         assertTrue(source.contains("visibility"), source);
-    }
-
-    /** "Any of" is the one mode that retypes: the field becomes a list, the old value its one tick. */
-    @Test
-    void anyOfMakesTheFieldAListWithTheOldValueTicked() throws IOException {
-        open("", "public static String mode = \"fast\";");
-        clickOn(find(n -> n instanceof javafx.scene.control.ToggleButton b && "Any of".equals(b.getText())));
-
-        String source = Files.readString(parameters);
-        assertTrue(source.contains("List<String> mode"), source);
-        assertTrue(source.contains("\"fast\""), source);
-        assertTrue(source.contains("List.of(\"fast\")"), source);
-    }
-
-    private Node addField() {
-        Node field = find(n -> n instanceof TextField tf && "new choice".equals(tf.getPromptText()));
-        assertNotNull(field, "the text parameter's card offers a Choices add field");
-        assertEquals("", ((TextField) field).getText(), "the add field starts empty");
-        return field;
     }
 
     private static Node find(Predicate<Node> test) {

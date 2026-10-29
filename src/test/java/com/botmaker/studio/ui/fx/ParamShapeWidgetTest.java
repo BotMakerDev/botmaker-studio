@@ -8,7 +8,6 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
-import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.Pane;
 import org.junit.jupiter.api.Test;
@@ -23,14 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Which control a parameter gets, and on what the answer depends: its {@link Type}, and whether the row
- * declares a set of choices.
+ * Which control a parameter gets, and on what the answer depends: its {@link Type}, and nothing else.
  *
- * <p>It used to depend on the deleted {@code ValueShape}, which answered two unrelated questions at once — how many
- * values there are, and whether they come from a set somebody wrote down. The second is a fact about the
- * <em>row</em>, so it lives on the row's options and the form says nothing about it (2026-09-20). What
- * survives from the shape era is the rule the shapes were split to get: the widget follows the declaration,
- * so a parameter never changes control because of something the author cannot see.
+ * <p>It used to depend on the deleted {@code ValueShape}, and then on the row's declared choices too; those went
+ * with {@code @Param(options)} on 2026-10-29. The rule that survives: the widget follows the declaration, so a
+ * parameter never changes control because of something the author cannot see.
  *
  * <p>No plugin is bound here, and none is needed: the JDK's literal types are read by the host's grammar
  * itself, and a leaf no plugin draws is the read-only field — which is still exactly one control.
@@ -51,38 +47,24 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         return built[0];
     }
 
-    /** One row seeded with the form's fresh initialiser and carrying the declared choices as written. */
-    private static ParameterRow row(String name, Type form, List<String> options) {
+    /** One row seeded with the form's fresh initialiser. */
+    private static ParameterRow row(String name, Type form) {
         return ParameterRow.named(name, ValueTypes.sourceName(form))
                 .value(PluginHost.grammar().freshInitializer(form).map(JavaValue::source).orElse(""))
-                .options(options)
                 .build();
-    }
-
-    private static ParameterRow row(String name, Type form) {
-        return row(name, form, List.of());
     }
 
     private List<Node> childrenOf(Node node) {
         return node instanceof Pane pane ? List.copyOf(pane.getChildren()) : List.of();
     }
 
-    /**
-     * The two list cells, side by side on the same form. What tells them apart is the row's own choices, and
-     * nothing else: a list with a set declared is tick boxes, a list with none is the user's to fill in.
-     */
+    /** A list of text is the user's to fill in, one per line. */
     @Test
-    void aListIsTicksWithASetDeclaredAndTheUsersOwnWithout() {
-        List<String> skills = List.of("mine", "fish", "cook");
+    void aListOfTextIsLines() {
         Type texts = ValueTypes.listOf(TEXT);
 
-        List<Node> ticks = childrenOf(widgetFor(row("many", texts, skills), texts));
-        assertEquals(skills.size(), ticks.size());
-        for (Node tick : ticks) assertInstanceOf(CheckBox.class, tick);
-
         // A textarea and not a Pane, so it has no children to count: text is written one per line.
-        assertInstanceOf(TextArea.class, widgetFor(row("open", texts), texts),
-                "a list with nothing declared is the user's to fill in");
+        assertInstanceOf(TextArea.class, widgetFor(row("open", texts), texts));
     }
 
     /** Every other type's list is a growable column of that type's own editor, empty to begin with. */
@@ -93,35 +75,12 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         List<Node> parts = childrenOf(widgetFor(row("spots", spots), spots));
 
         assertFalse(parts.isEmpty(), "the empty state still has to say something and offer Add");
-        assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox),
-                "nothing to tick: no set has been declared");
+        assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox), "nothing to tick");
     }
 
-    /**
-     * A declared choice stands for its <b>Java</b>, not its label: {@code "2"} written by the author is the
-     * {@code int} literal {@code 2}.
-     */
+    /** A leaf is the one editor for its type, not a column of choices. */
     @Test
-    void aDeclaredSetOnALeafIsRadioButtons() {
-        List<Node> rows = childrenOf(widgetFor(row("size", WHOLE_NUMBER, List.of("1", "2", "3")), WHOLE_NUMBER));
-
-        assertEquals(3, rows.size());
-        for (Node button : rows) assertInstanceOf(RadioButton.class, button);
-        assertEquals("2", ((JavaValue) rows.get(1).getUserData()).source());
-    }
-
-    /** A choice that is not a value of the type cannot be picked, rather than being written as it is. */
-    @Test
-    void aChoiceThatIsNotAValueOfTheTypeIsDisabled() {
-        List<Node> rows = childrenOf(widgetFor(row("size", WHOLE_NUMBER, List.of("1", "many")), WHOLE_NUMBER));
-
-        assertFalse(rows.getFirst().isDisabled());
-        assertTrue(rows.get(1).isDisabled());
-    }
-
-    /** With nothing declared the same leaf is the one editor for its type, not an empty radio group. */
-    @Test
-    void aLeafWithNothingDeclaredIsItsOwnEditor() {
+    void aLeafIsItsOwnEditor() {
         assertTrue(childrenOf(widgetFor(row("size", WHOLE_NUMBER), WHOLE_NUMBER)).isEmpty(),
                 "one control, not a column of choices");
     }
@@ -137,8 +96,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         List<Node> parts = childrenOf(widgetFor(row("retries", retries), retries));
 
         assertFalse(parts.isEmpty(), "an empty map still says so and offers Add");
-        assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox),
-                "a map is not a set of choices");
+        assertTrue(parts.stream().noneMatch(part -> part instanceof CheckBox), "a map is not a set of choices");
     }
 
     /**
@@ -164,52 +122,5 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         assertEquals(1, sink.size(), "a nested value is a cell that writes, not a read-only label");
         assertTrue(seed.sameJava(sink.getFirst().read().get().orElseThrow()),
                 sink.getFirst().read().get().orElseThrow().source());
-    }
-
-    /**
-     * The reader hands back the Java the field takes, written from the option's own value and never from the
-     * button's label. They part company the moment an option carries a graphic — a template's thumbnail, a
-     * colour swatch — and a value read off a label would then be whatever the label said.
-     */
-    @Test
-    void whatIsReadBackIsTheValueWrittenAsJavaAndNotTheLabel() {
-        ParameterRow choices = row("mode", TEXT, List.of("fast", "slow"));
-
-        List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
-        List<Node> buttons = childrenOf(widgetFor(choices, TEXT, sink));
-        interact(() -> ((RadioButton) buttons.get(1)).setSelected(true));
-
-        assertEquals(1, sink.size());
-        assertEquals("\"slow\"", sink.getFirst().read().get().orElseThrow().source());
-    }
-
-    /**
-     * A choice that reads as the whole list makes the field one of several lists: a radio per list, labelled
-     * by its items (2026-09-27). The same field with element choices is ticks — the choices' shape decides.
-     */
-    @Test
-    void choicesThatAreWholeListsAreRadioButtons() {
-        Type numbers = ValueTypes.listOf(Integer.class);
-        ParameterRow lists = ParameterRow.named("sizes", ValueTypes.sourceName(numbers)).value("List.of(1, 2)")
-                .options(List.of("List.of(1, 2)", "List.of(3)")).build();
-
-        List<Node> rows = childrenOf(widgetFor(lists, numbers));
-
-        assertEquals(2, rows.size());
-        for (Node button : rows) assertInstanceOf(RadioButton.class, button);
-        assertEquals("[1, 2]", ((RadioButton) rows.getFirst()).getText());
-        assertTrue(((RadioButton) rows.getFirst()).isSelected());
-    }
-
-    /** A stored value is matched against the choices by its value, so {@code "fast"} selects "fast". */
-    @Test
-    void theStoredValueSelectsItsChoice() {
-        ParameterRow choices = ParameterRow.named("mode", "String").value("\"fast\"")
-                .options(List.of("fast", "slow")).build();
-
-        List<Node> buttons = childrenOf(widgetFor(choices, TEXT));
-
-        assertTrue(((RadioButton) buttons.getFirst()).isSelected());
-        assertFalse(((RadioButton) buttons.get(1)).isSelected());
     }
 }

@@ -162,8 +162,7 @@ public final class ValueTypes {
 
     /**
      * The single type a user types values of: the type itself for a leaf, the element of a list or the value
-     * of a map, and {@code null} for a container of containers or a bot's class. What a declared set of
-     * choices and a declared range are asked of.
+     * of a map, and {@code null} for a container of containers or a bot's class.
      */
     public static Type leaf(Type type) {
         return switch (type) {

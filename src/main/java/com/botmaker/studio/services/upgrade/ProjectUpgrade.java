@@ -99,11 +99,12 @@ public final class ProjectUpgrade {
                     : "Moved " + moved.size() + " plugins: "
                             + String.join(", ", moved.stream().map(Moved::toString).toList()) + ".");
             if (!repaired.isEmpty()) {
-                text.append(" Repaired the plugin's values: ").append(String.join(" ", repaired));
+                text.append(" Repaired: ").append(String.join(" ", repaired));
             }
             if (filesRewritten == 0) {
                 text.append(" Nothing in this bot's own code had to change.");
-            } else {
+            } else if (usesRewritten > 0) {
+                // Uses are what the rules migrated; a file only the @Param repair touched is said by its sentence.
                 text.append(" ").append(usesRewritten).append(" use")
                         .append(usesRewritten == 1 ? "" : "s").append(" migrated in ")
                         .append(filesRewritten).append(" file").append(filesRewritten == 1 ? "" : "s")
@@ -142,6 +143,9 @@ public final class ProjectUpgrade {
                     for (Row row : moving) checked.add(row.upgrades().compare(row.targetVersion(), false));
 
                     moving.getFirst().upgrades().snapshot(snapshotMessage(moving));
+                    // The contract's own break (0.14, 2026-10-29): @Param lost its value rules. No @Migrate rule
+                    // can rewrite an annotation member, so they come off here, before the code is repaired.
+                    List<String> stripped = moving.getFirst().upgrades().stripRemovedParamMembers();
 
                     Map<String, String> versions = new LinkedHashMap<>();
                     List<Moved> moved = new ArrayList<>();
@@ -160,9 +164,9 @@ public final class ProjectUpgrade {
                     PluginUpgradeService.Repaired code = moving.getFirst().upgrades().repairCode(versions);
                     left.addAll(code.leftAsWritten());
 
-                    List<String> repaired = new ArrayList<>();
+                    List<String> repaired = new ArrayList<>(stripped);
                     List<Path> deleted = new ArrayList<>();
-                    int files = code.files();
+                    int files = code.files() + stripped.size();
                     for (Row row : moving) {
                         PluginUpgradeService.Values values = row.upgrades().repairValues(row.targetVersion());
                         repaired.addAll(values.repaired());
@@ -187,6 +191,8 @@ public final class ProjectUpgrade {
         return CompletableFuture
                 .supplyAsync(() -> {
                     moving.getFirst().upgrades().snapshot(snapshotMessage(moving));
+                    // The contract's break is no plugin's to migrate, so it is repaired here too (see run).
+                    List<String> stripped = moving.getFirst().upgrades().stripRemovedParamMembers();
                     Map<String, String> versions = new LinkedHashMap<>();
                     List<Moved> moved = new ArrayList<>();
                     for (Row row : moving) {
@@ -194,7 +200,7 @@ public final class ProjectUpgrade {
                         moved.add(new Moved(row.upgrades().displayName(), row.upgrades().currentVersion(),
                                 row.targetVersion()));
                     }
-                    return new Pass(versions, new Result(moved, 0, 0, List.of(), List.of(), List.of()));
+                    return new Pass(versions, new Result(moved, stripped.size(), 0, List.of(), stripped, List.of()));
                 })
                 .thenCompose(pass -> writer.write(pass.versions()).thenApply(v -> pass.result()));
     }

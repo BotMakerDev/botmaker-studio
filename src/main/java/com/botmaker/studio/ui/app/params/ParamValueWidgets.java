@@ -1,6 +1,5 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.plugin.api.slot.Bounds;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
@@ -11,18 +10,12 @@ import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.plugin.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.params.ChoiceMode;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonBase;
-import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextArea;
-import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -111,7 +104,7 @@ public final class ParamValueWidgets {
     public static Node build(String group, ParameterRow row, Type form, ProjectConfig config,
                              BotRecords records, List<ValueEditor> sink) {
         String owner = group == null ? "" : group;
-        ValueEditors.Context ctx = ValueEditors.Context.of(config).withBounds(new Bounds(row.min(), row.max()));
+        ValueEditors.Context ctx = ValueEditors.Context.of(config);
         Node widget = cell(owner, row, form == null ? ValueTypes.NONE : form,
                 records == null ? BotRecords.none() : records, ctx, sink);
         widget.setId("param-value-" + row.name());
@@ -128,18 +121,6 @@ public final class ParamValueWidgets {
                 ValueEditors.Context.of(config));
     }
 
-    /**
-     * The editor for one declared choice of {@code base}, seeded from {@code source} (a fresh value when
-     * null): a leaf's own editor, told each value it writes through {@code onChange}, or a container's own
-     * rows, which tell nobody and are read when their row is left (2026-09-27).
-     */
-    static ValueEditors.Editor choiceEditor(Type base, String source, ValueEditors.Context ctx, BotRecords records,
-                                            java.util.function.Consumer<JavaValue> onChange) {
-        if (ValueTypes.isLeaf(base)) return ValueEditors.framed(ValueEditors.editorFor(base, source, ctx, onChange));
-        Optional<SourceNode> written = source == null ? Optional.empty() : SourceNode.parse(source);
-        return editor(PluginHost.grammar(), base, written, records == null ? BotRecords.none() : records, ctx);
-    }
-
     /** The same widget, pinned to one width — what a list of rows wants, and a form does not. */
     public static Node buildFixedWidth(String group, ParameterRow row, Type form, ProjectConfig config,
                                        List<ValueEditor> sink) {
@@ -149,37 +130,12 @@ public final class ParamValueWidgets {
     }
 
     /**
-     * A declared set of choices is radio buttons or ticks; anything else is {@link #editor}, one level at a
-     * time as deep as the type goes, or read-only as a whole when some part of it has no editor at all.
+     * The type's {@link #editor}, one level at a time as deep as the type goes, or read-only as a whole when
+     * some part of it has no editor at all. No declared choices since 2026-10-29: an enum is its own set.
      */
     private static Node cell(String group, ParameterRow row, Type form, BotRecords records,
                              ValueEditors.Context ctx, List<ValueEditor> sink) {
         ValueGrammar grammar = PluginHost.grammar();
-        List<String> options = row.options();
-
-        // The choices' shape says which (ChoiceMode): one of them — a leaf, or one of several whole lists — or
-        // any number of them, ticked. An enum with none written down is picked from every constant, which is
-        // what its own editor already offers, so it falls through to that editor (feedback 3).
-        switch (ChoiceMode.of(form, options, grammar)) {
-            case ONE -> {
-                if (!options.isEmpty()) return radioRow(grammar, group, row, form, options, ctx, sink);
-            }
-            case MANY -> {
-                Type leaf = ValueTypes.arguments(form).getLast();
-                if (ChoiceMode.toggled(leaf) && !options.isEmpty()) {
-                    List<Object> declared = options.stream()
-                            .flatMap(option -> grammar.valueOf(leaf, option).stream()).toList();
-                    ValueEditors.Editor toggles = enumToggles(grammar, form, (Class<?>) leaf, declared,
-                            SourceNode.parse(row.value()));
-                    sink.add(ValueEditor.of(group, row, toggles.read()));
-                    return toggles.node();
-                }
-                if (!options.isEmpty()) {
-                    return checkList(grammar, group, row, form, leaf, options, ctx, sink);
-                }
-            }
-            case NONE -> { }
-        }
         String why = whyNotEditable(form, records);
         if (why != null) return unreadable(row, why);
         ValueEditors.Editor editor = editor(grammar, form, SourceNode.parse(row.value()), records, ctx);
@@ -232,7 +188,7 @@ public final class ParamValueWidgets {
         ValueContainer<?> container = ValueTypes.container(form).orElseThrow();
         List<Type> arguments = ValueTypes.arguments(form);
         if ((container == ValueContainer.LIST || container == ValueContainer.SET)
-                && ChoiceMode.toggled(arguments.getLast()) && grammar.known(arguments.getLast())) {
+                && toggled(arguments.getLast()) && grammar.known(arguments.getLast())) {
             // Only an enum the grammar reads: one nobody declares could be neither read nor written, and the
             // strip would hand back an empty list over the author's. Only a small one: a hundred keys as
             // toggles is a wall, and rows of the key's own picker are how a few of them are chosen.
@@ -269,67 +225,6 @@ public final class ParamValueWidgets {
     private static VBox composite() {
         VBox column = new VBox(4);
         column.getStyleClass().add("param-composite");
-        return column;
-    }
-
-    /**
-     * One radio button per declared choice, at most one of them on.
-     *
-     * <p>Nothing selected is a legal state and the honest one: a stored value the author has since removed
-     * from the list shows as no selection rather than as the first choice, which would be this widget
-     * choosing a setting on the user's behalf. It reads back blank, and a blank reading is written nowhere.
-     */
-    private static Node radioRow(ValueGrammar grammar, String group, ParameterRow row, Type leaf,
-                                 List<String> options, ValueEditors.Context ctx, List<ValueEditor> sink) {
-        ToggleGroup toggles = new ToggleGroup();
-        VBox column = new VBox(2);
-        Optional<JavaValue> current = canonical(grammar, leaf, SourceNode.parse(row.value()));
-        for (String option : options) {
-            Optional<JavaValue> written = optionSource(grammar, leaf, option);
-            RadioButton button = new RadioButton();
-            button.setToggleGroup(toggles);
-            button.setUserData(written.orElse(null));
-            button.setDisable(written.isEmpty());
-            showOption(button, leaf, option, written, ctx);
-            written.ifPresent(w -> button.setSelected(w.sameJava(current.orElse(null))));
-            column.getChildren().add(button);
-        }
-        if (options.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        sink.add(ValueEditor.of(group, row, () -> chosen(toggles)));
-        return column;
-    }
-
-    private static Optional<JavaValue> chosen(ToggleGroup toggles) {
-        Toggle selected = toggles.getSelectedToggle();
-        return selected != null && selected.getUserData() instanceof JavaValue written
-                ? Optional.of(written) : Optional.empty();
-    }
-
-    /** Declared choices, ticked — the list shape of {@link #radioRow}. */
-    private static Node checkList(ValueGrammar grammar, String group, ParameterRow row, Type form,
-                                  Type leaf, List<String> options, ValueEditors.Context ctx,
-                                  List<ValueEditor> sink) {
-        List<JavaValue> held = ValueWire.partsOrNone(form, row.value()).stream()
-                .flatMap(part -> canonical(grammar, leaf, Optional.of(part.written())).stream())
-                .toList();
-        List<CheckBox> boxes = new ArrayList<>();
-        VBox column = new VBox(2);
-        for (String option : options) {
-            Optional<JavaValue> written = optionSource(grammar, leaf, option);
-            CheckBox box = new CheckBox();
-            box.setUserData(written.orElse(null));
-            box.setDisable(written.isEmpty());
-            showOption(box, leaf, option, written, ctx);
-            written.ifPresent(w -> box.setSelected(held.stream().anyMatch(w::sameJava)));
-            boxes.add(box);
-            column.getChildren().add(box);
-        }
-        if (boxes.isEmpty()) column.getChildren().add(hint("No choices declared yet."));
-        sink.add(ValueEditor.of(group, row, () -> ValueWire.compose(form, boxes.stream()
-                .filter(CheckBox::isSelected)
-                .map(box -> box.getUserData() instanceof JavaValue w ? w : null)
-                .filter(w -> w != null)
-                .toList())));
         return column;
     }
 
@@ -399,7 +294,7 @@ public final class ParamValueWidgets {
      * means; a hand-written list that repeats a constant or orders them otherwise is rewritten that way only
      * when a toggle is touched. A stack or a queue keeps its rows: there the order is the value.
      *
-     * <p>{@code offered} are the constants drawn: every one, or the choices declared for the field.
+     * <p>{@code offered} are the constants drawn: every one.
      */
     private static ValueEditors.Editor enumToggles(ValueGrammar grammar, Type form, Class<?> constants,
                                                    List<?> offered, Optional<SourceNode> written) {
@@ -667,62 +562,12 @@ public final class ParamValueWidgets {
         return new VBox(2, written);
     }
 
-    // --- declared choices ---------------------------------------------------------------------------------
+    /** The largest enum whose constants are drawn as one strip of toggles; above it, rows of its own picker. */
+    private static final int TOGGLES = 16;
 
-    /**
-     * Dresses one choice's toggle: text for a string or an enum constant (the choice is its words), the
-     * type's own picture for everything else. The author's text is the label only when nothing can draw the
-     * value — an option the leaf cannot read, or a type no plugin draws.
-     */
-    private static void showOption(ButtonBase toggle, Type leaf, String option, Optional<JavaValue> written,
-                                   ValueEditors.Context ctx) {
-        if (!ValueTypes.isLeaf(leaf)) {
-            // One of several whole lists: its items, in a line, rather than the Java that builds it.
-            toggle.setGraphic(null);
-            toggle.setText(written.map(w -> itemsOf(leaf, w)).orElse(option));
-            return;
-        }
-        boolean words = leaf == String.class || (leaf instanceof Class<?> cls && cls.isEnum());
-        Node picture = words ? null
-                : written.map(w -> ValueEditors.optionDisplay(leaf, w.source(), ctx)).orElse(null);
-        toggle.setGraphic(picture);
-        toggle.setText(picture == null ? option : "");
-    }
-
-    /**
-     * A declared choice as the Java a field of {@code leaf} takes, or empty when the author's text is not a
-     * value of that type.
-     *
-     * <p>The text is read as {@code leaf} first — {@code 10}, {@code UP}, {@code "Mining"} — and a
-     * {@code String} leaf also takes the bare word, since {@code options = {"Mining"}} is how a person writes
-     * a choice of text. Either way it is then written by the grammar, so a choice and a stored value that
-     * mean the same thing are spelled the same and compare equal.
-     */
-    static Optional<JavaValue> optionSource(ValueGrammar grammar, Type leaf, String option) {
-        if (option == null || option.isBlank()) return Optional.empty();
-        Optional<Object> value = grammar.valueOf(leaf, option);
-        if (value.isEmpty() && leaf == String.class) {
-            value = Optional.of(option);
-        }
-        return value.flatMap(v -> grammar.spell(leaf, v));
-    }
-
-    /**
-     * {@code written} as the grammar would write the value it holds — what a choice is compared against — or
-     * the expression kept as it stands when the grammar cannot read it.
-     */
-    private static Optional<JavaValue> canonical(ValueGrammar grammar, Type leaf, Optional<SourceNode> written) {
-        return written.map(node -> grammar.valueOf(leaf, node)
-                .flatMap(value -> grammar.spell(leaf, value))
-                .orElse(JavaValue.kept(node)));
-    }
-
-    /** A container's items as they are written, in a line: {@code [1, 2]}, or {@code [ ]} for none. */
-    static String itemsOf(Type form, JavaValue written) {
-        List<ValueGrammar.Part> parts = ValueWire.partsOrNone(form, written.source());
-        if (parts.isEmpty()) return "[ ]";
-        return parts.stream().map(part -> part.written().source())
-                .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+    /** Whether {@code type} is an enum small enough for a strip of toggles. */
+    private static boolean toggled(Type type) {
+        return type instanceof Class<?> cls && cls.isEnum() && cls.getEnumConstants().length <= TOGGLES;
     }
 
     // --- small helpers ------------------------------------------------------------------------------------

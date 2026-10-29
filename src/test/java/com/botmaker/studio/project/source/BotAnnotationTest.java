@@ -109,7 +109,8 @@ class BotAnnotationTest {
                 import com.botmaker.plugin.api.params.Param;
                 class Parameters {
                     static final String LIMITS = "Limits";
-                    @Param(category = LIMITS, min = 1)
+                    static final String NOTE = "How many";
+                    @Param(category = LIMITS, description = NOTE)
                     public static int a = 1;
                 }
                 """);
@@ -117,7 +118,7 @@ class BotAnnotationTest {
         assertEquals(true, BotAnnotation.PARAM.marks(annotation));
         Map<String, Object> members = BotAnnotation.PARAM.members(annotation);
         assertEquals("Limits", members.get("category"));
-        assertEquals(1.0, members.get("min"));
+        assertEquals("How many", members.get("description"));
     }
 
     @Test

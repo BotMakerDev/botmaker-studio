@@ -83,7 +83,7 @@ class JavaParameterSourceTest {
     void everyAnnotationMemberIsRead() {
         JavaParameter parameter = read(wrap("""
                     @Param(category = "Limits", description = "How many times to try",
-                            visibility = "public", min = 1, max = 50.5)
+                            visibility = "public")
                     public static int maxAttempts = 10;
                 """)).getFirst();
 
@@ -91,30 +91,16 @@ class JavaParameterSourceTest {
         assertEquals("Limits", row.category());
         assertEquals("How many times to try", row.description());
         assertEquals(Visibility.PUBLIC, row.visibility());
-        assertEquals(1.0, row.min());
-        assertEquals(50.5, row.max());
     }
 
-    /** A bot written against plugin-basics' annotation wrote its bounds as text, and they still bound. */
+    /** A bot from before contract 0.14 still lists its parameter; the removed members are ignored. */
     @Test
-    void aBoundWrittenAsTextIsTheSameBound() {
-        ParameterRow row = read(wrap("""
-                    @Param(min = "1", max = "-2")
-                    public static int a = 1;
-                """)).getFirst().row();
-
-        assertEquals(1.0, row.min());
-        assertEquals(-2.0, row.max());
-    }
-
-    @Test
-    void optionsAreReadAsAList() {
+    void aRemovedMemberIsIgnored() {
         JavaParameter parameter = read(wrap("""
-                    @Param(options = {"fast", "slow"})
+                    @Param(options = {"fast", "slow"}, min = 1)
                     public static String speed = "fast";
                 """)).getFirst();
 
-        assertEquals(List.of("fast", "slow"), parameter.row().options());
         assertEquals("\"fast\"", parameter.row().value());
     }
 
@@ -127,8 +113,6 @@ class JavaParameterSourceTest {
 
         assertEquals("", row.category());
         assertEquals(Visibility.EDITOR_ONLY, row.visibility());
-        assertFalse(row.isBounded());
-        assertEquals(List.of(), row.options());
     }
 
     @Test

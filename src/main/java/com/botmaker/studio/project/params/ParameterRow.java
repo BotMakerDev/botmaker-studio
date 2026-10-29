@@ -1,6 +1,5 @@
 package com.botmaker.studio.project.params;
 
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -36,6 +35,9 @@ import java.util.Objects;
  * <p>A row does not carry the class it was read out of. Nothing that holds a row holds it alone — the host
  * pairs it with the field it came from, which knows the file, the class and whether the value may be
  * rewritten — so a section component here could only ever repeat that or contradict it.
+ *
+ * <p><b>No range and no choices</b> (2026-10-29): {@code @Param} describes the field, never the value, so a row
+ * carries no rules about what its value may be. A value with limits is a type of its own.
  */
 public final class ParameterRow {
 
@@ -48,9 +50,6 @@ public final class ParameterRow {
     private final String description;
     private final String category;
     private final Visibility visibility;
-    private final List<String> options;
-    private final double min;
-    private final double max;
 
     private ParameterRow(Builder b) {
         this.name = b.name;
@@ -59,9 +58,6 @@ public final class ParameterRow {
         this.description = b.description == null ? "" : b.description;
         this.category = b.category == null ? "" : b.category.trim();
         this.visibility = b.visibility == null ? Visibility.PUBLIC : b.visibility;
-        this.options = List.copyOf(b.options);
-        this.min = b.min;
-        this.max = b.max;
     }
 
     /**
@@ -122,42 +118,6 @@ public final class ParameterRow {
         return visibility == Visibility.PUBLIC;
     }
 
-    /**
-     * The set of values this row may take, each as the Java expression that writes one. Empty for a free
-     * value: whether a set is declared is a question about the declaration rather than about the type,
-     * which is why the type does not answer it.
-     */
-    public List<String> options() {
-        return options;
-    }
-
-    /**
-     * The declared inclusive lower bound, or {@link Double#NEGATIVE_INFINITY} when none is declared.
-     *
-     * <p><b>A number, not text</b> (2026-09-22). Both ends were strings so a duration bound could be
-     * written the way a duration is ({@code "30s"}) and a codec would parse it — and no plugin parses
-     * anything now. Every bounded type is a number or is measured by one, and both ends are advice to a
-     * widget and a clamp when a value is normalised, never a validation that can fail: a value outside the
-     * range is pulled to the nearest bound, because the alternative is a project that refuses to save
-     * because of a limit somebody tightened after the fact.
-     *
-     * <p>Independent ends are the point. "At most 10" is a sentence a person says, and it was once
-     * unsayable because the widget only appeared when both ends were filled in.
-     */
-    public double min() {
-        return min;
-    }
-
-    /** The declared inclusive upper bound, or {@link Double#POSITIVE_INFINITY} when none is declared. */
-    public double max() {
-        return max;
-    }
-
-    /** Whether either end is declared — what a widget asks before offering a slider. */
-    public boolean isBounded() {
-        return min != Double.NEGATIVE_INFINITY || max != Double.POSITIVE_INFINITY;
-    }
-
     /** What an editor calls this — its {@link #description()} when it has one, else its {@link #name()}. */
     public String displayLabel() {
         return description.isBlank() ? name : description;
@@ -177,9 +137,7 @@ public final class ParameterRow {
                 .value(value)
                 .description(description)
                 .category(category)
-                .visibility(visibility)
-                .options(options)
-                .bounds(min, max);
+                .visibility(visibility);
     }
 
     /** Equal when every component is: what makes "did anything change" answerable. */
@@ -192,15 +150,12 @@ public final class ParameterRow {
                 && value.equals(other.value)
                 && description.equals(other.description)
                 && category.equals(other.category)
-                && visibility == other.visibility
-                && options.equals(other.options)
-                && Double.compare(min, other.min) == 0
-                && Double.compare(max, other.max) == 0;
+                && visibility == other.visibility;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, typeName, value, description, category, visibility, options, min, max);
+        return Objects.hash(name, typeName, value, description, category, visibility);
     }
 
     @Override
@@ -217,9 +172,6 @@ public final class ParameterRow {
         private String description;
         private String category;
         private Visibility visibility;
-        private List<String> options = List.of();
-        private double min = Double.NEGATIVE_INFINITY;
-        private double max = Double.POSITIVE_INFINITY;
 
         private Builder(String name, String typeName) {
             this.name = name == null ? "" : name.trim();
@@ -248,22 +200,6 @@ public final class ParameterRow {
         /** Whether the bot's user is offered this. Defaults to {@link Visibility#PUBLIC} — a parameter exists to be set. */
         public Builder visibility(Visibility visibility) {
             this.visibility = visibility;
-            return this;
-        }
-
-        /** The declared set of values, for a shape that has one. */
-        public Builder options(List<String> options) {
-            this.options = options == null ? List.of() : List.copyOf(options);
-            return this;
-        }
-
-        /**
-         * The declared inclusive bounds. Pass {@link Double#NEGATIVE_INFINITY} or
-         * {@link Double#POSITIVE_INFINITY} for an end that is not declared — the two are independent.
-         */
-        public Builder bounds(double min, double max) {
-            this.min = min;
-            this.max = max;
             return this;
         }
 
