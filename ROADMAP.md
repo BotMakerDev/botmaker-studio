@@ -5,6 +5,9 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 
 ## Open
 
+- **Rare test failure, cause unknown** (2026-10-30): `MethodSwitchTest.anArgumentIsDrawnAgainWhenItsCallChanges:140`
+  failed in 1 of 3 full runs: picking `min` left the code unchanged. The pick path is synchronous, so `isValidMethod`
+  may have returned false. It passes alone and in the later full runs.
 - **Left from the `ui` sweep of 2026-10-30** (`~/.cache/botmaker/ui-findings.tsv` has the stalls):
   - The FX thread parses: opening a project stalled 1.0 s in `BotParser.syntax`, the Parameters window 0.6 s
     (`StudioWindow.show` + `BotParser.syntax`). `FxWatch` names only the busiest frames; the caller is not in the
