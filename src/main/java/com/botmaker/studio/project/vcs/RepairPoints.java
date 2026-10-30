@@ -1,6 +1,9 @@
 package com.botmaker.studio.project.vcs;
 
 import com.botmaker.cli.publish.Publish;
+import com.botmaker.cli.repair.Compile;
+import com.botmaker.cli.repair.Damage;
+import com.botmaker.cli.repair.ProjectSide;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.dircache.DirCache;
 import org.eclipse.jgit.dircache.DirCacheBuilder;
@@ -25,6 +28,7 @@ import org.eclipse.jgit.treewalk.TreeWalk;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -37,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Predicate;
 
 /**
@@ -64,12 +69,17 @@ public final class RepairPoints {
     /** Inside {@code .git}, so it goes with the record it holds. */
     private static final String HOLD_FILE = "botmaker-record-held";
 
+    /** Inside {@code .git}: the HEAD last searched, and the commit the fallback found from it. */
+    private static final String FALLBACK_FILE = "botmaker-newest-compiling";
+
     /** How many different trees the fallback tries before it gives up: each one is a compile. */
     private static final int MOST_TRIED = 100;
 
+    private final Path projectDir;
     private final ProjectVcs vcs;
 
     public RepairPoints(Path projectDir) {
+        this.projectDir = projectDir;
         this.vcs = new ProjectVcs(projectDir);
     }
 
@@ -185,6 +195,78 @@ public final class RepairPoints {
                 return Optional.empty();
             }
         }
+    }
+
+    /**
+     * The project on disk against the record, or else the newest commit that compiles. That search may be up to
+     * {@value #MOST_TRIED} Maven builds; what it finds is remembered for that HEAD. Finding nothing is not, as it may
+     * only mean Maven had no network.
+     *
+     * @param compile what the last compile of the project on disk said
+     * @throws IOException also when Maven could not be run: that says nothing about the project
+     */
+    public Damage.Report damage(Compile compile) throws IOException {
+        ProjectSide disk = ProjectSide.folder(projectDir);
+        if (!vcs.isRepo()) return Damage.noRepository(disk, compile);
+        Optional<String> point = lastCompiling();
+        if (point.isEmpty()) point = fallback();
+        return point.isEmpty() ? Damage.noRepairPoint(disk, compile) : Damage.compare(side(point.get()), disk, compile);
+    }
+
+    private Optional<String> fallback() throws IOException {
+        Path gitDir = vcs.gitDir();
+        Path memo = gitDir == null ? null : gitDir.resolve(FALLBACK_FILE);
+        String head;
+        try (Git git = vcs.open()) {
+            ObjectId id = git.getRepository().resolve(Constants.HEAD);
+            if (id == null) return Optional.empty();
+            head = id.name();
+        }
+        if (memo != null && Files.exists(memo)) {
+            List<String> remembered = Files.readAllLines(memo);
+            if (remembered.size() == 2 && remembered.getFirst().equals(head)) return Optional.of(remembered.getLast());
+        }
+        Optional<String> found;
+        try {
+            found = newestCompiling(Compile::compiles);
+        } catch (UncheckedIOException e) {
+            throw e.getCause();
+        }
+        if (memo != null && found.isPresent()) Files.writeString(memo, head + "\n" + found.get() + "\n");
+        return found;
+    }
+
+    /** A commit, as one side of a comparison. */
+    public ProjectSide side(String commit) throws IOException {
+        Map<String, ObjectId> blobs = new TreeMap<>();
+        try (Git git = vcs.open(); RevWalk commits = new RevWalk(git.getRepository());
+             TreeWalk walk = new TreeWalk(git.getRepository())) {
+            walk.addTree(commits.parseCommit(ObjectId.fromString(commit)).getTree());
+            walk.setRecursive(true);
+            while (walk.next()) {
+                if (walk.getFileMode(0) != FileMode.GITLINK) blobs.put(walk.getPathString(), walk.getObjectId(0));
+            }
+        }
+        return new ProjectSide() {
+            @Override
+            public Set<String> paths() {
+                return blobs.keySet();
+            }
+
+            @Override
+            public long size(String path) throws IOException {
+                try (Git git = vcs.open(); ObjectReader reader = git.getRepository().newObjectReader()) {
+                    return reader.getObjectSize(blobs.get(path), Constants.OBJ_BLOB);
+                }
+            }
+
+            @Override
+            public byte[] read(String path) throws IOException {
+                try (Git git = vcs.open(); ObjectReader reader = git.getRepository().newObjectReader()) {
+                    return reader.open(blobs.get(path), Constants.OBJ_BLOB).getBytes();
+                }
+            }
+        };
     }
 
     private static boolean compilesAt(Repository repo, Map<String, ObjectId> inputs, Predicate<Path> compiles)

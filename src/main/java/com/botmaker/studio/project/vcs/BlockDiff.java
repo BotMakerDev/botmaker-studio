@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.vcs;
 
+import com.botmaker.cli.repair.Members;
 import com.botmaker.studio.parser.helpers.SourceParser;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.ASTMatcher;
@@ -16,7 +17,6 @@ import org.eclipse.jdt.core.dom.ForStatement;
 import org.eclipse.jdt.core.dom.IfStatement;
 import org.eclipse.jdt.core.dom.LabeledStatement;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.SwitchStatement;
 import org.eclipse.jdt.core.dom.SynchronizedStatement;
@@ -347,12 +347,7 @@ public final class BlockDiff {
     }
 
     private static String signature(String typePath, MethodDeclaration m) {
-        List<String> params = new ArrayList<>();
-        for (Object p : m.parameters()) {
-            SingleVariableDeclaration v = (SingleVariableDeclaration) p;
-            params.add(v.getType() + (v.isVarargs() ? "..." : ""));
-        }
-        return typePath + "#" + m.getName().getIdentifier() + "(" + String.join(", ", params) + ")";
+        return Members.signature(typePath, m);
     }
 
     private static String name(MethodDeclaration m) {

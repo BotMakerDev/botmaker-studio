@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.vcs;
 
+import com.botmaker.cli.repair.Compile;
+import com.botmaker.cli.repair.Damage;
 import com.botmaker.studio.sharing.BotPublisher;
 import com.botmaker.studio.sharing.PublishPlan;
 import com.botmaker.studio.sharing.PublishRequest;
@@ -324,6 +326,42 @@ class RepairPointsTest {
         PublishPlan plan = new BotPublisher(null, null).start(request, vcs, "me").resume(p -> { });
 
         assertTrue(plan.failure().orElseThrow().detail().contains("saved state"));
+    }
+
+    @Test
+    void theDamageIsToldAgainstTheRecord(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("pom.xml"), "<project/>");
+        Files.writeString(dir.resolve("Bot.java"), "class Bot { void a() { } void b() { } }");
+        Files.write(dir.resolve("play.png"), new byte[]{1, 2});
+        new ProjectVcs(dir).init();
+        RepairPoints points = new RepairPoints(dir);
+        points.recordCompiled();
+        assertTrue(points.damage(Compile.clean()).clean());
+
+        Files.writeString(dir.resolve("Bot.java"), "class Bot { void a() { } }");
+        Files.delete(dir.resolve("play.png"));
+        Files.delete(dir.resolve("pom.xml"));
+
+        List<Damage.Row> rows = points.damage(Compile.clean()).rows();
+        assertEquals(List.of(Damage.Kind.NO_POM, Damage.Kind.FILES_GONE, Damage.Kind.MEMBERS_GONE),
+                rows.stream().map(Damage.Row::kind).toList());
+        assertEquals(Damage.Repair.PUT_BACK_FILES, rows.getFirst().repair());
+        assertEquals(List.of("play.png"), rows.get(1).files());
+        assertEquals(List.of("Bot#b()"), rows.get(2).members());
+    }
+
+    @Test
+    void withNoRepositoryTheDamageSaysSo(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("pom.xml"), "<project/>");
+        assertEquals(List.of(Damage.Kind.NO_GIT), new RepairPoints(dir).damage(Compile.notRun()).rows().stream()
+                .map(Damage.Row::kind).toList());
+    }
+
+    @Test
+    void withNothingThatCompilesTheDamageSaysSo(@TempDir Path dir) throws IOException {
+        project(dir); // No pom in any commit, so Maven builds none of them.
+        assertEquals(List.of(Damage.Kind.NO_POM, Damage.Kind.NOTHING_TO_COMPARE),
+                new RepairPoints(dir).damage(Compile.notRun()).rows().stream().map(Damage.Row::kind).toList());
     }
 
     @Test

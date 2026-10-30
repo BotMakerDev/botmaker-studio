@@ -14,6 +14,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- `RepairPoints.damage`: what is damaged against the last-compiling record, or else the newest commit Maven can build,
+  through the cli's `com.botmaker.cli.repair`. Nothing shows it yet.
 - Repair points (`project/vcs/RepairPoints`): each successful compile records the project on the private ref
   `refs/botmaker/last-compiling`, and a save holds every byte on a `botmaker/saved/<date>` branch with no branch
   switch. Neither is pushed, and Publish refuses from a save. Nothing shows them yet: the Repair pane is next.
