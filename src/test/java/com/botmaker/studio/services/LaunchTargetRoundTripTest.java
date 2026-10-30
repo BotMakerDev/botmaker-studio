@@ -192,7 +192,7 @@ class LaunchTargetRoundTripTest {
     @Test
     void theRunningTokenIsTheLaunchersIdentityNotOurs() {
         assertAll(
-                () -> assertEquals("AppId=570", LaunchSpec.parse("steam:570").runningToken()),
+                () -> assertEquals("AppId=570 --", LaunchSpec.parse("steam:570").runningToken()),
                 () -> assertEquals("Fortnite", LaunchSpec.parse("epic:Fortnite").runningToken()),
                 () -> assertEquals("game.x86_64", LaunchSpec.parse("exe:/opt/game/game.x86_64").runningToken()),
                 () -> assertEquals("wine", LaunchSpec.parse("cli:/usr/bin/wine game.exe").runningToken(),
