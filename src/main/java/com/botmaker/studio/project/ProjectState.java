@@ -97,6 +97,20 @@ public class ProjectState {
                 java.nio.file.Files.writeString(path, file.content());
             }
         }
+
+        /** Whether the disk still holds what {@link #writeSources} wrote. */
+        public boolean onDisk() {
+            try {
+                for (SourceFile file : files) {
+                    Path path = file.path();
+                    if (path == null || FileRole.of(path) == FileRole.LIBRARY) continue;
+                    if (!file.content().equals(java.nio.file.Files.readString(path))) return false;
+                }
+                return true;
+            } catch (java.io.IOException e) {
+                return false;
+            }
+        }
     }
 
     /**

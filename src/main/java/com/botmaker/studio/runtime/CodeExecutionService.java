@@ -375,7 +375,10 @@ public class CodeExecutionService {
         snapshot.writeSources();
 
         Files.createDirectories(compiledOutputPath);
-        return compileSources(snapshot, compiledOutputPath);
+        boolean compiled = compileSources(snapshot, compiledOutputPath);
+        // Only if the disk still holds what javac read: a write since would make a state nobody compiled the good one.
+        if (compiled && snapshot.onDisk()) Checkpoints.recordCompiled(config.projectPath());
+        return compiled;
     }
 
     private boolean compileSources(ProjectState.Snapshot snapshot, Path compiledOutputPath)

@@ -1619,7 +1619,7 @@ public final class VersionsPane {
             case PUBLISH -> "⇪";
             case INSTALL, CREATE -> "◆";
             case RESTORE -> "↺";
-            case AUTO, SAFETY, UNKNOWN -> "•";
+            case AUTO, SAFETY, SAVED_STATE, UNKNOWN -> "•";
         };
     }
 

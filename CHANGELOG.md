@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- Repair points (`project/vcs/RepairPoints`): each successful compile records the project on the private ref
+  `refs/botmaker/last-compiling`, and a save holds every byte on a `botmaker/saved/<date>` branch with no branch
+  switch. Neither is pushed, and Publish refuses from a save. Nothing shows them yet: the Repair pane is next.
+- A version's time is when it was written, not when Studio started.
+
 - Each plugin gets its own folder of the resources: `StudioServices.resourcesDir()` answers
   `src/main/resources/plugins/<group>/<artifact>/` for the plugin calling it (`PluginHost.calling`, the stack walk
   the plugin log already did), so two plugins' `images/` no longer clash. *Plugins with data* recognises that folder

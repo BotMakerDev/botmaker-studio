@@ -31,6 +31,8 @@ public enum VersionOrigin {
     CREATE("create", "Created"),
     /** A whole-project restore to an earlier version. */
     RESTORE("restore", "Restored"),
+    /** The project as it was before a repair: a commit on a {@code botmaker/saved/…} branch ({@link RepairPoints}). */
+    SAVED_STATE("saved-state", "Saved state"),
     /** No trailer, or one this Studio does not know. */
     UNKNOWN("unknown", "Other");
 

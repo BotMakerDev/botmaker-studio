@@ -5,6 +5,9 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 
 ## Open
 
+- **What a save leaves out or may cost** (`RepairPoints`, 2026-10-30): a nested repository with its own `.git` is left
+  out (a tracked one keeps only its commit). Each compile with changed or untracked files writes a commit, tree and
+  blobs the next one orphans, and Studio never runs `git gc`; the growth is unmeasured.
 - **Rare test failure, cause unknown** (2026-10-30): `MethodSwitchTest.anArgumentIsDrawnAgainWhenItsCallChanges:140`
   failed in 1 of 3 full runs: picking `min` left the code unchanged. The pick path is synchronous, so `isValidMethod`
   may have returned false. It passes alone and in the later full runs.

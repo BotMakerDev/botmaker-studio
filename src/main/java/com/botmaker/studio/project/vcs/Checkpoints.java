@@ -75,6 +75,15 @@ public final class Checkpoints {
         }
     }
 
+    /** After a compile that succeeded: the project as it is on disk becomes the repair point. Never fatal. */
+    public static synchronized void recordCompiled(Path projectDir) {
+        try {
+            new RepairPoints(projectDir).recordCompiled();
+        } catch (Exception e) {
+            System.err.println("Couldn't record the last compiling state: " + e.getMessage());
+        }
+    }
+
     /**
      * The same, for a version somebody asked for and is waiting on: it answers the new short SHA (null when
      * nothing changed) and throws what went wrong instead of logging it.

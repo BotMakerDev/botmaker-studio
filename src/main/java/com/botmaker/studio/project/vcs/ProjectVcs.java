@@ -155,6 +155,11 @@ public final class ProjectVcs {
         this.author = author;
     }
 
+    /** Who writes, as of now: a {@code PersonIdent} keeps the time it was made, and {@link #author} is long-lived. */
+    PersonIdent now() {
+        return new PersonIdent(author, Instant.now());
+    }
+
     /**
      * True when the project directory already has a repository: a {@code .git} directory, or a {@code .git}
      * <i>file</i> naming one elsewhere ({@code gitdir: …}), which is what a submodule or a linked worktree
@@ -202,7 +207,7 @@ public final class ProjectVcs {
             writeGitignore();
             excludeStudioState();
             git.add().addFilepattern(".").call();
-            git.commit().setAuthor(author).setCommitter(author)
+            git.commit().setAuthor(now()).setCommitter(now())
                     .setMessage(VersionOrigin.CREATE.stamp("Initial commit")).call();
         } catch (Exception e) {
             throw new IOException("Failed to initialize project history: " + e.getMessage(), e);
@@ -244,7 +249,7 @@ public final class ProjectVcs {
                 rm.call();
             }
             String first = label == null || label.isBlank() ? origin.displayName() : label;
-            RevCommit c = git.commit().setAuthor(author).setCommitter(author)
+            RevCommit c = git.commit().setAuthor(now()).setCommitter(now())
                     .setMessage(origin.stamp(first)).call();
             return c.abbreviate(7).name();
         } catch (Exception e) {
@@ -447,7 +452,7 @@ public final class ProjectVcs {
             if (!git.status().call().isClean()) {
                 git.add().addFilepattern(".").call();
                 git.add().addFilepattern(".").setUpdate(true).call();
-                git.commit().setAuthor(author).setCommitter(author)
+                git.commit().setAuthor(now()).setCommitter(now())
                         .setMessage(VersionOrigin.SAFETY.stamp("Snapshot before rollback")).call();
             }
             ObjectId tip = repo.resolve("HEAD");
@@ -458,7 +463,7 @@ public final class ProjectVcs {
             git.reset().setMode(ResetType.HARD).setRef(target.name()).call();
             git.reset().setMode(ResetType.SOFT).setRef(tip.name()).call();
             if (!git.status().call().isClean()) {
-                git.commit().setAuthor(author).setCommitter(author)
+                git.commit().setAuthor(now()).setCommitter(now())
                         .setMessage(VersionOrigin.RESTORE.stamp("Roll back to " + shortTarget)).call();
             }
         } catch (IOException e) {
@@ -647,7 +652,7 @@ public final class ProjectVcs {
         try (Git git = open()) {
             git.add().addFilepattern(".").call();
             git.add().addFilepattern(".").setUpdate(true).call();
-            RevCommit c = git.commit().setAuthor(author).setCommitter(author)
+            RevCommit c = git.commit().setAuthor(now()).setCommitter(now())
                     .setMessage(origin.stamp(label)).call();
             return c.abbreviate(7).name();
         } catch (Exception e) {
@@ -695,13 +700,14 @@ public final class ProjectVcs {
     public record RemoteInfo(String name, String url, int ahead, int behind) {
     }
 
-    /** The local branches, sorted; the current one among them. */
+    /** The local branches, sorted; the current one among them. A save is one only while it is the current one. */
     public List<String> branches() throws IOException {
         if (!isRepo()) return List.of();
         try (Git git = open()) {
+            String current = git.getRepository().getBranch();
             List<String> out = new ArrayList<>();
             for (Ref ref : git.branchList().call()) out.add(Repository.shortenRefName(ref.getName()));
-            return out.stream().sorted().toList();
+            return out.stream().filter(b -> b.equals(current) || !RepairPoints.isSavedBranch(b)).sorted().toList();
         } catch (Exception e) {
             throw new IOException("Could not list the branches: " + e.getMessage(), e);
         }
@@ -1495,7 +1501,7 @@ public final class ProjectVcs {
         try (Git git = open()) {
             ObjectId had = git.getRepository().resolve("refs/tags/" + name.trim() + "^{commit}");
             if (had != null) return had.name();
-            git.tag().setName(name.trim()).setMessage(message).setTagger(author).call();
+            git.tag().setName(name.trim()).setMessage(message).setTagger(now()).call();
             return git.getRepository().resolve("refs/tags/" + name.trim() + "^{commit}").name();
         } catch (IOException e) {
             throw e;
@@ -1513,8 +1519,8 @@ public final class ProjectVcs {
         org.eclipse.jgit.lib.CommitBuilder merge = new org.eclipse.jgit.lib.CommitBuilder();
         merge.setTreeId(head.getTree());
         merge.setParentIds(head, other);
-        merge.setAuthor(author);
-        merge.setCommitter(author);
+        merge.setAuthor(now());
+        merge.setCommitter(now());
         merge.setMessage(origin.stamp(label));
         ObjectId id;
         try (org.eclipse.jgit.lib.ObjectInserter inserter = repo.newObjectInserter()) {
@@ -1557,7 +1563,7 @@ public final class ProjectVcs {
         if (name == null || name.isBlank()) throw new IOException("Tag name must not be empty.");
         ensureInitialized();
         try (Git git = open()) {
-            git.tag().setName(name.trim()).setMessage(message).setTagger(author).call();
+            git.tag().setName(name.trim()).setMessage(message).setTagger(now()).call();
         } catch (Exception e) {
             throw new IOException("Tag failed: " + e.getMessage(), e);
         }

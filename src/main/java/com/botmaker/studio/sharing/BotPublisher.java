@@ -16,6 +16,7 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.Remote;
+import com.botmaker.studio.project.vcs.RepairPoints;
 import com.botmaker.studio.project.vcs.SyncModel;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -177,6 +178,9 @@ public final class BotPublisher {
             this.onChange = onChange;
             current = null;
             try {
+                if (RepairPoints.isSavedBranch(vcs.branch())) {
+                    return fail("This is a saved state, not your bot's line: switch back to your branch to publish.");
+                }
                 if (plan.state(PublishPlan.Step.REPO).status() != PublishPlan.Status.DONE) {
                     begin(PublishPlan.Step.REPO);
                     String repo = ensureRepository();
