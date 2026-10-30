@@ -68,9 +68,10 @@ public final class TryHost {
                 main.getMethod("main", String[].class).invoke(null, (Object) new String[0]);
             } catch (InvocationTargetException e) {
                 code = stopped(e.getCause()) ? 130 : 1;
-                if (code == 1) e.getCause().printStackTrace();
+                if (code == 1) err.println(failure(e.getCause()));
             } catch (ReflectiveOperationException | LinkageError e) {
-                e.printStackTrace();
+                // A bot class whose static initializer threw is the bot's failure too.
+                err.println(failure(e));
                 code = 1;
             } finally {
                 // A stopped try that swallowed the interrupt and returned was still stopped.
@@ -96,6 +97,39 @@ public final class TryHost {
             stopAsked = true;
             thread.interrupt();
         }
+    }
+
+    /**
+     * What a bot's failure says, as one line: {@code Failed: BotStuckException: No way from Options to Save slots …
+     * (VisitMenus.java:11)}, each cause after it ({@code ← IOException: …}). The place is the first frame of the bot's
+     * own code, the generated try's left out, or the deepest cause's first frame when the bot has none (a bug in the
+     * SDK).
+     * Until 2026-10-30 the whole stack trace was printed, the SDK's and Studio's frames with it (the user's call: an
+     * exception shouldn't appear like that). Nested classes are not used: this class is the jar's only one.
+     */
+    static String failure(Throwable thrown) {
+        StringBuilder text = new StringBuilder("Failed: ");
+        StackTraceElement place = null;
+        StackTraceElement first = null;
+        int depth = 0;
+        for (Throwable t = thrown; t != null && depth < 8; t = t.getCause(), depth++) {
+            if (depth > 0) text.append(" ← ");
+            text.append(t.getClass().getSimpleName());
+            if (t.getMessage() != null) text.append(": ").append(t.getMessage().strip().replaceAll("\\s*\\R\\s*", " "));
+            boolean firstOfThis = true;
+            for (StackTraceElement frame : t.getStackTrace()) {
+                if (frame.getFileName() == null) continue;
+                // The deepest cause's first line: where it went wrong.
+                if (firstOfThis) first = frame;
+                firstOfThis = false;
+                if (place == null && "try".equals(frame.getClassLoaderName())
+                        && !frame.getClassName().endsWith(".BotMakerTry")) place = frame;
+            }
+        }
+        StackTraceElement at = place != null ? place : first;
+        if (at != null) text.append(" (").append(at.getFileName())
+                .append(at.getLineNumber() > 0 ? ":" + at.getLineNumber() : "").append(')');
+        return text.toString();
     }
 
     /** A try that ended by the interrupt {@link #stop} sent, whatever it wrapped it in. */

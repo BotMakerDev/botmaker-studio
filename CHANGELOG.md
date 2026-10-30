@@ -65,6 +65,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- A ▶ Try that fails prints one line, not a stack trace: `Failed: BotStuckException: No way from Options to Save
+  slots … (VisitMenus.java:11)`, the line being the bot's own, each cause after an arrow (2026-10-30).
+
 Found by driving a dev Studio over `ui` (2026-10-30):
 
 - **A call where a primitive or text goes keeps its block.** `if (ImageWaiter.waitFor(…))` and
