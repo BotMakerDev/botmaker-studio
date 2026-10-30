@@ -39,8 +39,16 @@ class LongNamesFitTest extends FxHeadlessTest {
 
     private static final String LONG = "Firestone Idle Expedition Farmer Deluxe";
 
+    private final List<Stage> windows = new ArrayList<>();
+
+    /**
+     * On a window of its own: TestFX keeps one primary stage per test JVM, and a size set on it outlives this test
+     * and overrules the next test's scene.
+     */
     @Override
-    public void start(Stage stage) {
+    public void start(Stage primary) {
+        Stage stage = new Stage();
+        windows.add(stage);
         List<MyBot> bots = List.of(new MyBot(Path.of("/p/" + LONG), LONG, Optional.of("LiQiyeDev"),
                 Optional.of("1.0.2"), LocalDateTime.of(2026, 10, 19, 9, 0), Optional.of("1.1.0"), true, State.READY));
         GalleryEntry got = new GalleryEntry(LONG, "LiQiyeDev", "firestone", "Idle game farming", List.of(), "",
@@ -80,8 +88,14 @@ class LongNamesFitTest extends FxHeadlessTest {
         }, new ShowCommunity(true), new HiddenBots(Set.of()));
         getBots.show(List.of(got), true);
         Stage more = new Stage();
+        windows.add(more);
         more.setScene(ThemedWindows.scene(new StackPane(getBots.node()), 1200, 600));
         more.show();
+    }
+
+    @Override
+    public void stop() {
+        windows.forEach(Stage::close);
     }
 
     @Test

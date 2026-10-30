@@ -27,9 +27,6 @@ class ZoomPaneTest extends FxHeadlessTest {
     public void start(Stage stage) {
         root = new StackPane();
         stage.setScene(new Scene(root, 400, 300));
-        // TestFX keeps one stage per test JVM, and a size an earlier test set on it outlives a new scene.
-        stage.setWidth(400);
-        stage.setHeight(300);
         stage.show();
     }
 

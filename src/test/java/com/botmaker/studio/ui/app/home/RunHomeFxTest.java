@@ -33,9 +33,13 @@ class RunHomeFxTest extends FxHeadlessTest {
     private static final LocalDateTime MONDAY = LocalDateTime.of(2026, 10, 19, 9, 0);
     private final List<String> asked = new ArrayList<>();
     private RunHome home;
+    private Stage window;
 
     @Override
-    public void start(Stage stage) {
+    public void start(Stage primary) {
+        // A window of its own: TestFX keeps one primary stage per test JVM, and a size set on it overrules later scenes.
+        Stage stage = new Stage();
+        window = stage;
         List<MyBot> bots = List.of(
                 new MyBot(Path.of("/p/Firestone"), "Firestone", Optional.of("LiQiyeDev"), Optional.of("1.0.0"),
                         MONDAY, Optional.of("1.1.0"), true, State.READY),
@@ -74,6 +78,11 @@ class RunHomeFxTest extends FxHeadlessTest {
         stage.setWidth(900);
         stage.setHeight(700);
         stage.show();
+    }
+
+    @Override
+    public void stop() {
+        window.close();
     }
 
     /** The cards, once the off-thread read has filled them. */
