@@ -5,6 +5,17 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 
 ## Open
 
+- **Left from the `ui` sweep of 2026-10-30** (`~/.cache/botmaker/ui-findings.tsv` has the stalls):
+  - The FX thread parses: opening a project stalled 1.0 s in `BotParser.syntax`, the Parameters window 0.6 s
+    (`StudioWindow.show` + `BotParser.syntax`). `FxWatch` names only the busiest frames; the caller is not in the
+    row, so `ui profile` around the open is the next step.
+  - The Versions tab is read only when it is opened: a plugin move's "Before … upgrade" version and its pom
+    change are missing until the tab is reopened. A refresh on focus is not the fix: `refresh` flushes the
+    editor's sources to disk and would write over a change made outside Studio.
+  - The upgrade's strip of `@Param(min = …)` leaves the annotation on one line of 130 characters.
+  - The bot list names a `.bmk` copy of Firestone "gamebot" (its pom's artifactId?).
+  - `NewProjectPlugins` reuses `StartingPoints.Fetch`, whose display names speak of the gallery.
+  - `ui press` reaches a window behind an open modal one (the 🎮 button with Plugins & Libraries open).
 - **Three tests fail at random under the full parallel gate and pass alone** (2026-10-27, one per
   `tools/gate-snapshot.sh --all` run): `ZoomPaneTest.zoomingInNarrowsTheLayoutAndGrowsTheDrawing` (content
   1200 wide, not 400: a layout before the 400-wide root applies), `TerminalViewTest` (`waitForScreen` times out)

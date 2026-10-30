@@ -50,6 +50,20 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   longer speak of choices or ranges. An upgrade, and *Migrate first*, take `min`, `max` and `options` off every
   `@Param` and say which fields they changed; the summary's "Repaired the plugin's values:" now reads "Repaired:".
 
+### Fixed
+
+Found by driving a dev Studio over `ui` (2026-10-30):
+
+- **A call where a primitive or text goes keeps its block.** `if (ImageWaiter.waitFor(…))` and
+  `!Navigate.press(…).done()` were drawn as Basics' red "Off" switch, which hid the call and would have written
+  `true` over it. A call is still a value where an object goes (`Duration.ofMillis(15000L)` stays "15s").
+- New Project's plugin cards say "Checking for plugins…" while the catalog is asked, not "could not be reached".
+- Cancelling the overlay editor's window chooser closes it; it went on to say no window was open. That warning
+  no longer names the old *Launch Target*.
+- `ui` reads a list row scrolled out of view, and a choice box, as Studio draws them, not as the item's
+  `toString` (`Version[commit=CommitInfo[…`), and leaves Jetty's and the MCP server's INFO lines out of its
+  problems.
+
 ## [1.10.1] — 2026-10-28
 
 ### Added

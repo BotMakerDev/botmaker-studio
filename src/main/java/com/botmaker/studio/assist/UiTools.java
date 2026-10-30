@@ -544,11 +544,11 @@ final class UiTools {
                 return;
             }
             case ComboBoxBase<?> box -> {
-                lines.add("r" + ref(box) + " choice \"" + (box.getValue() == null ? "" : box.getValue()) + "\"" + off);
+                lines.add("r" + ref(box) + " choice \"" + choiceText(box, box.getValue()) + "\"" + off);
                 return;
             }
             case ChoiceBox<?> box -> {
-                lines.add("r" + ref(box) + " choice \"" + (box.getValue() == null ? "" : box.getValue()) + "\"" + off);
+                lines.add("r" + ref(box) + " choice \"" + choiceText(box, converted(box)) + "\"" + off);
                 return;
             }
             case ProgressIndicator progress -> {
@@ -586,17 +586,78 @@ final class UiTools {
     private void rows(Control view, List<?> items, String kind, String off, Reading how, List<String> lines) {
         lines.add(kind + " " + items.size() + (items.size() == 1 ? " row" : " rows") + off);
         Map<Integer, String> shown = cellTexts(view);
+        ListCell<?> spare = view instanceof ListView<?> list ? spareCell(list) : null;
         int listed = how.find() == null ? Math.min(items.size(), MOST_ROWS) : items.size();
         Map<Object, Integer> seen = new HashMap<>();
         for (int i = 0; i < listed; i++) {
             Object item = items.get(i);
             String text = shown.containsKey(i) ? quoted(shown.get(i))
-                    : view instanceof TableView<?> table ? quoted(columns(table, i)) : quoted(said(item));
+                    : view instanceof TableView<?> table ? quoted(columns(table, i))
+                    : spare != null ? quoted(drawn(spare, i, item)) : quoted(said(item));
             int nth = seen.merge(item, 1, Integer::sum) - 1;
             lines.add("r" + ref(new Row(view, item, nth)) + " row " + (text == null ? "(not shown)" : text)
                     + (selected(view, i) ? " (selected)" : ""));
         }
+        if (spare != null) {
+            try {
+                spare.updateIndex(-1);
+            } catch (RuntimeException ignored) {
+                // the cell is dropped anyway
+            }
+        }
         if (items.size() > listed) lines.add("… " + (items.size() - listed) + " more rows; read with find picks one");
+    }
+
+    /**
+     * A cell from {@code list}'s own factory, outside the list, to draw the rows no cell is on as the list would; null
+     * when the list has no factory. Its items' {@code toString} is a record's dump (2026-10-30, the Versions list).
+     */
+    private static <T> ListCell<T> spareCell(ListView<T> list) {
+        if (list.getCellFactory() == null) return null;
+        try {
+            ListCell<T> cell = list.getCellFactory().call(list);
+            cell.updateListView(list);
+            return cell;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * What {@code cell} shows for row {@code index}, else what {@code item} says of itself: also when the cell's own
+     * code fails outside a scene, which costs that row its drawing, not the read.
+     */
+    private static String drawn(ListCell<?> cell, int index, Object item) {
+        String text;
+        try {
+            cell.updateIndex(index);
+            text = texts(cell);
+        } catch (RuntimeException e) {
+            text = "";
+        }
+        return text.isBlank() ? said(item) : text;
+    }
+
+    /** What a choice shows: its button cell's text when it has one, else {@code value}. */
+    private static String choiceText(Control box, Object value) {
+        if (box.lookup(".list-cell") instanceof ListCell<?> cell && !cell.isEmpty()) {
+            String text = texts(cell);
+            if (!text.isBlank()) return text;
+        }
+        if (value == null) return "";
+        return box instanceof ComboBox<?> combo ? converted(combo) : String.valueOf(value);
+    }
+
+    private static <T> String converted(ChoiceBox<T> box) {
+        T value = box.getValue();
+        if (value == null) return "";
+        return box.getConverter() == null ? String.valueOf(value) : box.getConverter().toString(value);
+    }
+
+    private static <T> String converted(ComboBox<T> box) {
+        T value = box.getValue();
+        if (value == null) return "";
+        return box.getConverter() == null ? String.valueOf(value) : box.getConverter().toString(value);
     }
 
     /** {@code item} and, while it is open, its children, each a row indented by its depth; -1 is a hidden root. */

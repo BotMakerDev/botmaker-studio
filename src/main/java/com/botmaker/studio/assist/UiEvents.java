@@ -8,6 +8,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * What went wrong in a dev Studio that {@code ui} serves (2026-10-28), so a walk through its windows finds bugs
@@ -39,6 +40,8 @@ public final class UiEvents {
     static final int KEPT = 300;
     private static final int LINE_CHARS = 300;
     private static final String OURS = "com.botmaker.";
+    /** slf4j-simple's line below WARN ({@code [thread] INFO logger - …}): Jetty and the MCP server, not a problem. */
+    private static final Pattern CHATTER = Pattern.compile("\\[[^]]+] (INFO|DEBUG|TRACE) ");
     private static final Deque<Event> EVENTS = new ArrayDeque<>();
     /** Set while the uncaught handler prints what it already recorded. */
     private static final ThreadLocal<Boolean> QUIET = ThreadLocal.withInitial(() -> false);
@@ -115,6 +118,7 @@ public final class UiEvents {
             return;
         }
         if (stripped.startsWith("...") && stripped.endsWith("more")) return;
+        if (CHATTER.matcher(stripped).lookingAt()) return;
         wantFrame = true;
         add(Kind.STDERR, stripped);
     }

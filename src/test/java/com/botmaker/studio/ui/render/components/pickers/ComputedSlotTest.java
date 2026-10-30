@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.studio.core.ValueSlot;
+import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -10,6 +11,8 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,22 +32,36 @@ class ComputedSlotTest {
         return () -> expression;
     }
 
+    private static boolean computed(String argument) {
+        return PickerRegistry.computed(slot(argument), ResolvedType.UNKNOWN);
+    }
+
     @Test
     void aForLoopsConditionAndStepAreComputations() {
-        assertTrue(PickerRegistry.computed(slot("attempt < 5")));
-        assertTrue(PickerRegistry.computed(slot("attempt++")));
-        assertTrue(PickerRegistry.computed(slot("!found")));
-        assertTrue(PickerRegistry.computed(slot("attempt = 2")));
-        assertTrue(PickerRegistry.computed(slot("found ? 1 : 2")));
+        assertTrue(computed("attempt < 5"));
+        assertTrue(computed("attempt++"));
+        assertTrue(computed("!found"));
+        assertTrue(computed("attempt = 2"));
+        assertTrue(computed("found ? 1 : 2"));
+    }
+
+    /** {@code if (ImageWaiter.waitFor(…))} was drawn as an "Off" toggle (2026-10-30). */
+    @Test
+    void aCallWhereALiteralGoesIsAComputation() {
+        assertTrue(PickerRegistry.computed(slot("ImageWaiter.waitFor(Pictures.BATTLE)"), ResolvedType.BOOLEAN));
+        assertTrue(PickerRegistry.computed(slot("Navigate.press(Screens.HOME).done()"), ResolvedType.BOOLEAN));
+        assertTrue(PickerRegistry.computed(slot("(ImageWaiter.waitFor(Pictures.BATTLE))"), ResolvedType.BOOLEAN));
+        assertTrue(PickerRegistry.computed(slot("count()"), ResolvedType.INT));
+        assertTrue(PickerRegistry.computed(slot("name()"), ResolvedType.named("java.lang.String")));
     }
 
     @Test
     void aValueIsLeftToTheEditors() {
-        assertFalse(PickerRegistry.computed(slot("5")));
-        assertFalse(PickerRegistry.computed(slot("-5")));
-        assertFalse(PickerRegistry.computed(slot("true")));
-        assertFalse(PickerRegistry.computed(slot("Pictures.HOME")));
-        assertFalse(PickerRegistry.computed(slot("Duration.ofSeconds(3)")));
-        assertFalse(PickerRegistry.computed(ValueSlot.empty()));
+        assertFalse(computed("5"));
+        assertFalse(computed("-5"));
+        assertFalse(computed("true"));
+        assertFalse(computed("Pictures.HOME"));
+        assertFalse(PickerRegistry.computed(slot("Duration.ofSeconds(3)"), ResolvedType.of(Duration.class)));
+        assertFalse(PickerRegistry.computed(ValueSlot.empty(), ResolvedType.BOOLEAN));
     }
 }

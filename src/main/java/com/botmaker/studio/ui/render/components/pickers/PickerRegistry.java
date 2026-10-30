@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.studio.core.ValueSlot;
+import com.botmaker.studio.types.ResolvedType;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.ConditionalExpression;
@@ -9,7 +10,9 @@ import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.IVariableBinding;
 import org.eclipse.jdt.core.dom.InfixExpression;
 import org.eclipse.jdt.core.dom.InstanceofExpression;
+import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.NumberLiteral;
+import org.eclipse.jdt.core.dom.ParenthesizedExpression;
 import org.eclipse.jdt.core.dom.PostfixExpression;
 import org.eclipse.jdt.core.dom.PrefixExpression;
 import org.eclipse.jdt.core.dom.SimpleName;
@@ -98,7 +101,7 @@ public final class PickerRegistry {
      * and would shut a plugin out of its own type.
      */
     public static Node pickerNodeFor(PickerContext ctx) {
-        if (ctx != null && computed(ctx.arg())) return null;
+        if (ctx != null && computed(ctx.arg(), ctx.paramType())) return null;
         // A slot the canvas may not write gets a plugin's preview — a thumbnail, a swatch — or the plain
         // read-only node. Never an editor: one that opens a chooser and then has its write refused is worse
         // than none, and the host's own pickers here are all editors.
@@ -132,7 +135,7 @@ public final class PickerRegistry {
 
     /** Whether any picker applies to {@code ctx} (detection without building the node). */
     public static boolean hasPicker(PickerContext ctx) {
-        if (ctx != null && computed(ctx.arg())) return false;
+        if (ctx != null && computed(ctx.arg(), ctx.paramType())) return false;
         for (SpecialTypePicker picker : PICKERS) {
             if (picker.matches(ctx)) return true;
         }
@@ -147,11 +150,17 @@ public final class PickerRegistry {
      * Whether {@code arg} holds a computation rather than a value — {@code attempt < 5}, {@code attempt++},
      * {@code !found}, a local's name. No editor draws one: each claims its slot by type, so a {@code for}'s
      * condition was drawn as an "Off" toggle and its {@code attempt++} as a 0 field (2026-10-13). The
-     * expression's own block draws it instead. A negative number ({@code -5}) is still a value.
+     * expression's own block draws it instead. A negative number ({@code -5}) is still a value. So is a call
+     * in a slot of an object type ({@code Duration.ofSeconds(3)}), but not one where the slot takes a primitive or
+     * text, which only a literal is a value of: {@code if (ImageWaiter.waitFor(…))} was drawn as an "Off"
+     * toggle (2026-10-30).
      */
-    static boolean computed(ValueSlot arg) {
+    static boolean computed(ValueSlot arg, ResolvedType expected) {
         Expression node = arg == null ? null : arg.node();
         return switch (node) {
+            case ParenthesizedExpression inner -> computed(inner::getExpression, expected);
+            case MethodInvocation ignored -> expected != null
+                    && (expected.isPrimitive() || expected.isBoolean() || expected.isNumeric() || expected.isString());
             case InfixExpression ignored -> true;
             case PostfixExpression ignored -> true;
             case PrefixExpression prefix -> !(prefix.getOperator() == PrefixExpression.Operator.MINUS

@@ -8,8 +8,10 @@ import javafx.collections.FXCollections;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
@@ -30,6 +32,7 @@ import javafx.scene.input.TransferMode;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.testfx.util.WaitForAsyncUtils;
@@ -267,6 +270,15 @@ class UiToolsTest extends FxHeadlessTest {
     }
 
     @Test
+    void aLoggersInfoLineIsNoProblemButItsWarningIs() {
+        long before = UiEvents.last();
+        UiEvents.stderr("[qtp-90] INFO io.modelcontextprotocol.server.McpAsyncServer - Client initialize request");
+        UiEvents.stderr("[main] WARN org.eclipse.jetty.server.Server - port taken");
+        List<String> lines = UiEvents.after(before).stream().map(UiEvents.Event::text).toList();
+        assertEquals(List.of("[main] WARN org.eclipse.jetty.server.Server - port taken"), lines);
+    }
+
+    @Test
     void anUncaughtExceptionIsSummedUpWithItsCause() {
         long before = UiEvents.last();
         UiEvents.uncaught("JavaFX Application Thread",
@@ -350,6 +362,41 @@ class UiToolsTest extends FxHeadlessTest {
         ui.press(null, "item 251", MouseButton.PRIMARY, 2);
         assertEquals(1, doubled.get());
         assertEquals(251, UiTools.onFx(() -> list.getSelectionModel().getSelectedIndex()));
+    }
+
+    private record Commit(String sha, String title) {}
+
+    /** A row no cell is on reads as the list's cells draw it, not as its item's dump (2026-10-30, Versions). */
+    @Test
+    void aRowScrolledAwayReadsAsItsCellWouldDrawIt() {
+        ListView<Commit> list = new ListView<>(FXCollections.observableArrayList(
+                IntStream.range(0, 50).mapToObj(i -> new Commit("sha" + i, "Saved " + i)).toList()));
+        list.setPrefHeight(60);
+        list.setCellFactory(view -> new ListCell<>() {
+            @Override
+            protected void updateItem(Commit commit, boolean empty) {
+                super.updateItem(commit, empty);
+                setText(empty || commit == null ? null : "★ " + commit.title());
+            }
+        });
+        ComboBox<Commit> remote = new ComboBox<>(FXCollections.observableArrayList(new Commit("o", "origin")));
+        remote.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(Commit commit) {
+                return commit == null ? "" : commit.title() + " · up to date";
+            }
+
+            @Override
+            public Commit fromString(String text) {
+                return null;
+            }
+        });
+        remote.getSelectionModel().selectFirst();
+        add(new VBox(list, remote));
+        String read = UiTools.onFx(() -> new UiTools().read(null));
+        assertTrue(read.contains("row \"★ Saved 40\""), read);
+        assertTrue(read.contains("choice \"origin · up to date\""), read);
+        assertFalse(read.contains("Commit["), read);
     }
 
     @Test

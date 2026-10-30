@@ -45,7 +45,7 @@ final class NewProjectPlugins {
     private final Set<String> ticked = new LinkedHashSet<>();
     private final Runnable onChange;
     private List<PluginRegistry.Plugin> installable = List.of();
-    private boolean answered;
+    private StartingPoints.Fetch fetch = StartingPoints.Fetch.PENDING;
     private String botName = "";
     private Map<String, PublishedBotPlugins.Pin> botOwn = Map.of();
     private Map<String, PluginLock> locks = Map.of();
@@ -67,7 +67,7 @@ final class NewProjectPlugins {
         rows.whenComplete((plugins, failure) -> Platform.runLater(() -> {
             installable = plugins == null ? List.of()
                     : plugins.stream().filter(PluginRegistry.Plugin::isInstallable).toList();
-            answered = plugins != null;
+            fetch = plugins != null ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED;
             showCards();
         }));
     }
@@ -137,6 +137,16 @@ final class NewProjectPlugins {
                 : "No official plugins yet — show community plugins to see the rest.";
     }
 
+    /** The line in place of an empty grid: still asking, unreachable, or what the catalog's answer leaves out. */
+    static String whyEmpty(StartingPoints.Fetch fetch, boolean communityShown) {
+        return switch (fetch) {
+            case PENDING -> "Checking for plugins…";
+            case FAILED -> "No plugins listed — the catalog could not be reached. Add them later from Project ▸ "
+                    + "Plugins & Libraries.";
+            case ANSWERED -> emptyLine(communityShown);
+        };
+    }
+
     private void showCards() {
         // The ticks a hidden rank leaves out bring nothing: they are not picked either.
         List<PluginRegistry.Plugin> ranked = installable.stream().sorted(PluginRegistry.Plugin.RANKED).toList();
@@ -159,11 +169,7 @@ final class NewProjectPlugins {
             tiles.getChildren().stream().filter(n -> focusedId.equals(n.getUserData()) && n.isFocusTraversable())
                     .findFirst().ifPresent(Node::requestFocus);
         }
-        String why = !answered
-                ? "No plugins listed — the catalog could not be reached. Add them later from Project ▸ Plugins & "
-                + "Libraries."
-                : emptyLine(community.shown());
-        empty.setText(shown.isEmpty() ? why : "");
+        empty.setText(shown.isEmpty() ? whyEmpty(fetch, community.shown()) : "");
         empty.setVisible(shown.isEmpty());
     }
 

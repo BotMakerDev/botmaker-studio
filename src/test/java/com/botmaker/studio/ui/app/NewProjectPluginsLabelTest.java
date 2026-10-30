@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Each plugin card names the version the new project gets (a checklist row until 2026-10-24). */
 class NewProjectPluginsLabelTest {
@@ -24,6 +25,15 @@ class NewProjectPluginsLabelTest {
     void anOrdinaryCardShowsTheVerifiedVersion() {
         assertEquals("v1.2.3", NewProjectPlugins.version(plugin("sdk", "SDK", "1.2.3"), null));
         assertEquals("v0.1.1", NewProjectPlugins.version(plugin("basics", "Basics", "v0.1.1"), null));
+    }
+
+    /** Before the catalog answers, the grid says so; it said "could not be reached" until 2026-10-30. */
+    @Test
+    void anEmptyGridSaysWhetherTheCatalogIsStillAsked() {
+        assertEquals("Checking for plugins…", NewProjectPlugins.whyEmpty(StartingPoints.Fetch.PENDING, true));
+        assertTrue(NewProjectPlugins.whyEmpty(StartingPoints.Fetch.FAILED, true).contains("could not be reached"));
+        assertEquals(NewProjectPlugins.emptyLine(false),
+                NewProjectPlugins.whyEmpty(StartingPoints.Fetch.ANSWERED, false));
     }
 
     @Test

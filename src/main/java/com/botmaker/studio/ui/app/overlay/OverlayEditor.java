@@ -254,12 +254,16 @@ public final class OverlayEditor {
             return;
         }
         WatchedScreen watched = watchedNow(context, owner, session);
-        if (watched == null) watched = pickWindow(owner);
         if (watched == null) {
-            OverlayStyles.warn(owner, "The overlay editor docks beside the window the bot watches, and none is "
-                    + "open.\n\nOpen the app or game you're automating — start it with \"Launch Target\" if the "
-                    + "bot launches it — and try again.");
-            return;
+            // Cancelling the chooser closes it and nothing else; it said "none is open" until 2026-10-30.
+            List<String> candidates = OverlayWindowPicker.candidates(ScreenCaptureService.listWindowTitles());
+            if (candidates.isEmpty()) {
+                OverlayStyles.warn(owner, "The overlay editor docks beside the window the bot watches, and none "
+                        + "is open.\n\nOpen the app or game you're automating and try again.");
+                return;
+            }
+            watched = pickWindow(owner, candidates);
+            if (watched == null) return;
         }
         watched = watched.withFrames(pluginFrames(context, owner));
         OverlayEditor editor = new OverlayEditor(context, settings, capture, watched);
@@ -319,8 +323,12 @@ public final class OverlayEditor {
 
     /** Asks which open window to dock beside; null when cancelled or none is open. */
     private static WatchedScreen pickWindow(Window owner) {
-        String title = OverlayWindowPicker.ask(owner,
-                OverlayWindowPicker.candidates(ScreenCaptureService.listWindowTitles()));
+        return pickWindow(owner, OverlayWindowPicker.candidates(ScreenCaptureService.listWindowTitles()));
+    }
+
+    /** The window the user picks among {@code candidates}; null when they cancel. */
+    private static WatchedScreen pickWindow(Window owner, List<String> candidates) {
+        String title = OverlayWindowPicker.ask(owner, candidates);
         return title == null ? null : WatchedScreen.window(new TargetCapture.WindowRef(title), "\"" + title + "\"");
     }
 
