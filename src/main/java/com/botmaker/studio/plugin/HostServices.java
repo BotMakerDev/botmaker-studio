@@ -81,9 +81,17 @@ public final class HostServices implements StudioServices {
         return project == null ? Path.of("") : project.projectPath();
     }
 
+    /**
+     * The calling plugin's own folder of the resources, {@code plugins/<group>/<artifact>/} ({@link PluginOwners#folder},
+     * 2026-10-30): two plugins writing {@code images/} at the root wrote over each other's files. One instance serves
+     * every plugin, so the plugin is the one calling ({@link PluginHost#calling}); a call of the host's own answers
+     * the resources' root.
+     */
     @Override
     public Path resourcesDir() {
-        return project == null ? Path.of("") : project.resourcesRoot();
+        if (project == null) return Path.of("");
+        Path root = project.resourcesRoot();
+        return PluginHost.calling().map(plugin -> PluginOwners.folder(root, plugin.coordinate())).orElse(root);
     }
 
     @Override

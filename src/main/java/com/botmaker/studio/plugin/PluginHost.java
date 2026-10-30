@@ -163,6 +163,21 @@ public final class PluginHost {
     }
 
     /**
+     * The bound plugin calling the host now: the one whose class is nearest on this thread's stack; empty for a call
+     * the host makes itself. How a host facility answers each plugin its own ({@link PluginLogs}, a plugin's
+     * resources folder).
+     */
+    public static Optional<LoadedPlugin> calling() {
+        return CALLERS.walk(frames -> frames
+                .map(StackWalker.StackFrame::getDeclaringClass)
+                .map(PluginHost::pluginOwning)
+                .flatMap(Optional::stream)
+                .findFirst());
+    }
+
+    private static final StackWalker CALLERS = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+
+    /**
      * The bound plugin whose jar holds {@code type}, or empty for a class no plugin ships — the bot's own, the
      * JDK's, another library's. Decided by where the class was loaded from, not by its name: a jar is the
      * one thing two plugins cannot share, and the loader refuses a jar that declares two.

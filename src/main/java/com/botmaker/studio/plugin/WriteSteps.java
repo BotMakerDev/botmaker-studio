@@ -37,6 +37,7 @@ final class WriteSteps {
         private final Map<Path, String> before = new LinkedHashMap<>();
         private final Map<Path, String> after = new LinkedHashMap<>();
         private boolean checkpointed;
+        private List<String> types;
 
         private Step(String label) {
             this.label = label;
@@ -56,6 +57,21 @@ final class WriteSteps {
             if (checkpointed) return false;
             checkpointed = true;
             return true;
+        }
+
+        /**
+         * The bot's top-level types, read once a step (2026-10-30): a value write adds none, and reading them again
+         * after each write parsed the whole bot each time — a batch of 334 writes took over a minute. A write that
+         * creates a class forgets them ({@link #typesChanged}).
+         */
+        List<String> types(Supplier<List<String>> read) {
+            if (types == null) types = read.get();
+            return types;
+        }
+
+        /** A class was created: the next write reads the types again. */
+        void typesChanged() {
+            types = null;
         }
 
         /** The files that changed, as the history records them; a file written back to what it was is not one. */

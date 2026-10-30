@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.plugin.host.PluginCoordinate;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;
@@ -38,6 +39,14 @@ class PluginOwnersTest {
         for (String segment : segments) dir = dir.resolve(segment);
         Files.createDirectories(dir);
         Files.writeString(dir.resolve("parameters.json"), "{}");
+    }
+
+    @Test
+    void aPluginsFolderIsNamedAsItsHoldersPackage() {
+        assertEquals(resources.resolve("plugins/com_github_botmakerdev/botmaker_sdk"),
+                PluginOwners.folder(resources, new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk")));
+        assertEquals(resources.resolve("plugins/com_example/discord_bridge"),
+                PluginOwners.folder(resources, new PluginCoordinate("com.example", "discord-bridge")));
     }
 
     @Test

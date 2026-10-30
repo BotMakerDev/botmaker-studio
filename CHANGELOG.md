@@ -14,6 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- Each plugin gets its own folder of the resources: `StudioServices.resourcesDir()` answers
+  `src/main/resources/plugins/<group>/<artifact>/` for the plugin calling it (`PluginHost.calling`, the stack walk
+  the plugin log already did), so two plugins' `images/` no longer clash. *Plugins with data* recognises that folder
+  as the plugin's.
+- A plugin's batch of value writes (`History.batch`) reads the bot's top-level types once instead of re-parsing the
+  whole bot before each write: rewriting Firestone's 334 picture paths took 24.7 s instead of about 80 s.
+
 - A plugin's file is known by the plugin's mark on it, wherever it is: a holder written before 2026-10-27 in
   `plugins/sdk/` is locked and listed under *Managed by Studio* again, not taken for the bot's own code. A banner
   over the canvas offers to move such files into `plugins/<group>/<artifact>/`. The move takes a safety version,

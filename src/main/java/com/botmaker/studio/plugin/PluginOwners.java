@@ -1,7 +1,9 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.host.LoadedPlugin;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.project.managed.ManagedHolders;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -49,6 +51,16 @@ public final class PluginOwners {
 
     /** The directory every plugin's data lives under, inside a project's resources. */
     private static final String ROOT = "plugins";
+
+    /**
+     * {@code plugin}'s own folder of the resources under {@code resourcesRoot}: {@code plugins/<group>/<artifact>/},
+     * named as its holders' package ({@link ManagedHolders#segment}), so a plugin's Java and files sit under one name
+     * (2026-10-30). The root itself when the coordinate makes no package name.
+     */
+    public static Path folder(Path resourcesRoot, PluginCoordinate plugin) {
+        String segment = ManagedHolders.segment(plugin);
+        return segment == null ? resourcesRoot : resourcesRoot.resolve(ROOT).resolve(segment.replace('.', '/'));
+    }
 
     /** The ids of the plugins holding data in {@code config}'s project, in folder order. */
     public static List<String> owners(ProjectConfig config) {
@@ -112,13 +124,15 @@ public final class PluginOwners {
      * Whether a loaded plugin answers for the folder id {@code id}. A plugin has had no id since 2026-10-27; the
      * folder was its id, so a plugin claims it when the id is a package its class is in or under
      * ({@code com.botmaker.sdk} for {@code com.botmaker.sdk.plugin.SdkPlugin}), or when the id's last segment is
-     * the artifactId's last word ({@code com.botmaker.basics} for {@code botmaker-plugin-basics}).
+     * the artifactId's last word ({@code com.botmaker.basics} for {@code botmaker-plugin-basics}); and its own
+     * {@link #folder} by its coordinate ({@code com_github_botmakerdev.botmaker_sdk}).
      */
     private static boolean isLoaded(String id) {
         String last = id.substring(id.lastIndexOf('.') + 1);
         for (LoadedPlugin plugin : PluginHost.plugins()) {
             String artifact = plugin.coordinate().artifactId();
-            if (plugin.plugin().getClass().getName().startsWith(id + ".")
+            if (id.equals(ManagedHolders.segment(plugin.coordinate()))
+                    || plugin.plugin().getClass().getName().startsWith(id + ".")
                     || last.equalsIgnoreCase(artifact.substring(artifact.lastIndexOf('-') + 1))) return true;
         }
         return false;

@@ -188,7 +188,7 @@ public final class HostPluginValues implements PluginValues {
                 if (plan instanceof ManagedHolders.Plan.Refused refused) return Optional.of(refused.reason());
                 ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan;
                 try {
-                    ProjectWrites.create(config, write.file(), write.source(), "Create " + write.relative());
+                    create(write.file(), write.source(), "Create " + write.relative());
                 } catch (java.io.UncheckedIOException e) {
                     return Optional.of("Could not write " + write.relative() + ": " + e.getCause().getMessage());
                 }
@@ -252,7 +252,7 @@ public final class HostPluginValues implements PluginValues {
             }
             ManagedHolders.Plan.Write write = (ManagedHolders.Plan.Write) plan;
             try {
-                ProjectWrites.create(config, write.file(), write.source(), "Create " + write.relative());
+                create(write.file(), write.source(), "Create " + write.relative());
                 written.add(write.relative());
             } catch (java.io.UncheckedIOException e) {
                 System.err.println("Warning: could not write " + write.relative() + ": "
@@ -684,7 +684,7 @@ public final class HostPluginValues implements PluginValues {
             }
             checkpoint("Before: " + plan.summary());
             try {
-                ProjectWrites.create(config, file, plan.rewrites().get(file), plan.summary());
+                create(file, plan.rewrites().get(file), plan.summary());
             } catch (java.io.UncheckedIOException e) {
                 return new MethodWrite(null, "Could not write " + className + ".java: " + e.getCause().getMessage());
             }
@@ -847,12 +847,23 @@ public final class HostPluginValues implements PluginValues {
         return BotIndex.of(config, state);
     }
 
+    /** A new class's file written; inside a batch, the next write reads the bot's types again (WriteSteps.Step#types). */
+    private void create(Path file, String source, String label) {
+        ProjectWrites.create(config, file, source, label);
+        WriteSteps.Step open = WriteSteps.open();
+        if (open != null) open.typesChanged();
+    }
+
     /**
      * {@code value} as it may be written into any of the bot's files: a part a plugin hands over as the Java it
      * is written as, {@code Research::body}, imports its class, and a full name is written short (2026-10-13).
      */
     private JavaValue imported(JavaValue value) {
-        return ShortNames.imported(value, BotMethods.topLevelTypes(index()));
+        // Inside a plugin's batch, read once for all its writes (WriteSteps.Step#types).
+        WriteSteps.Step open = WriteSteps.open();
+        List<String> types = open == null ? BotMethods.topLevelTypes(index())
+                : open.types(() -> BotMethods.topLevelTypes(index()));
+        return ShortNames.imported(value, types);
     }
 
     private static String missing(String id, String member) {

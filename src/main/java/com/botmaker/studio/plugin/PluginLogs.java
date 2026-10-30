@@ -31,7 +31,6 @@ public final class PluginLogs {
     static final int KEPT = 500;
 
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
-    private static final StackWalker WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
     private static final Map<PluginCoordinate, Deque<Line>> LINES = new ConcurrentHashMap<>();
 
     /** How bad a line is. */
@@ -108,12 +107,7 @@ public final class PluginLogs {
     }
 
     private static Optional<LoadedPlugin> caller() {
-        return WALKER.walk(frames -> frames
-                .map(StackWalker.StackFrame::getDeclaringClass)
-                .filter(type -> type != PluginLogs.class && !type.getName().startsWith(PluginLogs.class.getName()))
-                .map(PluginHost::pluginOwning)
-                .flatMap(Optional::stream)
-                .findFirst());
+        return PluginHost.calling();
     }
 
     private static void write(Optional<LoadedPlugin> plugin, Level level, String message, Throwable cause) {
