@@ -8,7 +8,11 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.migrate.PluginRules;
+import com.botmaker.studio.nav.Refactor;
+import com.botmaker.studio.project.managed.HolderMove;
 import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.studio.services.BotSources;
+import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.PluginOwners;
 import com.botmaker.studio.services.LibraryService;
@@ -53,8 +57,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The application shell: it assembles the main window out of the panel managers, and releases what that window
@@ -103,6 +111,7 @@ public class UIManager implements ProjectWindow {
     private final StudioActions actions;
     /** Asked by the canvas's did-not-load banner for what the last re-resolve could not download. */
     private final LibraryService libraryService;
+    private final ClassFiles classFiles;
 
     // Theme management
     private Scene scene;
@@ -183,6 +192,7 @@ public class UIManager implements ProjectWindow {
         this.config = ctx.config();
         this.state = ctx.state();
         this.libraryService = ctx.libraryService();
+        this.classFiles = new ClassFiles(ctx);
 
         // Editor settings — the project's own, not a second one over the same (config, state, eventBus). The
         // capture service takes none of them: it holds no capture target, so a pick over several monitors
@@ -474,6 +484,9 @@ public class UIManager implements ProjectWindow {
         // What the last plugin change broke, under its own banner: read at open and after each change.
         checkBroken();
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> checkBroken(), true);
+        // A plugin's files in a folder it was written in before 2026-10-27, with the move one button away.
+        checkHolders();
+        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> checkHolders(), true);
         eventBus.subscribe(CoreApplicationEvents.MigrateRequestedEvent.class, e -> openMigrate(), true);
         eventBus.subscribe(CoreApplicationEvents.MigratedEvent.class, e -> {
             if (reviewPanel != null) reviewPanel.refresh();
@@ -751,6 +764,82 @@ public class UIManager implements ProjectWindow {
             reviewPanel.refresh();
             checkBroken();
         }, from -> openMigration(from, null));
+    }
+
+    /** Which read of {@link #checkHolders} is the newest: an older answer is dropped. */
+    private long holdersAsked;
+
+    /** While a move is planned or written, so a second press of the banner's button starts no second one. */
+    private boolean movingHolders;
+
+    /**
+     * Puts up or takes down the banner offering to move a plugin's files into the folder Studio writes them in
+     * ({@link HolderMove}). A move that would not compile offers nothing: the files are the plugin's where they are.
+     */
+    private void checkHolders() {
+        if (editorCanvas == null || state.isReaderMode() || PluginHost.pluginFiles().isEmpty()) {
+            if (editorCanvas != null) editorCanvas.showHolderMove("", () -> {});
+            return;
+        }
+        long asked = ++holdersAsked;
+        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Thread worker = new Thread(() -> {
+            String text;
+            try {
+                // Read without bindings first: the bound parse and the compile only when a file is outside.
+                Map<Path, String> sources = new LinkedHashMap<>();
+                BotSources.scan(config, state, sources::put);
+                text = !HolderMove.anyOutside(sources, PluginHost.pluginFiles()) ? ""
+                        : HolderMove.plan(index.get(), config, PluginHost.pluginFiles())
+                        .filter(Refactor.Planned.class::isInstance)
+                        .map(plan -> HolderMove.offer(config, (Refactor.Planned) plan)).orElse("");
+            } catch (RuntimeException | LinkageError e) {
+                text = "";
+            }
+            String found = text;
+            Platform.runLater(() -> {
+                if (asked == holdersAsked && editorCanvas != null) editorCanvas.showHolderMove(found, this::moveHolders);
+            });
+        }, "holder-check");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /** The banner's button: the move planned again over the buffers as they are now, a safety version first. */
+    private void moveHolders() {
+        if (movingHolders) return;
+        movingHolders = true;
+        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        ProjectState.Snapshot before = state.snapshot();
+        Thread worker = new Thread(() -> {
+            Optional<Refactor.Outcome> outcome;
+            try {
+                outcome = classFiles.planHolderMove(index.get(), before);
+            } catch (RuntimeException | LinkageError e) {
+                outcome = Optional.of(new Refactor.Refused("The move could not be planned: " + e.getMessage()));
+            }
+            Optional<Refactor.Outcome> planned = outcome;
+            Platform.runLater(() -> {
+                movingHolders = false;
+                switch (planned.orElse(null)) {
+                    case null -> { }
+                    case Refactor.Refused refused -> RefusalDialog.show(primaryStage, "The plugin files weren't moved",
+                            refused, Refactors.reveal(codeEditorService), fix -> { });
+                    case Refactor.Planned plan -> {
+                        try {
+                            ThemedWindows.alert(Alert.AlertType.INFORMATION, classFiles.applyHolderMove(plan)).show();
+                        } catch (IOException failed) {
+                            ThemedWindows.alert(Alert.AlertType.ERROR, "The move stopped "
+                                    + "part-way (" + failed.getMessage() + "). Versions has the project as it was "
+                                    + "before.").show();
+                        }
+                    }
+                }
+                checkHolders();
+            });
+        }, "holder-move");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     /** Which read of {@link #checkBroken} is the newest: an older answer is dropped. */

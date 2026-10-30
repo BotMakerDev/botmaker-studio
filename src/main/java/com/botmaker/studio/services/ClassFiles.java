@@ -5,12 +5,14 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.TypeDelete;
 import com.botmaker.studio.nav.TypeRename;
 import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.StudioContext;
+import com.botmaker.studio.project.managed.HolderMove;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -196,6 +198,7 @@ public final class ClassFiles {
                 Path path = rewrite.getKey();
                 Path to = plan.moves().get(path);
                 if (to != null) {
+                    Files.createDirectories(to.getParent());
                     Files.writeString(to, rewrite.getValue());
                     Files.delete(path);
                     state.removeFile(path);
@@ -246,6 +249,45 @@ public final class ClassFiles {
         changed();
         if (wasOpen) ctx.codeEditorService().switchToFile(config.entrySourceFile());
         return "Deleted " + at.getFileName() + ". Versions has a safety copy from before.";
+    }
+
+    /**
+     * Plans moving the plugins' holders outside their folders into it ({@link HolderMove}), and takes a safety
+     * version when it can be done; empty when every holder is in its folder. Worker thread; {@code before} taken
+     * on the FX thread.
+     */
+    public Optional<Refactor.Outcome> planHolderMove(BotIndex index, ProjectState.Snapshot before) {
+        Optional<Refactor.Outcome> outcome = HolderMove.plan(index, config, PluginHost.pluginFiles());
+        if (outcome.orElse(null) instanceof Refactor.Planned) {
+            Checkpoints.take(config.projectPath(), before, VersionOrigin.SAFETY, "Before moving the plugin files");
+        }
+        return outcome;
+    }
+
+    /** Writes a holder move like a rename, then removes each folder it left empty. FX thread. */
+    public String applyHolderMove(Refactor.Planned plan) throws IOException {
+        String said = applyRename(plan);
+        try {
+            removeEmptied(config.mainPackageDir(), plan.moves().keySet());
+        } catch (IOException kept) {
+            // Every file moved; an empty folder left behind is no reason to say the move failed.
+        }
+        return said;
+    }
+
+    /** Removes each folder under {@code root} that the files {@code moved} out of it left empty, then its empty parents. */
+    static void removeEmptied(Path root, Set<Path> moved) throws IOException {
+        Path stop = root.toAbsolutePath().normalize();
+        for (Path from : moved) {
+            // Several files leave one folder: the first removes it, the others find it gone.
+            for (Path dir = from.getParent(); dir != null && dir.startsWith(stop) && !dir.equals(stop)
+                    && Files.isDirectory(dir); dir = dir.getParent()) {
+                try (var entries = Files.list(dir)) {
+                    if (entries.findAny().isPresent()) break;
+                }
+                Files.delete(dir);
+            }
+        }
     }
 
     private void changed() {

@@ -16,6 +16,12 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
   - The bot list names a `.bmk` copy of Firestone "gamebot" (its pom's artifactId?).
   - `NewProjectPlugins` reuses `StartingPoints.Fetch`, whose display names speak of the gallery.
   - `ui press` reaches a window behind an open modal one (the 🎮 button with Plugins & Libraries open).
+  - `ui read` of the Versions tab's changed-files tree reads a row as `ChangedFile[label=plugins, …]`, not as drawn
+    (the list fix of 2026-10-30 covers lists only).
+- **Holders known by their mark** (2026-10-30, from its review): `LockResolver` reads a holder-named file outside its
+  folder from disk on the FX thread, while the explorer judges the buffer, so an unsaved mark can disagree; the move
+  parses each candidate a second time (syntax) beside the bound unit it has; the canvas's five banners are five
+  copies of one builder.
 - **Three tests fail at random under the full parallel gate and pass alone** (2026-10-27, one per
   `tools/gate-snapshot.sh --all` run): `ZoomPaneTest.zoomingInNarrowsTheLayoutAndGrowsTheDrawing` (content
   1200 wide, not 400: a layout before the 400-wide root applies), `TerminalViewTest` (`waitForScreen` times out)

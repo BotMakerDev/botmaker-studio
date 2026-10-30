@@ -147,7 +147,7 @@ final class ExplorerModel {
         if (name.endsWith(".java")) {
             if (FileRole.of(file) == FileRole.LIBRARY) return Kind.LIBRARY;
             if (file.equals(entryPoint)) return Kind.ENTRY_POINT;
-            if (PluginFiles.owner(file, holders).isPresent()) return Kind.PLUGIN_FILE;
+            if (PluginFiles.owner(file, source, holders).isPresent()) return Kind.PLUGIN_FILE;
             if (source != null && source.contains("@Param")) return Kind.PARAMETERS;
             return Kind.JAVA;
         }

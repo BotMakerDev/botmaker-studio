@@ -14,6 +14,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- A plugin's file is known by the plugin's mark on it, wherever it is: a holder written before 2026-10-27 in
+  `plugins/sdk/` is locked and listed under *Managed by Studio* again, not taken for the bot's own code. A banner
+  over the canvas offers to move such files into `plugins/<group>/<artifact>/`. The move takes a safety version,
+  rewrites each file's package and every import and qualified name that points at it, and refuses a move that
+  would stop the bot compiling.
+
 - A dev Studio's `ui` tool (`BOTMAKER_MCP_UI=1`) finds bugs as it drives. A press or a type waits until the
   windows hold still and says what changed: lines gained and lost, or a newly opened window read whole. Every
   answer ends with the errors Studio hit since the last one: uncaught exceptions and `stderr` lines, each with

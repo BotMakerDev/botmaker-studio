@@ -69,7 +69,7 @@ public record PluginHolders(Map<Path, String> files, List<String> references) {
     public static PluginHolders of(ProjectConfig config, ProjectState state, List<PluginFiles.Holder> holders) {
         if (config == null || holders.isEmpty()) return NONE;
         Map<Path, String> files = new LinkedHashMap<>();
-        BotSources.scan(config, state, (file, source) -> PluginFiles.owner(file, holders).ifPresent(holder -> {
+        BotSources.scan(config, state, (file, source) -> PluginFiles.owner(file, source, holders).ifPresent(holder -> {
             String pkg = packageOf(source);
             files.put(file, pkg.isEmpty() ? holder.className() : pkg + "." + holder.className());
         }));

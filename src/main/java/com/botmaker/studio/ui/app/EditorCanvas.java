@@ -369,6 +369,33 @@ final class EditorCanvas {
                 brokenBanner);
     }
 
+    /** Above the canvas while a plugin's files are outside the folder Studio writes them in; null otherwise. */
+    private HBox holderMoveBanner;
+
+    /**
+     * The move banner (2026-10-30): {@code text} says which plugin files are in an older folder, and its button
+     * moves them. An empty text takes it down.
+     */
+    void showHolderMove(String text, Runnable onMove) {
+        if (holderMoveBanner != null) {
+            column.getChildren().remove(holderMoveBanner);
+            holderMoveBanner = null;
+        }
+        if (text == null || text.isEmpty()) return;
+        Label msg = new Label(text);
+        msg.setWrapText(true);
+        msg.setMinWidth(0);
+        HBox.setHgrow(msg, Priority.ALWAYS);
+        Button move = new Button("Move them");
+        move.setMinWidth(Region.USE_PREF_SIZE);
+        move.setOnAction(e -> onMove.run());
+        holderMoveBanner = new HBox(10, msg, move);
+        holderMoveBanner.setAlignment(Pos.CENTER_LEFT);
+        holderMoveBanner.getStyleClass().add("missing-plugin-banner");
+        column.getChildren().add(column.getChildren().isEmpty() ? 0 : column.getChildren().size() - 1,
+                holderMoveBanner);
+    }
+
     /** The dev-mode banner's line, or {@code ""} when no dev build is bound. Pure, for the test. */
     static String devModeText(List<String> devBuilds) {
         if (devBuilds == null || devBuilds.isEmpty()) return "";
