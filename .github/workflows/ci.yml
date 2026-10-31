@@ -135,7 +135,7 @@ jobs:
   # headless, as on Linux.
   macos:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
 
@@ -179,7 +179,7 @@ jobs:
             platform: windows-x64
             javacpp: windows-x86_64
           # Apple Silicon only; no Intel Mac leg. The .dmg is unsigned (no Apple Developer account).
-          - os: macos-14
+          - os: macos-15
             platform: macos-arm64
             javacpp: macosx-arm64
             optional: true
