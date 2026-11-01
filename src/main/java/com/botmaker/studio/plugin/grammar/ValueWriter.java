@@ -225,11 +225,13 @@ final class ValueWriter {
         return Optional.of(chain);
     }
 
-    /** Whether {@code component}'s own parts build {@code value} back whole; plugin code that throws does not. */
+    /**
+     * Whether {@code component}'s own parts build {@code value} back whole ({@code ComponentType.rebuilds}); plugin
+     * code that throws, or was built against an older contract, does not.
+     */
     private static boolean keeps(ComponentType<?> component, Object value) {
         try {
-            List<Object> parts = component.componentsOf(value);
-            return parts != null && value.equals(component.build(parts));
+            return component.rebuilds(value);
         } catch (RuntimeException | LinkageError e) {
             return false;
         }

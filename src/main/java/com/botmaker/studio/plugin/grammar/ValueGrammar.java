@@ -542,20 +542,14 @@ public final class ValueGrammar {
     }
 
     /**
-     * The declaration that writes {@code value} as a {@code type}: the first of that class's that accepts it
-     * ({@code ComponentType.writes}), null when none does or the class has none.
+     * The declaration that writes {@code value} as a {@code type}, by the contract's one rule
+     * ({@code ComponentType.writer}: the first that accepts it and rebuilds it equal, else the first that accepts
+     * it), null when none does or the class has none.
      */
     ComponentType<?> writerOf(Class<?> type, Object value) {
         List<ComponentType<?>> all = type == null ? List.of()
                 : writersByName.getOrDefault(JavaNames.canonical(type), List.of());
-        for (ComponentType<?> each : all) {
-            try {
-                if (each.writesAny(value)) return each;
-            } catch (RuntimeException | LinkageError declined) {
-                // A plugin's predicate that throws, or a plugin built against an older contract, declines.
-            }
-        }
-        return null;
+        return ComponentType.writer(all, value);
     }
 
     /** The component that writes {@code type}, or {@code null}: the writer's registry. */

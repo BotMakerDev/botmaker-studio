@@ -10,6 +10,14 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- A class a plugin writes by several factories is written by the declaration that rebuilds the value equal,
+  else the first that accepts it (the contract's `ComponentType.writer`), so a plugin needs no `.when` to tell
+  `Hotkey.of(Key)` from `Hotkey.of(Combo)`.
+
 ## [1.11.0] — 2026-11-01
 
 ### Added
