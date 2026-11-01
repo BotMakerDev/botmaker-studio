@@ -153,6 +153,72 @@ class PluginRulesTest {
                 deprecatedJar, deprecatedSources, twinsJar, twinsSources, overreachJar, overreachSources).get(jar)));
     }
 
+    private static final String INPUT = """
+            package lib;
+            public interface Input {
+                Input leaving();
+                @Deprecated(forRemoval = true)
+                default Input leaves() { return leaving(); }
+            }
+            """;
+    private static final String BUTTON = """
+            package lib;
+            public record Button(boolean left) implements Input {
+                public static Button of() { return new Button(false); }
+                @Override
+                public Button leaving() { return new Button(true); }
+                @Override
+                @Deprecated(forRemoval = true)
+                public Button leaves() { return leaving(); }
+            }
+            """;
+    private static final String OVERRIDE_RULES = """
+            package lib;
+
+            import com.botmaker.plugin.api.meta.Migrate;
+
+            final class Migrations {
+                @Migrate(Input.class)
+                static Input leaves(@Migrate.Self Input self) {
+                    return self.leaving();
+                }
+
+                @Migrate(Button.class)
+                static Button leaves(@Migrate.Self Button self) {
+                    return self.leaving();
+                }
+            }
+            """;
+    private static final String OVERRIDE_BOT = """
+            package bot;
+
+            import lib.Button;
+            import lib.Input;
+
+            public class Bot {
+                static Button OK = Button.of().leaves();
+                static Input ANY = ((Input) Button.of()).leaves();
+            }
+            """;
+
+    /** A rule for an override is the override's, not ambiguous with the method it overrides (2026-11-01). */
+    @Test
+    void aRuleForAnOverrideTakesTheOwnersMethodNotTheOneItOverrides() throws IOException {
+        Map<String, String> classes = Map.of("Input", INPUT, "Button", BUTTON, "Migrations", OVERRIDE_RULES);
+        Path jar = plugin("overrides", classes);
+        Path sources = sources("overrides", classes);
+        BotIndex now = bot(OVERRIDE_BOT, NO_RULES, jar);
+        Migration migration = Migration.of(now, now.classpath(),
+                new PluginRules((at, coordinate) -> Optional.ofNullable(at.equals(jar) ? sources : null)));
+
+        assertEquals(2, migration.rules().size(), migration.rules().toString());
+        for (Rule rule : migration.rules()) assertNull(rule.problem(), rule.toString());
+        Refactor.Planned planned = assertInstanceOf(Refactor.Planned.class, migration.plan(false).outcome());
+        String bot = planned.rewrites().values().iterator().next();
+        assertTrue(bot.contains("Button.of().leaving()"), bot);
+        assertTrue(bot.contains("((Input) Button.of()).leaving()"), bot);
+    }
+
     @Test
     void aPluginsRuleCoversOnlyAnElementOfItsOwnThatItMarksDeprecated() throws IOException {
         BotIndex now = bot(NO_RULES, overreachJar);
@@ -300,9 +366,13 @@ class PluginRulesTest {
     // --- the fixture ----------------------------------------------------------------------------------------------
 
     private static BotIndex bot(String rules, Path pluginJar) throws IOException {
+        return bot(BOT, rules, pluginJar);
+    }
+
+    private static BotIndex bot(String botClass, String rules, Path pluginJar) throws IOException {
         Path root = Files.createTempDirectory(dir, "bot").resolve("src/main/java");
         Map<Path, String> sources = new LinkedHashMap<>();
-        sources.put(root.resolve("bot/Bot.java").toAbsolutePath().normalize(), BOT);
+        sources.put(root.resolve("bot/Bot.java").toAbsolutePath().normalize(), botClass);
         sources.put(root.resolve("bot/Migrations.java").toAbsolutePath().normalize(), rules);
         for (Map.Entry<Path, String> entry : sources.entrySet()) {
             Files.createDirectories(entry.getKey().getParent());

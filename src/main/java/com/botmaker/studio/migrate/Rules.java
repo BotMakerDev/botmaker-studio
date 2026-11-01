@@ -416,7 +416,13 @@ final class Rules {
         }
         Map<String, OldElement> byKey = new LinkedHashMap<>();
         matches.forEach(element -> byKey.putIfAbsent(element.key(), element));
-        List<OldElement> distinct = List.copyOf(byKey.values());
+        // A method the owner overrides is the owner's: Button.leaves() over Input.leaves(), as a call on a Button
+        // binds. Only the matches of the nearest type declaring one, the first found, are kept; two there are still
+        // ambiguous.
+        ITypeBinding nearest = matches.isEmpty() ? null : declaring.get(matches.getFirst().key());
+        List<OldElement> distinct = byKey.values().stream()
+                .filter(element -> declaring.get(element.key()) == nearest)
+                .toList();
         if (distinct.size() == 1) {
             String key = distinct.getFirst().key();
             return ownedBy(rule.resolved(distinct.getFirst()), declaring.get(key), deprecated.contains(key));

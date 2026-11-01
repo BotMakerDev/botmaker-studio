@@ -18,6 +18,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   else the first that accepts it (the contract's `ComponentType.writer`), so a plugin needs no `.when` to tell
   `Hotkey.of(Key)` from `Hotkey.of(Combo)`.
 
+### Fixed
+
+- A `@Migrate` rule for a method a class overrides (`Button.leaves()` over `Input.leaves()`) is no longer refused
+  as matching two elements: it takes the owner's own method, as a call on the owner binds.
+
 ## [1.11.0] — 2026-11-01
 
 ### Added
