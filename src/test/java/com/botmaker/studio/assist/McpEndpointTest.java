@@ -210,6 +210,8 @@ class McpEndpointTest {
         volatile Path dir;
         volatile Runnable onSnap = () -> {};
         volatile int filesChanged;
+        /** What the plugin's current fake_snap draws: changed, it stands for the plugin reloaded. */
+        volatile String snapShape = "square";
 
         @Override
         public Optional<Path> projectDir() {
@@ -223,10 +225,12 @@ class McpEndpointTest {
 
         @Override
         public List<PluginTool> pluginTools() {
+            // Read now, as a plugin's loader holds its tool: a reload makes a new one.
+            String shape = snapShape;
             AssistantTool<Snap> snap = AssistantTool.named("snap").describedAs("A square picture.")
                     .takes(Snap.class).handledBy((p, ctx) -> {
                         onSnap.run();
-                        return AgentReply.text("a " + p.size() + "px square")
+                        return AgentReply.text("a " + p.size() + "px " + shape)
                                 .and(AgentReply.image(new BufferedImage(p.size(), p.size(), BufferedImage.TYPE_INT_RGB)));
                     });
             List<PluginTool> tools = new ArrayList<>(List.of(new PluginTool("fake_snap", "Fake", snap),
@@ -658,6 +662,14 @@ class McpEndpointTest {
 
         JsonNode wrong = call("fake_snap", "{\"size\":\"big\"}");
         assertTrue(isError(wrong), wrong.toString());
+    }
+
+    /** A plugin reloaded since its tools were served answers as it is now: the served one's loader is closed. */
+    @Test
+    void aPluginToolCallReachesThePluginAsItIsNow() throws Exception {
+        initialize();
+        driver.snapShape = "circle";
+        assertEquals("a 2px circle", text(call("fake_snap", "{\"size\":2}")));
     }
 
     @Test

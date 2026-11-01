@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -313,11 +314,20 @@ public final class McpTools {
         for (StudioDriver.PluginTool owned : driver.pluginTools()) {
             String description = owned.tool().description() + " (from " + owned.pluginName() + ")";
             out.add(spec(json, owned.name(), description, schemaOf(owned.tool().schema()), request -> {
+                // The tool the plugins hold now, not the one served: a plugin reloaded, or another project opened,
+                // closes the loader the served one came from, and it failed on its first class not yet loaded
+                // (NoClassDefFoundError ToolTiming$Phase, 2026-11-01).
+                Optional<StudioDriver.PluginTool> live = driver.pluginTools().stream()
+                        .filter(t -> t.name().equals(owned.name())).findFirst();
+                if (live.isEmpty()) {
+                    return result(owned.name() + " is no longer served: its plugin was removed. List the tools again.",
+                            true);
+                }
                 AgentReply reply;
                 long before = rootChanged(driver);
                 try {
                     // One Project History version for the call, however many writes it makes.
-                    reply = ToolCalls.once(() -> owned.tool().invoke(arguments(request), driver.agentContext()));
+                    reply = ToolCalls.once(() -> live.get().tool().invoke(arguments(request), driver.agentContext()));
                 } catch (RuntimeException e) {
                     return result(owned.name() + " could not start: " + e.getMessage(), true);
                 } finally {

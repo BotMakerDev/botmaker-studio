@@ -10,6 +10,13 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Fixed
+
+- The assistant's plugin tools keep working after **Reload plugins** or opening another project. Each call reaches
+  the plugin as it is loaded now; before, a call failed with `NoClassDefFoundError` from the closed plugin's loader.
+
 ## [1.11.1] — 2026-11-01
 
 ### Added
