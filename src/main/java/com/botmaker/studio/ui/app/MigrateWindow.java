@@ -223,7 +223,8 @@ final class MigrateWindow {
     /** How far {@code broken}'s rule has got, as its row says it. */
     static String ruleText(Broken broken) {
         return switch (broken.state()) {
-            case NONE -> "none — Write rule";
+            case NONE -> broken.dropped() == null ? "none — Write rule"
+                    : "none, " + broken.dropped().text() + " — change its uses, or Write rule";
             case SEEDED -> broken.rule().qualified() + ", to write";
             case WRITTEN -> broken.rule().qualified() + from(broken.rule());
             case REFUSED -> broken.rule().qualified() + from(broken.rule()) + ": " + broken.rule().problem();
@@ -339,7 +340,8 @@ final class MigrateWindow {
     /** {@code broken}'s rule as the assistant reads it, with what to do next. */
     static String toolRuleText(Broken broken) {
         return switch (broken.state()) {
-            case NONE -> "no rule (seed)";
+            case NONE -> broken.dropped() == null ? "no rule (seed)"
+                    : "no rule, " + broken.dropped().text() + " (change its uses by hand, or seed)";
             case SEEDED -> "rule " + broken.rule().qualified() + " still seeded: write its body";
             case WRITTEN -> "rule " + broken.rule().qualified() + from(broken.rule())
                     + (broken.rule().shipped() ? " (read-only" + (seedable(broken)

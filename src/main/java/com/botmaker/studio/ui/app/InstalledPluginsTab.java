@@ -945,9 +945,11 @@ public final class InstalledPluginsTab {
             String plugin = moving.get(i).upgrades().displayName();
             for (Broken broken : reports.get(i).open()) {
                 String uses = broken.sites().size() + (broken.sites().size() == 1 ? " use" : " uses");
-                open.add(broken.element().display() + " (" + plugin + ", " + uses + ")");
-                // A seeded or refused rule is a rule: only an element none names takes a default seed.
-                if (broken.state() == Broken.State.NONE) silent.add(plugin);
+                open.add(broken.element().display() + " (" + plugin + ", " + uses
+                        + (broken.dropped() == null ? "" : ", " + broken.dropped().text()) + ")");
+                // A seeded or refused rule is a rule: only an element none names takes a default seed. A dropped
+                // one takes it too, but its plugin said why, so it is not silent.
+                if (broken.state() == Broken.State.NONE && broken.dropped() == null) silent.add(plugin);
             }
         }
         if (open.isEmpty()) return "";

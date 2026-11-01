@@ -102,9 +102,12 @@ public final class Migration {
         return rules;
     }
 
-    /** Every old element the bot still uses that the new jars break or a rule names. */
+    /**
+     * Every old element the bot still uses that the new jars break or a rule names, each with what its plugin says
+     * when it marked it {@code @Migrate.Dropped}.
+     */
     public List<Broken> broken() {
-        return Broken.in(now, old, probe, rules);
+        return Broken.in(now, old, probe, rules, binary -> shipping.nameOf(oldClasspath, binary));
     }
 
     /** Every use of {@code element} in the bot. */

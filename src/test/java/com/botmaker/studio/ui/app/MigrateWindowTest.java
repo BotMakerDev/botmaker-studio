@@ -78,6 +78,17 @@ class MigrateWindowTest {
     }
 
     @Test
+    void aDroppedElementSaysWhoDroppedItAndWhy() {
+        Broken dropped = new Broken(MARKER, List.of(site(3)), Broken.State.NONE, null,
+                new Broken.Dropped("BotMaker SDK", "one marker list now"));
+        assertEquals("none, dropped by BotMaker SDK: one marker list now — change its uses, or Write rule",
+                MigrateWindow.ruleText(dropped));
+        assertEquals("no rule, dropped by BotMaker SDK: one marker list now (change its uses by hand, or seed)",
+                MigrateWindow.toolRuleText(dropped));
+        assertTrue(MigrateWindow.seedable(dropped));
+    }
+
+    @Test
     void aPluginsRuleSaysWhoseItIsAndMayBeWrittenOver() {
         Rule shipped = new Rule(Path.of("lib/Migrations.java"), "Migrations", "marker", 0, Migrate.Kind.METHOD,
                 "com.bot.api.GameScreen", List.of(), List.of(), true, "self", false, "GameScreen", Set.of(),

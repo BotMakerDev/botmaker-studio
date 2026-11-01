@@ -158,6 +158,20 @@ public final class PluginRules {
         return sources.isEmpty() ? Shipped.NONE : new Shipped(sources, plugins);
     }
 
+    /**
+     * The name of the plugin on {@code classpath} whose jar declares {@code binaryName}, or {@code null}: who a
+     * {@code @Migrate.Dropped} element is dropped by. Reads only what {@link #of} already read for that classpath.
+     */
+    String nameOf(List<String> classpath, String binaryName) {
+        for (String entry : classpath) {
+            Key key = keyOf(Path.of(entry));
+            if (key == null) continue;
+            Plugin plugin = held(key).plugin();
+            if (plugin != null && plugin.declares(binaryName)) return plugin.name();
+        }
+        return null;
+    }
+
     private Held held(Key key) {
         long now = System.currentTimeMillis();
         return held.compute(key, (k, was) -> was == null || was.stale(now) ? read(k, now) : was);

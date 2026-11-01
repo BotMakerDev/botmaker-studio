@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- An element a plugin marked `@Migrate.Dropped("why")` says "dropped by <plugin>: <why>" in **Project ▸ Migrate…**,
+  in the assistant's migration list and in the upgrade question, beside each use the upgrade breaks.
+
 ### Changed
 
 - A class a plugin writes by several factories is written by the declaration that rebuilds the value equal,

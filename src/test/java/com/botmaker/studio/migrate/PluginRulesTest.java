@@ -315,6 +315,31 @@ class PluginRulesTest {
         assertEquals(Broken.State.REFUSED, migration.broken().getFirst().state());
     }
 
+    /** Release N marks {@code marker} dropped and ships no rule, nor a sources jar: the mark is in the class file. */
+    @Test
+    void anUpgradePastADroppedElementListsItsUsesWithThePluginsReason() throws IOException {
+        Path droppedJar = plugin("dropped", Map.of("Screen", SCREEN_DEPRECATED.replace(
+                "@Deprecated(forRemoval = true)", "@Deprecated(forRemoval = true)"
+                        + " @com.botmaker.plugin.api.meta.Migrate.Dropped(\"a screen has one marker list now\")")));
+        BotIndex now = bot(NO_RULES, removedJar);
+        Migration migration = Migration.of(now, List.of(droppedJar.toString(), contract), shipping());
+
+        List<Broken> broken = migration.broken();
+        assertEquals(1, broken.size(), broken.toString());
+        Broken marker = broken.getFirst();
+        assertEquals(Broken.State.NONE, marker.state());
+        assertEquals(1, marker.sites().size());
+        assertEquals(new Broken.Dropped("Fixture dropped", "a screen has one marker list now"), marker.dropped());
+        assertEquals("dropped by Fixture dropped: a screen has one marker list now", marker.dropped().text());
+    }
+
+    @Test
+    void anUnmarkedElementIsNotDropped() throws IOException {
+        BotIndex now = bot(NO_RULES, removedJar);
+        PluginRules none = new PluginRules((jar, coordinate) -> Optional.empty());
+        assertNull(Migration.of(now, List.of(deprecatedJar.toString(), contract), none).broken().getFirst().dropped());
+    }
+
     @Test
     void aPluginWithNoSourcesJarShipsNoRule() throws IOException {
         BotIndex now = bot(NO_RULES, removedJar);
