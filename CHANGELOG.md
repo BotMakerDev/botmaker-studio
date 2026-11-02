@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- The GitHub and Google account bars run one sign-in handshake (`ui/app/DeviceSignIn`), and `GoogleAuth` runs
+  shared's `oauth.DeviceFlow` and `Credentials` instead of its own copy of GitHub's. Nothing a user sees changes.
+
 ### Fixed
 
 - The assistant's plugin tools keep working after **Reload plugins** or opening another project. Each call reaches
