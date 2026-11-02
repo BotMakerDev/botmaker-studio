@@ -34,9 +34,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -227,8 +229,21 @@ public final class ManagedConstants {
          * the way javac would, through the file's imports ({@link SourceNames}), not matched by its spelling.
          */
         public Optional<Object> read(QualifiedName name) {
-            return constant(name).flatMap(constant -> constant.value(grammar, this));
+            return constant(name).flatMap(constant -> {
+                // A constant whose initialiser leads back to itself (X = Pictures.X) holds nothing: read on, it
+                // overflowed the stack on every read of the bot (2026-11-02).
+                Set<Constant> reading = READING.get();
+                if (!reading.add(constant)) return Optional.empty();
+                try {
+                    return constant.value(grammar, this);
+                } finally {
+                    reading.remove(constant);
+                }
+            });
         }
+
+        /** The constants this thread is reading the value of, the outermost first. */
+        private static final ThreadLocal<Set<Constant>> READING = ThreadLocal.withInitial(HashSet::new);
 
         @Override
         public Optional<Object> named(QualifiedName written) {

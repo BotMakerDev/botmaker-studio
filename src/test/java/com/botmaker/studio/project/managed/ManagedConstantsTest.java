@@ -125,6 +125,16 @@ class ManagedConstantsTest {
         assertEquals("Pictures.ORE", lookup.spell(new Picture("→ORE")).orElseThrow().source());
     }
 
+    /** A constant written as itself (2026-11-02, a picture recut at its place) reads as nothing, never overflows. */
+    @Test
+    void aConstantNamingItselfReadsAsNothing() {
+        String looped = PICTURES.replace("new " + name() + "(\"images/ore.png\")", "Pictures.ORE");
+        ManagedConstants.Lookup lookup = new ManagedConstants.Lookup(ManagedConstants.read(looped, KNOWN), GRAMMAR);
+
+        assertTrue(lookup.read(name("Pictures.ORE")).isEmpty());
+        assertEquals(new Picture("images/gold.png"), lookup.read(name("Pictures.GOLD")).orElseThrow());
+    }
+
     @Test
     void aValueEqualToAConstantIsWrittenAsTheConstant() {
         JavaValue written = lookup().spell(new Picture("images/gold.png")).orElseThrow();

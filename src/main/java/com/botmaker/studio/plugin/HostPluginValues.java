@@ -707,9 +707,9 @@ public final class HostPluginValues implements PluginValues {
     }
 
     /**
-     * The constant's initialiser as a value. No managed constants are offered to the context: a
-     * value equal to one would be written as that constant, and a constant's own initialiser naming itself
-     * does not compile.
+     * The constant's initialiser as a value. Every managed constant but itself is offered to the context: its
+     * value, equal to what it held, would be written as itself, {@code X = Pictures.X}, which holds nothing
+     * (2026-11-02, a picture recut at its own place).
      */
     public Optional<ValueContext> open(String id, String member) {
         return ManagedSets.member(index(), id, member, PluginHost.grammar())
@@ -717,7 +717,14 @@ public final class HostPluginValues implements PluginValues {
                 // The bot's constants too (2026-10-12): a flow names its activities as Activities.Collect.class,
                 // which nothing but them spells, so without them every flow with an activity was refused.
                 .map(found -> HostValueContext.of(found.form(), found.initializer(), services,
-                        expression -> writeInitializer(found, imported(expression)), this::constants));
+                        expression -> writeInitializer(found, imported(expression)),
+                        () -> constants().stream().filter(c -> !isItself(c, found)).toList()));
+    }
+
+    /** Whether {@code constant} is {@code member}: its field, of its class or of its nested enum. */
+    static boolean isItself(ManagedConstants.Constant constant, ManagedSets.Member member) {
+        return member.name().equals(constant.field()) && constant.simpleOwner().equals(
+                member.group() == null ? member.className() : member.className() + "." + member.group());
     }
 
     public Optional<String> add(String id, String member, Object value) {
