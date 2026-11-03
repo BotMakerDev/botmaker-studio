@@ -46,6 +46,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   class path its run channel (`onBotRun`) before `main`, and sends lines, a plugin's frames and its questions to
   Studio. Its log writer, Jackson and the wire load child-first from a second jar, so a bot's own versions never
   meet them. The call trace goes through the same log; the Trace tab still shows calls only with debugging on.
+- A plugin's run line keeps the values it carries (`TraceLine.values`) in the run's log, so the Reports tab and
+  `reports` can group by each as `plugin.<key>`. Studio reads no key. A bot whose contract predates them logs none.
 - A plugin's telemetry frame reaches its window without the wire's length prefix (`RunTelemetry.payload`).
 - The GitHub and Google account bars run one sign-in handshake (`ui/app/DeviceSignIn`), and `GoogleAuth` runs
   shared's `oauth.DeviceFlow` and `Credentials` instead of its own copy of GitHub's. Nothing a user sees changes.

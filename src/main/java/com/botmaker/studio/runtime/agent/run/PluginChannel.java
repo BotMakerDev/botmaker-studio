@@ -23,7 +23,7 @@ final class PluginChannel implements RunChannel {
     private final AgentRun run;
     private final String plugin;
 
-    private PluginChannel(AgentRun run, String plugin) {
+    PluginChannel(AgentRun run, String plugin) {
         this.run = run;
         this.plugin = plugin;
     }
@@ -57,7 +57,16 @@ final class PluginChannel implements RunChannel {
                 .orElse(null);
         run.accept(new LogLine(line.at().toEpochMilli(), Level.fromId(line.level().id()), line.source(),
                 line.text(), line.count(), rect, line.writerClass(), line.writerMethod(), line.className(),
-                line.line().orElse(-1)), cause, true);
+                line.line().orElse(-1), values(line)), cause, true);
+    }
+
+    /** The line's plugin values; none from a bot whose contract predates them. */
+    private static Map<String, String> values(TraceLine line) {
+        try {
+            return line.values();
+        } catch (NoSuchMethodError older) {
+            return Map.of();
+        }
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.botmaker.studio.runtime.agent.run;
 
+import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.runlog.RunLog;
 import com.botmaker.runlog.RunLogs;
 import com.botmaker.runlog.api.Level;
@@ -11,8 +12,11 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.IntStream;
 
@@ -68,6 +72,19 @@ class AgentRunTest {
         run.ended();
 
         assertEquals(List.of("held", "after"), texts(bot));
+    }
+
+    @Test
+    void aPluginsLineKeepsItsValuesInTheLog(@TempDir Path bot) {
+        AgentRun run = run(bot, false);
+        new PluginChannel(run, "com.example:p").line(new TraceLine(Instant.ofEpochMilli(1), TraceLine.Level.WARN,
+                "Screens", "stuck", 1, "x.Screens", "goTo", "com.example.Collect", OptionalInt.of(57),
+                Optional.empty(), Map.of("screen", "Title")), null);
+        run.ended();
+
+        LogLine kept = read(bot).lines().getFirst();
+        assertEquals(Map.of("screen", "Title"), kept.values());
+        assertEquals("Title", read(bot).report().occurrences().getFirst().value("plugin.screen"));
     }
 
     @Test

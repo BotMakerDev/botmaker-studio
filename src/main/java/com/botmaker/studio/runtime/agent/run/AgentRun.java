@@ -278,7 +278,7 @@ public final class AgentRun implements RunLines {
         }
         String text = cause == null ? line.text() : line.text() + "\n" + trace(cause);
         return new LogLine(line.atMillis(), line.level(), line.source(), text, line.count(), line.rect(),
-                line.writerClass(), line.writerMethod(), className, at);
+                line.writerClass(), line.writerMethod(), className, at, line.values());
     }
 
     /** The innermost frame of the bot's own classes on this thread. */
