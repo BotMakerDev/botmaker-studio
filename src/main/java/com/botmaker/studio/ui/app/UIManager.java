@@ -31,6 +31,7 @@ import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.services.ReviewService;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import com.botmaker.studio.services.ScreenCaptureService;
+import com.botmaker.studio.ui.app.reports.ReportsPanel;
 import com.botmaker.studio.ui.app.terminal.TerminalPane;
 import com.botmaker.studio.ui.app.versions.VersionsPane;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
@@ -152,6 +153,7 @@ public class UIManager implements ProjectWindow {
     private DebugPanel debugPanel;
     /** The Trace bottom tab: the running bot's debug lines. Built by {@link #createScene()}. */
     private TracePanel tracePanel;
+    private ReportsPanel reportsPanel;
     /** The Assistant bottom tab. Built with the window, so its conversation lasts as long as the window does. */
     private final AssistantPane assistantPane;
     /** The bottom tool window's tabs, keyed by the closed set so nothing selects one by index. */
@@ -272,6 +274,7 @@ public class UIManager implements ProjectWindow {
         }
         runConsole.dispose();
         if (tracePanel != null) tracePanel.dispose();
+        if (reportsPanel != null) reportsPanel.dispose();
         if (editorCanvas != null) editorCanvas.dispose();
         // Each shell is a child process of Studio; left running, every reload would add a few.
         terminalPane.dispose();
@@ -521,6 +524,8 @@ public class UIManager implements ProjectWindow {
         // A trace line lands the way a debug frame does: by its class's file and its line.
         if (tracePanel != null) tracePanel.dispose();
         tracePanel = new TracePanel(eventBus, config.projectPath(), config.sourceRoot(), projectSettingsService, navigation::revealLine);
+        if (reportsPanel != null) reportsPanel.dispose();
+        reportsPanel = new ReportsPanel(eventBus, config.projectPath(), config.sourceRoot(), navigation::revealLine);
         // The same pause, on the canvas: a value chip beside each live variable. It keeps itself subscribed.
         new LiveValues(eventBus, state);
         navigation.wire(menuBarManager, binding -> {
@@ -589,6 +594,7 @@ public class UIManager implements ProjectWindow {
         bottomTabs.clear();
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
         bottomTabs.put(BottomTab.TRACE, bottomTab(BottomTab.TRACE, tracePanel.node()));
+        bottomTabs.put(BottomTab.REPORTS, bottomTab(BottomTab.REPORTS, reportsPanel.node()));
         bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, terminalPane.node()));
         bottomTabs.put(BottomTab.ERRORS, bottomTab(BottomTab.ERRORS, diagnosticsPanel.node()));
         bottomTabs.put(BottomTab.USAGES, bottomTab(BottomTab.USAGES, usagesPanel.node()));

@@ -16,6 +16,8 @@ enum BottomTab {
     RUN("Run"),
     /** The running bot's debug lines, filtered and linked to their blocks — see {@link TracePanel} (2026-09-29). */
     TRACE("Trace"),
+    /** A bot's problems, from its runs here or its runners' issues, charted — see {@code ReportsPanel} (2026-11-03). */
+    REPORTS("Reports"),
     /** Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}. */
     TERMINAL("Terminal"),
     ERRORS("Errors"),

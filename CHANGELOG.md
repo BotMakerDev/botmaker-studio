@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added (Reports tab)
+
+- A **Reports** tab beside Trace charts a bot's problems, from its runs on this computer or from the issues its
+  runners sent: group by any dimension the reports name, totals per value stacked by level or a bar per day, warnings
+  or errors only. A bar lists its problems; a problem opens its bot line or its issues on GitHub.
+
 ### Added
 
 - **Reports at a run's end**: a ▶ Run that hit problems shows them, ticked, beside the exact issue text each would

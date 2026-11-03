@@ -33,9 +33,9 @@ import java.util.stream.Stream;
 /**
  * Past runs as an assistant reads them: one run's {@code run.jsonl} ({@code read_trace} with {@code run}) through
  * {@link RunLogs}, and the bot's reports ({@code reports}) through the CLI's {@code com.botmaker.cli.reports}, from
- * its GitHub issues or its run logs.
+ * its GitHub issues or its run logs. Public for {@link #signedIn()}, which the Reports tab reads GitHub through too.
  */
-final class PastRuns {
+public final class PastRuns {
 
     /** Where a project's runs are kept, one folder a run; the runlog's writer, named in full past assist's RunLog. */
     static final Path RUNS = com.botmaker.runlog.RunLog.FOLDER;
@@ -129,7 +129,7 @@ final class PastRuns {
     }
 
     /** GitHub as the signed-in Studio account reads it, anonymously when nobody is signed in. */
-    private static GitHubGet signedIn() {
+    public static GitHubGet signedIn() {
         GitHubClient client = new GitHubClient();
         String token = new GitHubAuth().token();
         return path -> {

@@ -106,7 +106,9 @@ public final class RunTelemetry {
         if (sourceRoot == null || className == null || className.isBlank()) return Optional.empty();
         int nested = className.indexOf('$');
         String topLevel = nested < 0 ? className : className.substring(0, nested);
-        Path file = sourceRoot.resolve(topLevel.replace('.', '/') + ".java");
+        Path file = sourceRoot.resolve(topLevel.replace('.', '/') + ".java").normalize();
+        // A class name read from a log or an issue is a runner's: an absolute one would resolve past the root.
+        if (!file.startsWith(sourceRoot.normalize())) return Optional.empty();
         return java.nio.file.Files.isRegularFile(file) ? Optional.of(file) : Optional.empty();
     }
 }
