@@ -65,6 +65,12 @@ jobs:
       # botmaker-plugin-toolkit was checked out here too, for the runtime-scope dependency Studio carried
       # for its bundled SdkPlugin. Both are gone (2026-09-02): a plugin brings its own toolkit at compile
       # scope, which is what the archetype generates and what botmaker-cli's `pom-scopes` check enforces.
+      - name: Check out botmaker-runlog
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-runlog
+          path: .deps/botmaker-runlog
+
       - name: Check out botmaker-shared
         uses: actions/checkout@v7
         with:
@@ -123,6 +129,7 @@ jobs:
           mvn_retry mvn -B -f .deps/botmaker-plugin-parent/pom.xml install
           mvn_retry mvn -B -f .deps/botmaker-plugin-archetype/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-cli/pom.xml install -DskipTests
+          mvn_retry mvn -B -f .deps/botmaker-runlog/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-shared/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-session/pom.xml install -DskipTests
 
@@ -149,7 +156,7 @@ jobs:
         run: |
           source .github/mvn-retry.sh
           for repo in botmaker-studio-api botmaker-plugin-host botmaker-plugin-toolkit botmaker-plugin-parent botmaker-plugin-archetype \
-                      botmaker-cli botmaker-shared botmaker-session; do
+                      botmaker-cli botmaker-runlog botmaker-shared botmaker-session; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -f ".deps/${repo}/pom.xml" install -DskipTests
           done
@@ -275,7 +282,7 @@ jobs:
         shell: bash
         run: |
           source .github/mvn-retry.sh
-          for repo in botmaker-studio-api botmaker-plugin-host botmaker-shared botmaker-session; do
+          for repo in botmaker-studio-api botmaker-plugin-host botmaker-runlog botmaker-shared botmaker-session; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -f ".deps/${repo}/pom.xml" install -DskipTests
           done
