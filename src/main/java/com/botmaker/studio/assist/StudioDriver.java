@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.studio.services.ClassFiles;
+import com.botmaker.studio.services.run.RunEntries;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -65,6 +66,9 @@ public interface StudioDriver {
 
     /** ▶ Run the bot, as the toolbar does. */
     String runBot();
+
+    /** ▶ Run {@code entry}, a plugin's declared run, instead of the bot's {@code main}, as its toolbar button does. */
+    String runEntry(RunEntries.Declared entry);
 
     /** ▶ Run {@code key}'s method on its own, through the plugin's trial entry. */
     String runActivity(String key);

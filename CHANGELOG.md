@@ -12,6 +12,15 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added (plugin runs)
+
+- **A plugin's declared runs** (`runs(MyRuns.class)`, contract 2026-11-03): each is a "▶ title" button at the end
+  of its plugin's tab, pressable while nothing runs, and `run_bot` takes `entry` (its title, case and spacing
+  aside). It runs as ▶ Run does — compile, version, run folder, telemetry, end-of-run dialog — with the entry's
+  class as the JVM's main and the bot's value-holder classes as its arguments (`services/run/RunEntries`,
+  `CodeExecutionService.Launch`). An unknown title is refused listing the declared ones; one title from two
+  plugins is refused naming both.
+
 ### Added (Reports tab)
 
 - **A run's log keeps what a plugin's views count**: with debugging off, an info line a plugin gave values is

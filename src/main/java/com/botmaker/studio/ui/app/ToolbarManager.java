@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.toolbar.ActionContext;
+import com.botmaker.plugin.api.toolbar.EnabledWhen;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -10,6 +11,7 @@ import com.botmaker.studio.plugin.HostActionContext;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.PluginHost.PluginBar;
 import com.botmaker.studio.services.ProjectSettingsService;
+import com.botmaker.studio.services.run.RunEntries;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -21,7 +23,9 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ToolbarManager {
 
@@ -178,7 +182,7 @@ public class ToolbarManager {
         for (ToolbarItem item : studioItems()) own.add(place(placed, ctx, item));
         OverflowBar studioRow = new OverflowBar(5, 5, 1, HPos.CENTER, own.toArray(Node[]::new));
 
-        List<PluginBar> bars = PluginTabs.ordered(PluginHost.barItemsByPlugin(), tabs());
+        List<PluginBar> bars = PluginTabs.ordered(withRuns(PluginHost.barItemsByPlugin()), tabs());
         Node centre = studioRow;
         if (!bars.isEmpty()) {
             List<Node> buttons = new ArrayList<>();
@@ -284,6 +288,27 @@ public class ToolbarManager {
     }
 
     /**
+     * {@code bars} with each plugin's declared runs ({@link RunEntries}) last on its tab, one "▶ title" button
+     * each, pressable while nothing runs; a plugin with runs and no buttons gets a tab for them (2026-11-03).
+     */
+    private List<PluginBar> withRuns(List<PluginBar> bars) {
+        Map<PluginCoordinate, PluginBar> byPlugin = new LinkedHashMap<>();
+        bars.forEach(bar -> byPlugin.put(bar.plugin(), bar));
+        for (RunEntries.Declared run : RunEntries.all()) {
+            PluginBar bar = byPlugin.get(run.plugin());
+            List<ToolbarItem> items = new ArrayList<>(bar == null ? List.of() : bar.items());
+            items.add(ToolbarItem.id("run:" + run.plugin() + ":" + run.title()).label("▶ " + run.title())
+                    .tooltip("Run " + run.title() + " instead of the bot's main")
+                    .onBar(Integer.MAX_VALUE)
+                    .enabledWhen(EnabledWhen.BOT_STOPPED)
+                    .onPress(() -> c -> eventBus.publish(
+                            new CoreApplicationEvents.EntryRunRequestedEvent(run.title(), run.mainClass()))));
+            byPlugin.put(run.plugin(), new PluginBar(run.plugin(), run.pluginName(), run.jar(), items));
+        }
+        return List.copyOf(byPlugin.values());
+    }
+
+    /**
      * The plugin tabs, most recent first: the project's, or this window's own while no project is open.
      */
     private List<String> tabs() {
@@ -309,7 +334,7 @@ public class ToolbarManager {
      * button would be, a plugin's selecting its tab first ({@link ActionFinder}).
      */
     public void findAction(Stage owner) {
-        List<PluginBar> bars = PluginTabs.ordered(PluginHost.barItemsByPlugin(), tabs());
+        List<PluginBar> bars = PluginTabs.ordered(withRuns(PluginHost.barItemsByPlugin()), tabs());
         ActionFinder.show(owner, ActionFinder.entries(studioItems(), bars), actionContext(), projectOpen(),
                 botRunning(), plugin -> {
                     // The tab already in front stays there; a rebuild would only redraw the same bar.

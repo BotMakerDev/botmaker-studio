@@ -8,6 +8,7 @@ import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.runtime.tryhost.TryHost;
 import com.botmaker.studio.services.trial.TrialCaller;
 import com.botmaker.studio.ui.app.reports.RunProblems;
@@ -22,6 +23,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 public class CodeExecutionService {
 
@@ -52,6 +54,24 @@ public class CodeExecutionService {
      */
     private final Thread shutdownHook = new Thread(this::killAll, "bot-process-reaper");
 
+    /**
+     * What a run's JVM starts: the bot's {@code main} (no {@code title}), or a plugin's declared run
+     * ({@link CoreApplicationEvents.EntryRunRequestedEvent}) with the bot's value holders as {@code args}.
+     */
+    public record Launch(String title, String mainClass, List<String> args) {
+
+        public Launch {
+            args = List.copyOf(args);
+        }
+
+        /** The command line's end: {@code -cp <classpath> <mainClass> <args…>}. */
+        public List<String> tail(String classpath) {
+            List<String> tail = new ArrayList<>(List.of("-cp", classpath, mainClass));
+            tail.addAll(args);
+            return tail;
+        }
+    }
+
     public CodeExecutionService(
             DiagnosticsManager diagnosticsManager,
             ProjectConfig config,
@@ -70,6 +90,8 @@ public class CodeExecutionService {
                 e -> compileCode(state.snapshot()), false);
         eventBus.subscribe(CoreApplicationEvents.ExecutionRequestedEvent.class,
                 e -> runCode(state.snapshot()), false);
+        eventBus.subscribe(CoreApplicationEvents.EntryRunRequestedEvent.class,
+                e -> runEntry(state.snapshot(), e.title(), e.mainClass()), false);
         eventBus.subscribe(CoreApplicationEvents.TrialRunRequestedEvent.class,
                 e -> tryCode(state.snapshot(), e.caller(), e.label()), false);
         eventBus.subscribe(CoreApplicationEvents.StopRunRequestedEvent.class,
@@ -100,7 +122,20 @@ public class CodeExecutionService {
      * for its whole life, which is also what makes "the console shows what this run compiled" true.
      */
     public void runCode(ProjectState.Snapshot snapshot) {
-        launch(snapshot, null, null);
+        // entryClassName(), not mainClassName(): the entry class is named after the project only in a
+        // project Studio created and the user has not renamed. One made from a published template
+        // keeps its author's class name, which is the whole point of a template arriving as shipped.
+        launch(snapshot, null, null, () -> new Launch(null, config.entryClassName(), List.of()));
+    }
+
+    /**
+     * Runs a plugin's declared run {@code title} as {@link #runCode} runs the bot — compile, version, run folder,
+     * telemetry, the end-of-run dialog — with {@code mainClass} as the JVM's main and the bot's value holders
+     * ({@link TrialCaller#holderBinaryNames}) as its arguments. Call it on the FX thread: the sources are read now.
+     */
+    public void runEntry(ProjectState.Snapshot snapshot, String title, String mainClass) {
+        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        launch(snapshot, null, null, () -> new Launch(title, mainClass, TrialCaller.holderBinaryNames(index.get())));
     }
 
     /**
@@ -111,10 +146,12 @@ public class CodeExecutionService {
      * @param label what is tried, for the status line
      */
     public void tryCode(ProjectState.Snapshot snapshot, TrialCaller.Source caller, String label) {
-        launch(snapshot, caller, label);
+        launch(snapshot, caller, label, null);
     }
 
-    private void launch(ProjectState.Snapshot snapshot, TrialCaller.Source trial, String label) {
+    /** {@code run} is what a run (not a try) starts, asked for off the FX thread once the compile passed. */
+    private void launch(ProjectState.Snapshot snapshot, TrialCaller.Source trial, String label,
+                        Supplier<Launch> run) {
         // Pre-compile block validation: a slot still waiting on one of the user's variables (a red "Choose a
         // variable…" chip) would only surface as a raw javac error. Detect it via BlockValidator, surface it in
         // the Errors panel, and abort before compiling. Always publish (an empty list clears any previously
@@ -181,13 +218,12 @@ public class CodeExecutionService {
                     return;
                 }
                 String classpath = buildRuntimeClasspath(snapshot);
+                // Before the version is taken: a launch that cannot be read is a run that never started.
+                Launch launch = run.get();
                 // The version that ran, so "go back to when it worked" has somewhere to go.
                 Checkpoints.take(config.projectPath(), VersionOrigin.AUTO, "Run");
-                // entryClassName(), not mainClassName(): the entry class is named after the project only in a
-                // project Studio created and the user has not renamed. One made from a published template
-                // keeps its author's class name, which is the whole point of a template arriving as shipped.
-                String mainClass = config.entryClassName();
-                status("Running... (Press Stop to terminate)");
+                status((launch.title() == null ? "Running" : "Running " + launch.title())
+                        + "... (Press Stop to terminate)");
                 if (cancelled.get()) {
                     status("Stopped before it started.");
                     return;
@@ -197,12 +233,12 @@ public class CodeExecutionService {
                 eventBus.publish(new CoreApplicationEvents.ProgramStartedEvent());
 
                 // Run the compiled main class directly:
-                // java [bot options] [session hand-off] -cp <classes:deps> <mainClass>
+                // java [bot options] [session hand-off] -cp <classes:deps> <mainClass> [args]
                 List<String> command = new ArrayList<>(List.of(config.javaExecutable()));
                 command.addAll(BotJvm.options(state.getSettings()));
                 command.addAll(BotJvm.runAgent(config, state.getSettings()));
                 command.addAll(sessionHandoffArguments());
-                command.addAll(List.of("-cp", classpath, mainClass));
+                command.addAll(launch.tail(classpath));
                 ProcessBuilder pb = new ProcessBuilder(command)
                         .directory(config.projectPath().toFile());
 

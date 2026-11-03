@@ -40,6 +40,7 @@ import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.services.overlay.OverlayTargets;
+import com.botmaker.studio.services.run.RunEntries;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.trial.TrialMenu;
@@ -221,6 +222,14 @@ final class StudioBridge implements StudioDriver {
         return onFx(() -> {
             ctx.eventBus().publish(new CoreApplicationEvents.ExecutionRequestedEvent());
             return "Starting the bot. run_state says when it runs; read_trace what it does.";
+        });
+    }
+
+    @Override
+    public String runEntry(RunEntries.Declared entry) {
+        return onFx(() -> {
+            ctx.eventBus().publish(new CoreApplicationEvents.EntryRunRequestedEvent(entry.title(), entry.mainClass()));
+            return "Starting " + entry.title() + ". run_state says when it runs; read_trace what it does.";
         });
     }
 

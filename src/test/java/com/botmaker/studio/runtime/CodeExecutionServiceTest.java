@@ -182,6 +182,17 @@ class CodeExecutionServiceTest extends FxHeadlessTest {
         h.service().close();
     }
 
+    /** A declared run is the JVM's main, the bot's value holders its arguments, after the classpath. */
+    @Test
+    void aLaunchPutsItsClassAndArgsLast() {
+        CodeExecutionService.Launch launch = new CodeExecutionService.Launch("Explore map",
+                "com.example.ExploreMap", List.of("com.mybot.Sdk", "com.mybot.Screens"));
+        assertEquals(List.of("-cp", "classes:deps", "com.example.ExploreMap", "com.mybot.Sdk", "com.mybot.Screens"),
+                launch.tail("classes:deps"));
+        assertEquals(List.of("-cp", "classes", "com.mybot.Bot"),
+                new CodeExecutionService.Launch(null, "com.mybot.Bot", List.of()).tail("classes"));
+    }
+
     // ---- Stopping ----
 
     @Test

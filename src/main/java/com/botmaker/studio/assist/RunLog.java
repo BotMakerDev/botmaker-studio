@@ -3,6 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.studio.events.CoreApplicationEvents.DebugSessionFinishedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.DebugSessionStartedEvent;
+import com.botmaker.studio.events.CoreApplicationEvents.EntryRunRequestedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.ExecutionRequestedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.OutputAppendedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.OutputClearedEvent;
@@ -103,6 +104,7 @@ public final class RunLog implements AutoCloseable {
         this.clock = clock;
         this.launching = launching;
         subscriptions.add(bus.subscribe(ExecutionRequestedEvent.class, e -> requested("the bot")));
+        subscriptions.add(bus.subscribe(EntryRunRequestedEvent.class, e -> requested(e.title())));
         subscriptions.add(bus.subscribe(TrialRunRequestedEvent.class, e -> requested(e.label())));
         subscriptions.add(bus.subscribe(ProgramStartedEvent.class, e -> started()));
         subscriptions.add(bus.subscribe(ProgramStoppedEvent.class, e -> stopped()));

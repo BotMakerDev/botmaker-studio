@@ -13,6 +13,7 @@ import com.botmaker.studio.plugin.HostHistory;
 import com.botmaker.studio.plugin.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectTemplate;
+import com.botmaker.studio.services.run.RunEntries;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -142,6 +143,7 @@ class McpEndpointTest {
         @Override public String moveCaret(String file, String blockId) { return "caret"; }
         @Override public String showArea(Area area, String label) { return "boxed"; }
         @Override public String runBot() { asked.add("run"); return "running"; }
+        @Override public String runEntry(RunEntries.Declared entry) { asked.add("entry " + entry.title()); return "running"; }
         @Override public String runActivity(String key) { asked.add("activity " + key); return "running"; }
         @Override public String tryStatement(String file, String blockId, Map<String, String> values) {
             asked.add("try " + blockId + " " + values);
@@ -689,6 +691,14 @@ class McpEndpointTest {
         };
         call("fake_snap", "{\"size\":1}");
         assertEquals(1, driver.filesChanged, "a new file at the root is listed");
+    }
+
+    @Test
+    void anUnknownEntryIsRefusedNamingTheDeclaredOnes() throws Exception {
+        initialize();
+        JsonNode refused = call("run_bot", "{\"entry\":\"Explore map\"}");
+        assertTrue(isError(refused) && text(refused).endsWith("Declared: none."), refused.toString());
+        assertTrue(driver.asked.isEmpty(), "nothing was started");
     }
 
     @Test

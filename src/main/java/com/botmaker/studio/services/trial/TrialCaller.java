@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 
 /**
  * The throwaway class ▶ Try runs: a {@code main} that hands one statement, and the locals it reads, to a plugin's
@@ -152,6 +153,18 @@ public final class TrialCaller {
      * {@code Bot.runFlow(…, Sdk.class)} — read off the bindings, in name order.
      */
     public static List<String> holders(BotIndex index) {
+        return holders(index, ITypeBinding::getQualifiedName);
+    }
+
+    /**
+     * {@link #holders}, by binary name ({@code Outer$Inner}): what a declared run's {@code main} receives and
+     * loads with {@code Class.forName}, where {@link #holders} is written into Java source.
+     */
+    public static List<String> holderBinaryNames(BotIndex index) {
+        return holders(index, ITypeBinding::getBinaryName);
+    }
+
+    private static List<String> holders(BotIndex index, Function<ITypeBinding, String> name) {
         if (index == null) return List.of();
         return index.read(units -> {
             Set<String> found = new TreeSet<>();
@@ -163,7 +176,7 @@ public final class TrialCaller {
                     for (IAnnotationBinding annotation : binding.getAnnotations()) {
                         ITypeBinding type = annotation.getAnnotationType();
                         if (ManagedIds.isMarker(type)) {
-                            found.add(binding.getDeclaringClass().getErasure().getQualifiedName());
+                            found.add(name.apply(binding.getDeclaringClass().getErasure()));
                         }
                     }
                     return false;

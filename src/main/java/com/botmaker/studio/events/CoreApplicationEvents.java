@@ -182,6 +182,11 @@ public class CoreApplicationEvents {
 
     public record CompilationRequestedEvent() implements ApplicationEvent {}
     public record ExecutionRequestedEvent() implements ApplicationEvent {}
+    /**
+     * Run a plugin's declared run {@code title} instead of the bot's {@code main} (2026-11-03): {@code mainClass}
+     * is the JVM's main, the bot's value holders its arguments. A run like ▶ Run's in every other way.
+     */
+    public record EntryRunRequestedEvent(String title, String mainClass) implements ApplicationEvent {}
     public record StopRunRequestedEvent() implements ApplicationEvent {}
     public record ProgramStartedEvent() implements ApplicationEvent {}
     public record ProgramStoppedEvent() implements ApplicationEvent {}
