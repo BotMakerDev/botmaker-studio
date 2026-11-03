@@ -8,6 +8,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,6 +35,13 @@ public final class TracedCalls {
     /** The longest a rendered argument or result may be. */
     private static final int MAX_VALUE = 80;
     private static final String UNTRACED = "com.botmaker.plugin.api.palette.Untraced";
+    private static final String READS_SCREEN = "com.botmaker.plugin.api.palette.ReadsScreen";
+    /**
+     * Around a result read off the screen: the run log's screen-text marker, {@code com.botmaker.runlog.ScreenText}
+     * (this half of the agent names nothing but the JDK; {@code TraceAgentTest} keeps the two equal).
+     */
+    static final char SCREEN_OPEN = '⁨';
+    static final char SCREEN_CLOSE = '⁩';
 
     private static final MethodHandle INVOKE;
 
@@ -54,8 +62,11 @@ public final class TracedCalls {
 
     private TracedCalls() {}
 
-    /** One traced method: what a line is written under, and whether there is a result to show. */
-    record Call(Class<?> owner, String method, boolean instance, boolean returnsVoid) {
+    /**
+     * One traced method: what a line is written under, whether there is a result to show, and whether that result
+     * was read off the screen ({@code @ReadsScreen}), marked so a report hides it.
+     */
+    record Call(Class<?> owner, String method, boolean instance, boolean returnsVoid, boolean readsScreen) {
         String source() {
             return owner.getNestHost().getSimpleName();
         }
@@ -82,11 +93,12 @@ public final class TracedCalls {
         MethodType declared = instance ? type.dropParameterTypes(0, 1) : type;
         MethodHandle target = (instance ? caller.findVirtual(owner, name, declared)
                 : caller.findStatic(owner, name, declared)).asFixedArity().asType(type);
-        if (untraced(owner, name, declared)) return new ConstantCallSite(target);
+        Set<String> marks = annotations(owner, name, declared);
+        if (marks.contains(UNTRACED)) return new ConstantCallSite(target);
         int arity = type.parameterCount();
         MethodHandle spread = target.asSpreader(Object[].class, arity)
                 .asType(MethodType.methodType(Object.class, Object[].class));
-        Call call = new Call(owner, name, instance, type.returnType() == void.class);
+        Call call = new Call(owner, name, instance, type.returnType() == void.class, marks.contains(READS_SCREEN));
         MethodHandle traced = MethodHandles.insertArguments(INVOKE, 0, call, spread)
                 .asCollector(Object[].class, arity)
                 .asType(type);
@@ -106,20 +118,21 @@ public final class TracedCalls {
         return result;
     }
 
-    private static boolean untraced(Class<?> owner, String name, MethodType declared) {
+    /** The binary names of the called method's annotations, none when it is not a public method of its class. */
+    private static Set<String> annotations(Class<?> owner, String name, MethodType declared) {
         try {
             Method method = owner.getMethod(name, declared.parameterArray());
-            for (Annotation annotation : method.getAnnotations()) {
-                if (annotation.annotationType().getName().equals(UNTRACED)) return true;
-            }
+            Set<String> names = new HashSet<>();
+            for (Annotation annotation : method.getAnnotations()) names.add(annotation.annotationType().getName());
+            return names;
         } catch (NoSuchMethodException | SecurityException | LinkageError e) {
             // Not a public method of the class itself: traced, as the plan asked.
+            return Set.of();
         }
-        return false;
     }
 
     private static void returned(Call call, Object[] args, Object result, long nanos) {
-        String text = call(call, args) + (call.returnsVoid() ? "" : " → " + render(result));
+        String text = call(call, args) + (call.returnsVoid() ? "" : " → " + result(call, result));
         Repeat repeat = REPEATS.get();
         synchronized (repeat) {
             if (call.equals(repeat.call) && text.equals(repeat.text)) {
@@ -202,6 +215,16 @@ public final class TracedCalls {
             text.append(render(args[i]));
         }
         return text.append(')').toString();
+    }
+
+    /**
+     * {@code result} rendered, inside the screen-text marker when the call read it off the screen; a marker the
+     * screen itself showed is dropped, so it cannot close the span early.
+     */
+    static String result(Call call, Object result) {
+        if (!call.readsScreen()) return render(result);
+        String text = render(result).replace(String.valueOf(SCREEN_OPEN), "").replace(String.valueOf(SCREEN_CLOSE), "");
+        return SCREEN_OPEN + text + SCREEN_CLOSE;
     }
 
     /** A value as its own {@code toString} says it, cut to {@value #MAX_VALUE} characters. */

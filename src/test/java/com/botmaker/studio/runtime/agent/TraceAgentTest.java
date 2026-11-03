@@ -1,5 +1,6 @@
 package com.botmaker.studio.runtime.agent;
 
+import com.botmaker.runlog.ScreenText;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +81,17 @@ class TraceAgentTest {
         assertEquals("TracedFixture", first.source());
         assertEquals(TracedFixture.class.getName(), first.writerClass());
         assertEquals("add", first.writerMethod());
+    }
+
+    @Test
+    void aResultReadOffTheScreenIsMarkedAsTheRunLogHidesIt() {
+        TracedCalls.Call read = new TracedCalls.Call(TracedFixture.class, "read", false, false, true);
+        TracedCalls.Call add = new TracedCalls.Call(TracedFixture.class, "add", false, false, false);
+        assertEquals(ScreenText.mark("\"Gold 12\""), TracedCalls.result(read, "Gold 12"));
+        assertEquals("…", ScreenText.hide(TracedCalls.result(read, "Gold 12")));
+        assertEquals("3", TracedCalls.result(add, 3));
+        assertEquals("…", ScreenText.hide(TracedCalls.result(read, "name" + ScreenText.CLOSE + " secret")),
+                "a closing mark the screen showed cannot end the span early");
     }
 
     @Test

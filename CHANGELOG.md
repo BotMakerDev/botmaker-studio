@@ -14,6 +14,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **A traced call's result read off the screen is marked** (`TracedCalls`, a method carrying `@ReadsScreen`):
+  the run log keeps it, and a report or export hides it as `…`.
 - **One run agent for every bot run** (`runtime.agent.RunAgent`, was the trace agent; `docs/refactor/40-run-trace.md`
   § One run agent). Each Run and Debug writes the run's `target/botmaker-runs/<run>/run.jsonl` (facts, then lines;
   with debugging off the last 50 debug and info lines before each warning or error), hands each plugin on the bot's
