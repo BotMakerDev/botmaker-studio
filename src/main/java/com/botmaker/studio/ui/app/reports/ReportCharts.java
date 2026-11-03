@@ -1,7 +1,9 @@
 package com.botmaker.studio.ui.app.reports;
 
 import com.botmaker.cli.reports.Reports;
+import com.botmaker.plugin.api.run.ReportView;
 import com.botmaker.runlog.api.Counts;
+import com.botmaker.runlog.api.Dimension;
 import com.botmaker.runlog.api.Level;
 import com.botmaker.runlog.api.Occurrence;
 import com.botmaker.runlog.api.Report;
@@ -34,6 +36,64 @@ final class ReportCharts {
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
 
     private ReportCharts() {
+    }
+
+    /** The dimensions {@code view} groups by that {@code report} names none of, by key; empty when it can be drawn. */
+    static List<String> missing(Report report, ReportView view) {
+        Set<String> named = report.dimensions().stream().map(Dimension::id).collect(Collectors.toSet());
+        List<String> keys = new ArrayList<>(List.of(view.dimension()));
+        view.against().ifPresent(keys::add);
+        return keys.stream().filter(k -> !named.contains(Dimension.plugin(k))).toList();
+    }
+
+    /**
+     * {@code reports} as {@code view} counts them: its problems, or every line carrying its value; at its one level
+     * if it names one; each weighing the number its line carries under the view's weight, when it names one (a line
+     * with no whole number above zero there is left out).
+     */
+    static Reports viewed(Reports reports, ReportView view) {
+        Report report = reports.report();
+        List<Occurrence> counted = new ArrayList<>(report.occurrences());
+        String dimension = Dimension.plugin(view.dimension());
+        if (view.lines() == ReportView.Lines.EVERY_LINE) {
+            counted.addAll(report.lines());
+            counted.removeIf(o -> !o.values().containsKey(dimension)
+                    || view.against().filter(to -> !o.values().containsKey(Dimension.plugin(to))).isPresent());
+        }
+        view.level().ifPresent(level -> counted.removeIf(o -> !o.level().id().equals(level.id())));
+        List<Occurrence> weighed = view.weight().map(key -> counted.stream()
+                .map(o -> weighed(o, Dimension.plugin(key))).flatMap(Optional::stream).toList()).orElse(counted);
+        return new Reports(reports.source(), new Report(report.dimensions(), weighed), reports.issues(),
+                reports.notes());
+    }
+
+    private static Optional<Occurrence> weighed(Occurrence o, String key) {
+        long n;
+        try {
+            n = Long.parseLong(o.value(key).trim());
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+        if (n <= 0) return Optional.empty();
+        // A line said k times in a row weighs k times its number; the sums saturate (Counts.add).
+        long weight = n > Integer.MAX_VALUE / o.count() ? Integer.MAX_VALUE : n * o.count();
+        return Optional.of(new Occurrence(o.time(), o.level(), o.fingerprint(), (int) weight, o.values()));
+    }
+
+    /**
+     * A grid of counts: a row per value of {@code rows}, a column per value of {@code columns}, each the {@code most}
+     * most met; for a view drawn {@linkplain ReportView#against against} a second value.
+     */
+    static Heat grid(Report report, String rows, String columns, int most) {
+        List<String> top = Counts.by(report, rows).stream().limit(most).map(Counts.Count::value).toList();
+        List<String> across = Counts.by(report, columns).stream().limit(most).map(Counts.Count::value).toList();
+        Map<String, Map<String, Integer>> cells = new HashMap<>();
+        for (Occurrence o : report.occurrences()) {
+            cells.computeIfAbsent(o.value(rows), k -> new HashMap<>()).merge(o.value(columns), o.count(), Counts::add);
+        }
+        List<List<Integer>> counts = top.stream().map(r -> across.stream()
+                .map(c -> cells.getOrDefault(r, Map.of()).getOrDefault(c, 0)).toList()).toList();
+        return new Heat(top, across, counts);
     }
 
     /** One bar's part: {@code count} of a series at {@code category}. */

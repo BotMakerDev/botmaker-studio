@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The Reports tab, smoke: a week of fake problems drawn, a bar listing its problems. With {@code BM_REPORTS_SHOTS}
@@ -50,7 +51,8 @@ class ReportsPanelTest extends FxHeadlessTest {
     public void start(Stage stage) {
         panel = new ReportsPanel(Path.of("/nowhere"), (file, line) -> { },
                 Optional.of(new ReportTarget("LiQiyeDev", "firestone-bot")),
-                ReportChartsTest::week, t -> ReportChartsTest.week());
+                ReportChartsTest::week, t -> ReportChartsTest.week(),
+                () -> List.of(ReportChartsTest.PER_SCREEN, ReportChartsTest.MOVES));
         root = new StackPane(panel.node());
         scene = new Scene(root, 1200, 420);
         ThemedWindows.addStylesheet(scene);
@@ -67,6 +69,10 @@ class ReportsPanelTest extends FxHeadlessTest {
         WaitForAsyncUtils.waitFor(5, TimeUnit.SECONDS, () -> root.lookup(".chart") != null);
         return (StackedBarChart<?, ?>) root.lookup(".chart");
     }
+
+    private static final int VIEW = 1;
+    private static final int GROUP_BY = 2;
+    private static final int KIND = 3;
 
     @SuppressWarnings("unchecked")
     private <T> ComboBox<T> combo(int index) {
@@ -94,7 +100,7 @@ class ReportsPanelTest extends FxHeadlessTest {
     @Test
     void everyKindDrawsAndItsValuesPick() throws Exception {
         chart();
-        onFx(() -> combo(1).getSelectionModel().select(0)); // Bot line
+        onFx(() -> combo(GROUP_BY).getSelectionModel().select(0)); // Bot line
         String daily = "com.firestone.Daily:42";
 
         kind(ReportsPanel.Kind.LINES);
@@ -130,8 +136,41 @@ class ReportsPanelTest extends FxHeadlessTest {
         assertFalse(panel.rowsShown().isEmpty());
     }
 
+    @Test
+    void aPluginsViewIsDrawnOrSaysWhatTheReportsLack() throws Exception {
+        chart();
+        ComboBox<ReportsPanel.View> views = combo(VIEW);
+        assertEquals(List.of("Any dimension", "Problems per screen", "Failed moves"),
+                views.getItems().stream().map(ReportsPanel.View::title).toList());
+
+        onFx(() -> views.getSelectionModel().select(2)); // Failed moves, over a week that names no screen
+        Label lacking = (Label) chartHolderChild();
+        assertTrue(lacking.getText().contains("from and to"), lacking.getText());
+        assertTrue(combo(KIND).isDisabled());
+
+        onFx(() -> panel.show(ReportChartsTest.screens()));
+        assertEquals("Failed moves", views.getValue().title(), "a reload keeps the view");
+        GridPane grid = (GridPane) root.lookup(".reports-heatmap");
+        assertNotNull(grid);
+        Node titleToHome = grid.getChildren().stream()
+                .filter(n -> GridPane.getRowIndex(n) == 1 && GridPane.getColumnIndex(n) == 1).findFirst().orElseThrow();
+        assertEquals("2", ((Label) titleToHome).getText());
+        clickOn(titleToHome);
+        assertEquals("Title", panel.pickedValue());
+        assertEquals(1, panel.rowsShown().size(), "the warning on Title is not this view's");
+
+        onFx(() -> views.getSelectionModel().select(0));
+        assertFalse(combo(KIND).isDisabled());
+    }
+
+    private Node chartHolderChild() {
+        return root.lookupAll(".label").stream()
+                .filter(n -> n instanceof Label l && l.getText() != null && l.getText().startsWith("“"))
+                .findFirst().orElseThrow();
+    }
+
     private void kind(ReportsPanel.Kind kind) {
-        onFx(() -> combo(2).getSelectionModel().select(kind));
+        onFx(() -> combo(KIND).getSelectionModel().select(kind));
     }
 
     /** Pictures of every kind, light and dark, when asked for. */
@@ -146,7 +185,7 @@ class ReportsPanelTest extends FxHeadlessTest {
             });
             for (ReportsPanel.Kind kind : ReportsPanel.Kind.values()) {
                 boolean overDays = kind == ReportsPanel.Kind.BARS_BY_DAY || kind == ReportsPanel.Kind.LINES;
-                onFx(() -> combo(1).getSelectionModel().select(overDays ? 3 : 0)); // Flow over days, else Bot line
+                onFx(() -> combo(GROUP_BY).getSelectionModel().select(overDays ? 3 : 0)); // Flow over days, else Bot line
                 kind(kind);
                 onFx(() -> panel.pick(overDays ? "Map" : "com.firestone.Daily:42"));
                 snap(out.resolve(kind.name().toLowerCase().replace('_', '-') + "-"

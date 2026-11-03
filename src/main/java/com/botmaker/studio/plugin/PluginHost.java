@@ -5,6 +5,7 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.run.Readiness;
+import com.botmaker.plugin.api.run.ReportView;
 import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.plugin.api.slot.SlotEditor;
 import com.botmaker.plugin.api.source.ManagedValue;
@@ -34,6 +35,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -764,6 +766,30 @@ public final class PluginHost {
             if (least == null || said.get().level().compareTo(least.level()) > 0) least = said.get();
         }
         return Optional.ofNullable(least);
+    }
+
+    /**
+     * Every bound plugin's report views, in plugin order; one whose title an earlier plugin's view took is
+     * dropped, and a plugin that cannot list its views (one built on an older contract included) costs only itself.
+     */
+    public static List<ReportView> reportViews() {
+        return mergeReportViews(plugins);
+    }
+
+    static List<ReportView> mergeReportViews(List<LoadedPlugin> set) {
+        Map<String, ReportView> byTitle = new LinkedHashMap<>();
+        for (LoadedPlugin plugin : set) {
+            List<ReportView> offered;
+            try {
+                offered = plugin.plugin().reportViews();
+            } catch (RuntimeException | LinkageError e) {
+                System.err.println("Warning: " + plugin.coordinate() + " could not offer report views: " + e);
+                continue;
+            }
+            if (offered == null) continue;
+            offered.stream().filter(Objects::nonNull).forEach(v -> byTitle.putIfAbsent(v.title(), v));
+        }
+        return List.copyOf(byTitle.values());
     }
 
     static List<OwnedPart> mergeRunOverlayParts(List<LoadedPlugin> set) {

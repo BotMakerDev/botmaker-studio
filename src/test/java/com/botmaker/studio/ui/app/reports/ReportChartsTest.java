@@ -1,6 +1,8 @@
 package com.botmaker.studio.ui.app.reports;
 
 import com.botmaker.cli.reports.Reports;
+import com.botmaker.plugin.api.TraceLine;
+import com.botmaker.plugin.api.run.ReportView;
 import com.botmaker.runlog.api.Dimension;
 import com.botmaker.runlog.api.Level;
 import com.botmaker.runlog.api.Occurrence;
@@ -187,5 +189,65 @@ class ReportChartsTest {
         ReportCharts.Row row = ReportCharts.rows(week(), "botLine", "com.firestone.Map:77").getFirst();
 
         assertEquals("Error · Map:77 · Flow.go ×4 #3 #19", ReportsPanel.rowText(row));
+    }
+
+    static final ReportView PER_SCREEN = ReportView.of("Problems per screen", ReportView.Chart.BARS, "screen");
+    static final ReportView MOVES = ReportView.of("Failed moves", ReportView.Chart.HEATMAP, "from").against("to")
+            .only(TraceLine.Level.ERROR);
+    static final ReportView TIME = ReportView.of("Time on screens", ReportView.Chart.DONUT, "screen")
+            .counting(ReportView.Lines.EVERY_LINE).weighedBy("millis");
+
+    private static Occurrence screen(Level level, int count, Map<String, String> values) {
+        return new Occurrence(DAY1, level, "com.x.Bot:1|com.x.Screens.goTo|" + level.id(), count, values);
+    }
+
+    /** A run's problems and lines as a plugin's values label them: screens, moves, time. */
+    static Reports screens() {
+        List<Dimension> dims = List.of(new Dimension("botLine", "Bot line"), new Dimension("plugin.screen", "screen"),
+                new Dimension("plugin.from", "from"), new Dimension("plugin.to", "to"),
+                new Dimension("plugin.millis", "millis"));
+        List<Occurrence> problems = List.of(
+                screen(Level.ERROR, 2, Map.of("plugin.screen", "Title", "plugin.from", "Title", "plugin.to", "Home")),
+                screen(Level.ERROR, 1, Map.of("plugin.screen", "Shop", "plugin.from", "Shop", "plugin.to", "Home")),
+                screen(Level.WARN, 4, Map.of("plugin.screen", "Title", "plugin.from", "Title", "plugin.to", "Home")),
+                screen(Level.WARN, 1, Map.of("botLine", "com.x.Bot:9")));
+        List<Occurrence> lines = List.of(
+                screen(Level.INFO, 1, Map.of("plugin.screen", "Home", "plugin.millis", "9000")),
+                screen(Level.INFO, 1, Map.of("plugin.screen", "Title", "plugin.millis", "3000")),
+                screen(Level.INFO, 1, Map.of("plugin.screen", "Shop", "plugin.millis", "soon")),
+                screen(Level.INFO, 2, Map.of("plugin.screen", "Shop", "plugin.millis", "1000")),
+                screen(Level.INFO, 1, Map.of("plugin.screen", "Big", "plugin.millis", "9999999999")),
+                screen(Level.INFO, 1, Map.of("plugin.screen", "Big", "plugin.millis", "9999999999")));
+        return new Reports("runs", new Report(dims, problems, lines), Map.of(), List.of());
+    }
+
+    @Test
+    void aViewCountsItsProblemsOrItsLinesWeighed() {
+        Report problems = ReportCharts.viewed(screens(), PER_SCREEN).report();
+        assertEquals(List.of("Title", "Shop", "unknown"), ReportCharts.totals(problems, "plugin.screen", 15)
+                .categories());
+
+        Report time = ReportCharts.viewed(screens(), TIME).report();
+        assertEquals(List.of(new ReportCharts.Slice("Big", Integer.MAX_VALUE, false),
+                        new ReportCharts.Slice("Home", 9000, false), new ReportCharts.Slice("Title", 3000, false),
+                        new ReportCharts.Slice("Shop", 2000, false)),
+                ReportCharts.share(time, "plugin.screen", 6),
+                "a line said twice weighs twice, a huge sum holds at the most, a line with no number adds nothing");
+    }
+
+    @Test
+    void aGridViewCountsOneValueAgainstAnother() {
+        Report errors = ReportCharts.viewed(screens(), MOVES).report();
+        ReportCharts.Heat grid = ReportCharts.grid(errors, "plugin.from", "plugin.to", 15);
+
+        assertEquals(List.of("Title", "Shop"), grid.values());
+        assertEquals(List.of("Home"), grid.days());
+        assertEquals(List.of(List.of(2), List.of(1)), grid.counts(), "the warning is not counted");
+    }
+
+    @Test
+    void aViewSaysWhichOfItsKeysTheReportsLack() {
+        assertEquals(List.of(), ReportCharts.missing(screens().report(), MOVES));
+        assertEquals(List.of("from", "to"), ReportCharts.missing(week().report(), MOVES));
     }
 }

@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app.reports;
 import com.botmaker.cli.reports.IssueReports;
 import com.botmaker.cli.reports.Reports;
 import com.botmaker.cli.reports.RunReports;
+import com.botmaker.plugin.api.run.ReportView;
 import com.botmaker.runlog.ReportTarget;
 import com.botmaker.runlog.RunLog;
 import com.botmaker.runlog.api.Dimension;
@@ -10,6 +11,7 @@ import com.botmaker.runlog.api.Level;
 import com.botmaker.studio.assist.PastRuns;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.RunTelemetry;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
@@ -66,8 +68,8 @@ import java.util.function.Supplier;
  * The Reports tab (run reports spec §5): a bot's problems, from its runs on this computer or from the issues its
  * runners sent, grouped by one of the dimensions the reports name (Studio knows none) — a bar per value stacked by
  * level, a bar per day stacked by value, lines over the days, a value × day heatmap, a donut of shares or a sortable
- * table ({@link Kind}). A bar, point, cell, slice or row lists its problems; a problem opens its bot line or its
- * issues.
+ * table ({@link Kind}). A loaded plugin's {@link ReportView}, picked by title, sets all three over its own line
+ * values. A bar, point, cell, slice or row lists its problems; a problem opens its bot line or its issues.
  *
  * <p>Issue titles and values are written by runners: shown as text, never acted on.
  */
@@ -128,17 +130,28 @@ public final class ReportsPanel {
         }
     }
 
+    /** What the View picker offers: today's any dimension, or one of a plugin's views. */
+    record View(ReportView view) {
+        static final View ANY = new View(null);
+
+        String title() {
+            return view == null ? "Any dimension" : view.title();
+        }
+    }
+
     private final Path sourceRoot;
     private final BiConsumer<Path, Integer> onReveal;
     private final Optional<ReportTarget> target;
     private final Supplier<Reports> runs;
     private final Function<ReportTarget, Reports> issues;
+    private final Supplier<List<ReportView>> views;
     private final List<EventBus.Subscription> subscriptions = new ArrayList<>();
     /** The newest load: an older one that ends later is dropped. */
     private final AtomicInteger loads = new AtomicInteger();
 
     private final BorderPane root = new BorderPane();
     private final ComboBox<Source> source = new ComboBox<>();
+    private final ComboBox<View> view = new ComboBox<>();
     private final ComboBox<Dimension> groupBy = new ComboBox<>();
     private final ComboBox<Kind> kind = new ComboBox<>();
     private final ComboBox<Only> only = new ComboBox<>();
@@ -151,12 +164,15 @@ public final class ReportsPanel {
 
     private Reports shown;
     private String pickedValue;
+    /** True while pickers are set in code: their actions draw nothing, the one who set them draws once. */
+    private boolean settling;
 
     /** The Reports tab of the project in {@code project}; a problem's line opens through {@code onReveal}. */
     public ReportsPanel(EventBus eventBus, Path project, Path sourceRoot, BiConsumer<Path, Integer> onReveal) {
         this(sourceRoot, onReveal, ReportTarget.of(project),
                 () -> RunReports.read(project.resolve(RunLog.FOLDER)),
-                t -> new IssueReports(PastRuns.signedIn(), IssueReports.defaultCache()).read(t));
+                t -> new IssueReports(PastRuns.signedIn(), IssueReports.defaultCache()).read(t),
+                PluginHost::reportViews);
         // A run's end adds its problems to this computer's.
         subscriptions.add(eventBus.subscribe(CoreApplicationEvents.BotRunEndedEvent.class, e -> {
             if (source.getValue() == Source.RUNS) load();
@@ -164,12 +180,13 @@ public final class ReportsPanel {
     }
 
     ReportsPanel(Path sourceRoot, BiConsumer<Path, Integer> onReveal, Optional<ReportTarget> target,
-                 Supplier<Reports> runs, Function<ReportTarget, Reports> issues) {
+                 Supplier<Reports> runs, Function<ReportTarget, Reports> issues, Supplier<List<ReportView>> views) {
         this.sourceRoot = sourceRoot;
         this.onReveal = onReveal;
         this.target = target;
         this.runs = runs;
         this.issues = issues;
+        this.views = views;
         build();
         load();
     }
@@ -190,6 +207,9 @@ public final class ReportsPanel {
         source.setValue(Source.RUNS);
         source.setConverter(named(s -> s == Source.ISSUES ? "Issues on " + target.map(ReportTarget::toString)
                 .orElse("GitHub") : s.displayName()));
+        view.getItems().setAll(View.ANY);
+        view.setValue(View.ANY);
+        view.setConverter(named(View::title));
         groupBy.setConverter(named(Dimension::label));
         kind.getItems().setAll(Kind.values());
         kind.setValue(Kind.BARS);
@@ -201,12 +221,13 @@ public final class ReportsPanel {
         refresh.setOnAction(e -> load());
 
         source.setOnAction(e -> load());
+        view.setOnAction(e -> applyView());
         groupBy.setOnAction(e -> redraw());
         kind.setOnAction(e -> redraw());
         only.setOnAction(e -> redraw());
 
-        HBox bar = new HBox(8, new Label("From"), source, new Label("Group by"), groupBy, new Label("Chart"), kind,
-                only, refresh, notes);
+        HBox bar = new HBox(8, new Label("From"), source, new Label("View"), view, new Label("Group by"), groupBy,
+                new Label("Chart"), kind, only, refresh, notes);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(4, 8, 4, 8));
         notes.setWrapText(true);
@@ -265,45 +286,110 @@ public final class ReportsPanel {
     /** Draws {@code reports}, keeping the dimension picked when they name it too. */
     void show(Reports reports) {
         shown = reports;
+        settling = true;
         String was = groupBy.getValue() == null ? null : groupBy.getValue().id();
         List<Dimension> dims = reports.report().dimensions();
         groupBy.getItems().setAll(dims);
         groupBy.setValue(dims.stream().filter(d -> d.id().equals(was)).findFirst()
                 .or(() -> dims.stream().filter(d -> d.id().equals("botLine")).findFirst())
                 .orElse(dims.isEmpty() ? null : dims.getFirst()));
+        // The loaded plugins' views, read again each time: a plugin bound since adds its own.
+        String title = view.getValue() == null ? View.ANY.title() : view.getValue().title();
+        List<View> offered = new ArrayList<>(List.of(View.ANY));
+        views.get().forEach(v -> offered.add(new View(v)));
+        view.getItems().setAll(offered);
+        view.setValue(offered.stream().filter(v -> v.title().equals(title)).findFirst().orElse(View.ANY));
+        settling = false;
         List<String> said = new ArrayList<>(reports.notes());
         if (reports.report().occurrences().isEmpty()) said.add("No problems.");
         notes.setText(String.join(" ", said));
+        applyView();
+    }
+
+    /**
+     * Sets the pickers a plugin's view decides — its chart and dimension, its level — and locks them, or frees them
+     * for any dimension; then draws.
+     */
+    private void applyView() {
+        if (settling) return;
+        ReportView picked = pluginView();
+        groupBy.setDisable(picked != null);
+        kind.setDisable(picked != null);
+        only.setDisable(picked != null);
+        if (picked != null) {
+            settling = true;
+            try {
+                kind.setValue(Kind.valueOf(picked.chart().name()));
+                only.setValue(Only.ALL);
+                String id = Dimension.plugin(picked.dimension());
+                groupBy.getItems().stream().filter(d -> d.id().equals(id)).findFirst().ifPresent(groupBy::setValue);
+            } finally {
+                settling = false;
+            }
+        }
         redraw();
     }
 
+    /** The plugin's view picked, or null for any dimension. */
+    private ReportView pluginView() {
+        return view.getValue() == null ? null : view.getValue().view();
+    }
+
+    /** The dimension counted: the view's own, else the one grouped by; null when there is none. */
+    private Dimension grouped() {
+        ReportView picked = pluginView();
+        if (picked == null) return groupBy.getValue();
+        String id = Dimension.plugin(picked.dimension());
+        return groupBy.getItems().stream().filter(d -> d.id().equals(id)).findFirst()
+                .orElse(new Dimension(id, picked.dimension()));
+    }
+
     private void redraw() {
+        if (settling) return;
         pick(null);
-        Dimension dim = groupBy.getValue();
+        Dimension dim = grouped();
         if (shown == null || dim == null) {
             chartHolder.getChildren().setAll(new Label("No problems to draw."));
             return;
         }
+        ReportView picked = pluginView();
+        List<String> missing = picked == null ? List.of() : ReportCharts.missing(shown.report(), picked);
+        if (!missing.isEmpty()) {
+            // A view names keys a plugin's lines carry: these reports have none of them, an older run or issue.
+            Label none = new Label("“" + picked.title() + "” counts " + String.join(" and ", missing)
+                    + ", which none of these reports carry.");
+            none.setWrapText(true);
+            chartHolder.getChildren().setAll(none);
+            return;
+        }
         Reports counted = counted();
         String id = dim.id();
+        String unit = picked == null ? "problems" : picked.weight()
+                .orElse(picked.lines() == ReportView.Lines.EVERY_LINE ? "lines" : "problems");
+        Optional<String> against = picked == null ? Optional.empty() : picked.against().map(Dimension::plugin);
         chartHolder.getChildren().setAll(switch (kind.getValue() == null ? Kind.BARS : kind.getValue()) {
             case BARS -> totals(ReportCharts.totals(counted.report(), id, MOST));
             case BARS_BY_DAY -> byDay(ReportCharts.byDay(counted.report(), id, MOST_PER_DAY));
             case LINES -> lines(ReportCharts.lines(counted.report(), id, MOST_PER_DAY));
-            case HEATMAP -> heatmap(ReportCharts.heatmap(counted.report(), id, MOST, HEAT_DAYS));
-            case DONUT -> donut(ReportCharts.share(counted.report(), id, MOST_PER_DAY));
+            case HEATMAP -> against.isPresent()
+                    ? heatmap(ReportCharts.grid(counted.report(), id, against.get(), MOST), false)
+                    : heatmap(ReportCharts.heatmap(counted.report(), id, MOST, HEAT_DAYS), true);
+            case DONUT -> donut(ReportCharts.share(counted.report(), id, MOST_PER_DAY), unit);
             case TABLE -> table(ReportCharts.table(counted, id));
         });
     }
 
+    /** What is counted: the plugin's view's lines, else the problems at the level picked. */
     private Reports counted() {
+        ReportView picked = pluginView();
+        if (picked != null) return ReportCharts.viewed(shown, picked);
         return shown.filtered(only.getValue() == null ? null : only.getValue().level, null);
     }
 
     /** Lists the problems of {@code value} of the dimension grouped by; null clears the list. */
     void pick(String value) {
         pickedValue = value;
-        Dimension dim = groupBy.getValue();
+        Dimension dim = grouped();
         if (value == null || dim == null || shown == null) {
             picked.setText(PICK_HINT);
             rows.getItems().clear();
@@ -402,16 +488,19 @@ public final class ReportsPanel {
     }
 
     /**
-     * A row per value, a column per day, each cell shaded by its count against the largest (JavaFX has no heatmap).
-     * A cell or a row's name lists its value's problems.
+     * A row per value, a column per day ({@code overDays}) or per value of a view's second key, each cell shaded by
+     * its count against the largest (JavaFX has no heatmap). A cell or a row's name lists its value's problems.
      */
-    private Node heatmap(ReportCharts.Heat heat) {
+    private Node heatmap(ReportCharts.Heat heat, boolean overDays) {
         GridPane grid = new GridPane(2, 2);
         grid.getStyleClass().add("reports-heatmap");
         grid.setPadding(new Insets(8));
         for (int d = 0; d < heat.days().size(); d++) {
-            Label day = new Label(heat.days().get(d).substring(5)); // MM-dd: the year is in the tooltip
-            day.setTooltip(new Tooltip(heat.days().get(d)));
+            String column = heat.days().get(d);
+            // MM-dd: the year is in the tooltip
+            Label day = new Label(overDays && column.length() > 5 ? column.substring(5) : column);
+            day.setMaxWidth(160);
+            day.setTooltip(new Tooltip(column));
             grid.add(day, d + 1, 0);
             GridPane.setHalignment(day, HPos.CENTER);
         }
@@ -444,8 +533,8 @@ public final class ReportsPanel {
         return scroll;
     }
 
-    /** Each value's share of the problems, a slice each, with the total in the hole; a slice lists its problems. */
-    private Node donut(List<ReportCharts.Slice> slices) {
+    /** Each value's share of the {@code unit}, a slice each, with the total in the hole; a slice lists its problems. */
+    private Node donut(List<ReportCharts.Slice> slices, String unit) {
         PieChart pie = new PieChart();
         pie.setAnimated(false);
         pie.setLegendVisible(false);
@@ -464,7 +553,7 @@ public final class ReportsPanel {
         hole.getStyleClass().add("reports-donut-hole");
         hole.setStyle("-fx-background-color: -fx-background; -fx-background-radius: 50%;");
         hole.setOnMouseClicked(MouseEvent::consume); // the hole is empty: a click there picks no slice
-        Label sum = new Label(total + "\nproblems");
+        Label sum = new Label(total + "\n" + unit);
         sum.setTextAlignment(TextAlignment.CENTER);
         sum.setMouseTransparent(true);
         StackPane donut = new StackPane(pie, hole, sum);

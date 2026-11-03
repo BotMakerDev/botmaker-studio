@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added (Reports tab)
 
+- A **View** picker: *Any dimension* (as before) or a chart a loaded plugin declares (`reportViews`). The plugin's
+  view sets the chart, the dimension and the level, and locks those pickers. A heatmap view can draw one value
+  against another, such as from × to. A view can count every line carrying its value, or add up a number such as
+  time. A view whose keys the reports lack says which ones. It works for both runs and issues.
 - A **Reports** tab beside Trace charts a bot's problems, from its runs on this computer or from the issues its
   runners sent: group by any dimension the reports name, totals per value stacked by level or a bar per day, warnings
   or errors only. A bar lists its problems; a problem opens its bot line or its issues on GitHub.
