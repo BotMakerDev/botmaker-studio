@@ -3,6 +3,8 @@ package com.botmaker.studio.runtime;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.runlog.RunLog;
+import com.botmaker.studio.runtime.agent.RunPlan;
 import com.botmaker.studio.runtime.agent.TracePlan;
 
 import java.io.IOException;
@@ -10,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -42,29 +45,33 @@ public final class BotJvm {
     }
 
     /**
-     * {@code -javaagent:<jar>=<plan>}: the trace agent ({@code runtime.agent}, 2026-09-30), which writes a trace
-     * line for each call the bot's own classes ({@code config.compiledOutputPath()}) make into an offered class of
-     * the project's plugins, minus what the Trace tab hides ({@code hiddenTraceWriters}). The plan is a file
-     * beside the classes, rewritten every run. Empty when there is nothing to trace or the agent cannot be
-     * written: a run never fails over its trace.
+     * {@code -javaagent:<jar>=<plan>}: the run agent ({@code runtime.agent}, one since 2026-11-03), the host in the
+     * bot's JVM. It keeps the run's log under {@code <project>/target/botmaker-runs}, hands each plugin declared on
+     * the bot's classpath its run channel, and traces each call the bot's own classes
+     * ({@code config.compiledOutputPath()}) make into an offered class of the project's plugins, minus what the
+     * Trace tab hides ({@code hiddenTraceWriters}). The plan is a file beside the classes, rewritten every run.
+     * Empty only when the agent cannot be written: a run never fails over it.
      */
-    public static List<String> traceAgent(ProjectConfig config, StudioProjectSettings settings) {
+    public static List<String> runAgent(ProjectConfig config, StudioProjectSettings settings) {
+        if (config == null) return List.of();
         List<String> offered = PluginHost.menuFacades().stream().map(f -> f.type().getName()).toList();
-        if (config == null || offered.isEmpty()) return List.of();
         try {
-            Path plan = tracePlan(config);
-            new TracePlan(Set.of(config.compiledOutputPath()), Set.copyOf(offered),
-                    settings == null ? Set.of() : Set.copyOf(settings.hiddenTraceWriters())).write(plan);
-            return List.of("-javaagent:" + TraceAgentJar.path() + "=" + plan);
+            RunAgentJar.Jars jars = RunAgentJar.jars();
+            Path plan = runPlan(config);
+            TracePlan trace = new TracePlan(Set.of(config.compiledOutputPath()), Set.copyOf(offered),
+                    settings == null ? Set.of() : Set.copyOf(settings.hiddenTraceWriters()));
+            new RunPlan(trace, Optional.of(config.projectPath().resolve(RunLog.FOLDER)), jars.inner())
+                    .write(plan);
+            return List.of("-javaagent:" + jars.agent() + "=" + plan);
         } catch (IOException | RuntimeException e) {
-            System.err.println("Runs this time without the call trace: " + e.getMessage());
+            System.err.println("Runs this time without its log and call trace: " + e.getMessage());
             return List.of();
         }
     }
 
-    /** Where {@link #traceAgent} writes the plan the agent reads once, at the JVM's start. */
-    static Path tracePlan(ProjectConfig config) {
-        return config.compiledOutputPath().resolveSibling("botmaker-trace.properties");
+    /** Where {@link #runAgent} writes the plan the agent reads once, at the JVM's start. */
+    static Path runPlan(ProjectConfig config) {
+        return config.compiledOutputPath().resolveSibling("botmaker-run.properties");
     }
 
     static List<String> options(Map<String, String> runProperties) {

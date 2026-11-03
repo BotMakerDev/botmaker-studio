@@ -14,9 +14,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
-- The call trace runs with debugging off too when the bot's run keeps a log file (`Diag.isRecorded`): the last
-  calls before a warning or an error reach the file. The Trace tab still shows calls only with debugging on. A
-  bot on an older `botmaker-shared` traces as before.
+- **One run agent for every bot run** (`runtime.agent.RunAgent`, was the trace agent; `docs/refactor/40-run-trace.md`
+  § One run agent). Each Run and Debug writes the run's `target/botmaker-runs/<run>/run.jsonl` (facts, then lines;
+  with debugging off the last 50 debug and info lines before each warning or error), hands each plugin on the bot's
+  class path its run channel (`onBotRun`) before `main`, and sends lines, a plugin's frames and its questions to
+  Studio. Its log writer, Jackson and the wire load child-first from a second jar, so a bot's own versions never
+  meet them. The call trace goes through the same log; the Trace tab still shows calls only with debugging on.
+- A plugin's telemetry frame reaches its window without the wire's length prefix (`RunTelemetry.payload`).
 - The GitHub and Google account bars run one sign-in handshake (`ui/app/DeviceSignIn`), and `GoogleAuth` runs
   shared's `oauth.DeviceFlow` and `Credentials` instead of its own copy of GitHub's. Nothing a user sees changes.
 

@@ -1,7 +1,5 @@
 package com.botmaker.studio.runtime.agent;
 
-import com.botmaker.shared.Diag;
-
 import java.lang.annotation.Annotation;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.ConstantCallSite;
@@ -18,12 +16,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * The runtime half of the trace agent: links each rewritten call site ({@link CallSites}) to its method, and
  * writes one line per call, {@code [ImageFinder] find(ORE) → Match[…]  12 ms}.
  *
- * <p><b>Through the bot's own {@link Diag}</b>, so a traced call is one more debug line: printed to the console,
- * sent to Studio's Trace tab with the bot line that made it, and silent when debugging is off (where the run's
- * file still keeps the last calls, {@code Diag.setFileSink}). The source is the
+ * <p><b>Through the run agent's {@link RunLines}</b>, so a traced call is one more debug line: printed to the
+ * console, sent to Studio's Trace tab with the bot line that made it, and kept for the run's log; with debugging
+ * off it is only held among the last lines written before a problem. The source is the
  * called class's simple name, and the writer is that class and method, so the tab's class and method filter hides
- * a call's lines like any other. A bot with no {@code botmaker-shared} on its classpath gets the same line on
- * stderr.
+ * a call's lines like any other. A run whose agent has no inner half gets the same line on stderr.
  *
  * <p><b>A repeat is counted, not printed</b>: a bot that polls {@code find(ORE)} until it appears writes the first
  * miss, then one line saying how many more there were, when the call changes or every five seconds.
@@ -52,8 +49,8 @@ public final class TracedCalls {
     private static final ThreadLocal<Repeat> REPEATS = ThreadLocal.withInitial(TracedCalls::opened);
     /** Every thread's open repeat, so the run's end reports what is still being counted. */
     private static final Set<Repeat> OPEN = ConcurrentHashMap.newKeySet();
-    private static volatile boolean noDiag;
-    private static volatile boolean oldDiag;
+    /** Where the lines go: the run agent's inner half, or null for standard error. */
+    private static volatile RunLines lines;
 
     private TracedCalls() {}
 
@@ -177,38 +174,22 @@ public final class TracedCalls {
         return repeat;
     }
 
-    /**
-     * Whether a call's line goes anywhere: debugging is on, or the run's file keeps the last lines with it off. A
-     * bot on a {@code botmaker-shared} older than {@code Diag.isRecorded} asks only the switch.
-     */
+    /** Sends every later line to {@code given}; {@code null} for standard error. */
+    static void to(RunLines given) {
+        lines = given;
+    }
+
+    /** Whether a call's line goes anywhere: shown, or kept for the lines before a problem. */
     private static boolean enabled() {
-        if (noDiag) return true;
-        if (!oldDiag) {
-            try {
-                return Diag.isRecorded();
-            } catch (NoSuchMethodError e) {
-                oldDiag = true;
-            } catch (LinkageError e) {
-                noDiag = true;
-                return true;
-            }
-        }
-        try {
-            return Diag.isEnabled();
-        } catch (LinkageError e) {
-            noDiag = true;
-            return true;
-        }
+        RunLines to = lines;
+        return to == null || to.recorded();
     }
 
     private static void write(Call call, String text, int count) {
-        if (!noDiag) {
-            try {
-                Diag.log(new Diag.Origin(call.source(), call.owner().getName(), call.method()), text, count, null);
-                return;
-            } catch (LinkageError e) {
-                noDiag = true;
-            }
+        RunLines to = lines;
+        if (to != null) {
+            to.call(call.source(), text, count, call.owner().getName(), call.method());
+            return;
         }
         System.err.println("[" + call.source() + "] " + text + (count > 1 ? "  (×" + count + ")" : ""));
     }

@@ -59,20 +59,38 @@ public record TracePlan(Set<Path> botClasses, Set<String> traced, Set<String> hi
 
     public void write(Path file) throws IOException {
         Properties properties = new Properties();
+        into(properties);
+        store(properties, file);
+    }
+
+    public static TracePlan read(Path file) throws IOException {
+        return from(load(file));
+    }
+
+    /** Puts this plan's keys in {@code properties}, beside the run plan's own ({@link RunPlan}). */
+    void into(Properties properties) {
         properties.setProperty(CLASSES, botClasses.stream().map(Path::toString)
                 .collect(Collectors.joining(java.io.File.pathSeparator)));
         properties.setProperty(TRACED, String.join(SEPARATOR, traced));
         properties.setProperty(HIDDEN, String.join(SEPARATOR, hidden));
+    }
+
+    static void store(Properties properties, Path file) throws IOException {
         try (Writer out = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
-            properties.store(out, "BotMaker trace agent: the calls Studio traces in this run");
+            properties.store(out, "BotMaker run agent: this run's plan");
         }
     }
 
-    public static TracePlan read(Path file) throws IOException {
+    static Properties load(Path file) throws IOException {
         Properties properties = new Properties();
         try (Reader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             properties.load(in);
         }
+        return properties;
+    }
+
+    /** The plan {@code properties} hold; a key left out is empty. */
+    static TracePlan from(Properties properties) {
         Set<Path> classes = new LinkedHashSet<>();
         for (String path : split(properties.getProperty(CLASSES, ""), java.io.File.pathSeparator)) {
             classes.add(Path.of(path));

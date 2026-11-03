@@ -13,8 +13,8 @@ import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
 
 /**
- * {@link TryHost}'s jar, written from Studio's own class the first time a try needs it, as {@link TraceAgentJar}
- * writes the trace agent: the warm JVM's classpath is the bot's, and Studio's jar is the whole IDE.
+ * {@link TryHost}'s jar, written from Studio's own class the first time a try needs it, as {@link RunAgentJar}
+ * writes the run agent: the warm JVM's classpath is the bot's, and Studio's jar is the whole IDE.
  */
 final class TryHostJar {
 

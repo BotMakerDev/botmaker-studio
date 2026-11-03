@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -47,7 +48,7 @@ class RunTelemetryTest {
         assertEquals(new TraceLine(Instant.ofEpochMilli(1_000L), TraceLine.Level.WARN, "Vision", "no ore", 3,
                 "com.example.Collect", "body", "com.example.Collect", OptionalInt.of(14),
                 Optional.of(new TraceLine.Region(1, 2, 3, 4))), line);
-        assertArrayEquals(click,
+        assertArrayEquals(Arrays.copyOfRange(click, Integer.BYTES, click.length),
                 assertInstanceOf(CoreApplicationEvents.TelemetryFrameEvent.class, published.get(1)).frame());
         assertEquals(2, published.size(), "a debug line goes to the trace only, not to telemetry as well");
     }

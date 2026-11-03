@@ -11,6 +11,7 @@ import com.botmaker.studio.events.EventBus;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
@@ -63,8 +64,16 @@ public final class RunTelemetry {
             // A question is Studio's to answer (it draws the dialog), so it is read here and never relayed.
             eventBus.publish(new CoreApplicationEvents.InputRequestedEvent(ask.get()));
         } else {
-            eventBus.publish(new CoreApplicationEvents.TelemetryFrameEvent(frame));
+            eventBus.publish(new CoreApplicationEvents.TelemetryFrameEvent(payload(frame)));
         }
+    }
+
+    /**
+     * What a plugin's channel sent ({@code RunChannel.frame}), without the wire's length prefix: the run agent sends
+     * a plugin's bytes as they are, and the plugin's window reads them back the same way.
+     */
+    static byte[] payload(byte[] frame) {
+        return frame.length <= Integer.BYTES ? new byte[0] : Arrays.copyOfRange(frame, Integer.BYTES, frame.length);
     }
 
     /**

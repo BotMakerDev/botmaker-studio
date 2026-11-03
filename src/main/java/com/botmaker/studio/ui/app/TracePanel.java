@@ -256,7 +256,7 @@ final class TracePanel {
         target(sourceRoot, line).ifPresent(at -> onReveal.accept(at.getKey(), at.getValue()));
     }
 
-    /** The classes a run traces calls into: the offered classes of the project's plugins ({@code BotJvm.traceAgent}). */
+    /** The classes a run traces calls into: the offered classes of the project's plugins ({@code BotJvm.runAgent}). */
     private static List<String> traceable() {
         return PluginHost.menuFacades().stream().map(f -> f.type().getName()).toList();
     }

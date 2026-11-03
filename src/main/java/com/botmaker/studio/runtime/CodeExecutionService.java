@@ -198,7 +198,7 @@ public class CodeExecutionService {
                 // java [bot options] [session hand-off] -cp <classes:deps> <mainClass>
                 List<String> command = new ArrayList<>(List.of(config.javaExecutable()));
                 command.addAll(BotJvm.options(state.getSettings()));
-                command.addAll(BotJvm.traceAgent(config, state.getSettings()));
+                command.addAll(BotJvm.runAgent(config, state.getSettings()));
                 command.addAll(sessionHandoffArguments());
                 command.addAll(List.of("-cp", classpath, mainClass));
                 ProcessBuilder pb = new ProcessBuilder(command)
@@ -263,16 +263,16 @@ public class CodeExecutionService {
         for (String jar : snapshot.resolvedClasspath()) cp.append(java.io.File.pathSeparator).append(jar);
         List<String> command = new ArrayList<>(List.of(config.javaExecutable()));
         command.addAll(BotJvm.options(state.getSettings()));
-        command.addAll(BotJvm.traceAgent(config, state.getSettings()));
+        command.addAll(BotJvm.runAgent(config, state.getSettings()));
         command.addAll(sessionHandoffArguments());
         command.addAll(List.of("-cp", cp.toString(), TryHost.class.getName()));
         return command;
     }
 
-    /** The trace plan the agent read at the JVM's start: a JVM started with another one is started again. */
+    /** The run plan the agent read at the JVM's start: a JVM started with another one is started again. */
     private String tracePlanText() {
         try {
-            Path plan = BotJvm.tracePlan(config);
+            Path plan = BotJvm.runPlan(config);
             return Files.isRegularFile(plan) ? Files.readString(plan) : "";
         } catch (IOException e) {
             return "";

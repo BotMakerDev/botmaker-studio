@@ -1,7 +1,5 @@
 package com.botmaker.studio.runtime.agent;
 
-import com.botmaker.shared.Diag;
-import com.botmaker.shared.ipc.TelemetryEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +8,7 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,29 +17,55 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The agent's rewrite, in this JVM: a bot class is rewritten as {@link CallSites} would rewrite it on load, then
- * run, and every call it makes into the traced class is one line, through {@code Diag}, under the class's name.
+ * run, and every call it makes into the traced class is one line to the run ({@link RunLines}), under the class's
+ * name.
  */
 class TraceAgentTest {
 
-    private final List<TelemetryEvent.Log> lines = new ArrayList<>();
+    /** One line as the run heard it. */
+    record Heard(String source, String text, int count, String writerClass, String writerMethod) {
+    }
+
+    /** A run that keeps lines while {@code recorded}. */
+    static final class Lines implements RunLines {
+        final List<Heard> heard = new ArrayList<>();
+        final boolean recorded;
+
+        Lines(boolean recorded) {
+            this.recorded = recorded;
+        }
+
+        @Override
+        public boolean recorded() {
+            return recorded;
+        }
+
+        @Override
+        public void call(String source, String text, int count, String writerClass, String writerMethod) {
+            heard.add(new Heard(source, text, count, writerClass, writerMethod));
+        }
+
+        @Override
+        public void ended() {
+        }
+    }
 
     @AfterEach
     void restore() {
-        Diag.setSink(null);
-        Diag.set(true);
+        TracedCalls.to(null);
     }
 
     @Test
     void eachCallTheBotMakesIsOneLineAndARepeatIsCounted() throws Exception {
-        Diag.set(true);
-        Diag.setSink(lines::add);
+        Lines lines = new Lines(true);
+        TracedCalls.to(lines);
         TracePlan plan = new TracePlan(Set.of(), Set.of(TracedFixture.class.getName()),
                 Set.of(TracedFixture.class.getName() + "#hiddenOne"));
 
         Class<?> bot = rewritten(BotFixture.class, plan);
         bot.getMethod("run").invoke(null);
 
-        List<String> texts = lines.stream().map(l -> withoutTime(l.text())).toList();
+        List<String> texts = lines.heard.stream().map(l -> withoutTime(l.text())).toList();
         assertEquals(List.of(
                 "add(1, 2) → 3",
                 "greet(\"Ana\") → \"Hi Ana from x\"",
@@ -50,8 +75,8 @@ class TraceAgentTest {
                 "fail() threw IllegalStateException: boom",
                 "count([a, b]) → 2"), texts, "twice() is the plugin's own call, quiet() is @Untraced, "
                 + "hiddenOne() is hidden: " + texts);
-        assertEquals(4, lines.get(3).count(), "four more polls after the first");
-        TelemetryEvent.Log first = lines.getFirst();
+        assertEquals(4, lines.heard.get(3).count(), "four more polls after the first");
+        Heard first = lines.heard.getFirst();
         assertEquals("TracedFixture", first.source());
         assertEquals(TracedFixture.class.getName(), first.writerClass());
         assertEquals("add", first.writerMethod());
@@ -64,34 +89,25 @@ class TraceAgentTest {
     }
 
     @Test
-    void aQuietRunWritesNoLineButStillCalls() throws Exception {
-        Diag.set(false);
-        Diag.setSink(lines::add);
+    void aRunThatKeepsNothingBuildsNoLineButStillCalls() throws Exception {
+        Lines lines = new Lines(false);
+        TracedCalls.to(lines);
         TracePlan plan = new TracePlan(Set.of(), Set.of(TracedFixture.class.getName()), Set.of());
 
         rewritten(BotFixture.class, plan).getMethod("run").invoke(null);
 
-        assertTrue(lines.isEmpty(), lines.toString());
+        assertTrue(lines.heard.isEmpty(), lines.heard.toString());
     }
 
-    /** With debugging off, a run's file still keeps the calls and writes them before the next warning. */
     @Test
-    void aQuietRunKeepsItsCallsForTheFile() throws Exception {
-        List<TelemetryEvent.Log> written = new ArrayList<>();
-        Diag.set(false);
-        Diag.setSink(lines::add);
-        Diag.setFileSink(null, written::add);
-        try {
-            TracePlan plan = new TracePlan(Set.of(), Set.of(TracedFixture.class.getName()), Set.of());
-            rewritten(BotFixture.class, plan).getMethod("run").invoke(null);
-            Diag.warn("Screens", "stuck");
-        } finally {
-            Diag.setFileSink(null, null);
-        }
-
-        assertTrue(lines.stream().allMatch(l -> l.text().equals("stuck")), lines.toString());
-        assertEquals("add(1, 2) → 3", withoutTime(written.getFirst().text()));
-        assertEquals("stuck", written.getLast().text());
+    void theRunPlanSurvivesItsFile() throws IOException {
+        Path file = java.nio.file.Files.createTempFile("plan", ".properties");
+        TracePlan trace = new TracePlan(Set.of(Path.of("/tmp/a b/classes")), Set.of("x.Mouse"), Set.of());
+        RunPlan plan = new RunPlan(trace, Optional.of(Path.of("/tmp/bot/target/botmaker-runs")),
+                Optional.of(Path.of("/tmp/inner.jar")));
+        plan.write(file);
+        assertEquals(plan, RunPlan.read(file));
+        assertEquals(trace, TracePlan.read(file), "the trace part reads alone");
     }
 
     @Test
