@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A run no longer covers the desktop in black** (`DesktopLayer`): the run layer grows to the desktop only while a
+  plugin or the host draws something on it, and goes back to one pixel when that is gone. On KDE X11 the full-desktop
+  layer showed pure black over every screen; a run whose game is in a private session draws nothing there, so the
+  layer never grows.
+
 ### Added (Reports button)
 
 - **📊 Reports in Studio's toolbar row**, after Parameters: opens the bottom Reports tab on this computer's runs,

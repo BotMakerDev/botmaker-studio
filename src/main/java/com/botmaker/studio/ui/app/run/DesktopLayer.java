@@ -22,6 +22,7 @@ import javafx.application.ConditionalFeature;
 import javafx.application.Platform;
 import javafx.scene.Group;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
@@ -47,8 +48,8 @@ import java.util.function.Function;
  * {@link RunOverlayContext#mode()} says why it was opened. FX thread.
  *
  * <p>It is first shown one pixel wide and grows to the desktop only once the native side has made it
- * click-through; where that cannot be done it is not shown at all, since a layer that caught the bot's own
- * clicks would break the run it shows. It is emptied while a capture surface is up, so a pick is never made over
+ * click-through, and only while something is drawn on it ({@link #fit}); where click-through cannot be done it is
+ * not shown at all, since a layer that caught the bot's own clicks would break the run it shows. It is emptied while a capture surface is up, so a pick is never made over
  * its own marks.
  */
 public final class DesktopLayer {
@@ -186,14 +187,39 @@ public final class DesktopLayer {
             madeInARow[0] = made ? madeInARow[0] + 1 : 0;
             if (!through[0] && madeInARow[0] >= 2) {
                 through[0] = true;
-                stage.setWidth(space.width());
-                stage.setHeight(space.height());
             } else if (!through[0] && ticks[0] >= TRIES) {
                 off("this desktop cannot make a window let clicks through");
+                return;
             }
+            if (through[0]) fit(space, drawsSomething(content));
         }));
         keeper.setCycleCount(Animation.INDEFINITE);
         keeper.play();
+    }
+
+    /**
+     * Desktop-sized while something is drawn, one pixel otherwise. On KDE X11 the full-desktop layer showed pure
+     * black over every screen, Studio's own copy only, never a test window built the same way (2026-11-03, cause
+     * not found); a run whose game is in a private session draws nothing here, so it never grows.
+     */
+    private void fit(DesktopSpace space, boolean drawn) {
+        if (stage == null) return;
+        boolean grown = stage.getWidth() > 1;
+        if (drawn && !grown) {
+            stage.setWidth(space.width());
+            stage.setHeight(space.height());
+        } else if (!drawn && grown) {
+            stage.setWidth(1);
+            stage.setHeight(1);
+        }
+    }
+
+    /** Whether any part's node, or the host's marks, has something in it: a parent with children, or a leaf. */
+    private static boolean drawsSomething(Group content) {
+        for (Node node : content.getChildren()) {
+            if (!(node instanceof Parent parent) || !parent.getChildrenUnmodifiable().isEmpty()) return true;
+        }
+        return false;
     }
 
     /**
