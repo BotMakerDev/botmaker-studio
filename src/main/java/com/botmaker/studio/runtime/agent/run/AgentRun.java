@@ -137,8 +137,9 @@ public final class AgentRun implements RunLines {
     @Override
     public synchronized void ended() {
         if (folder == null) return;
+        // Opened, never closed: each line is flushed as written, and a plugin's own shutdown hook (the SDK's time on
+        // each screen) may say its last lines after this one ran; the JVM's exit closes the file.
         open();
-        if (log != null) log.close();
     }
 
     // ---- what the channels ask ----
@@ -222,7 +223,8 @@ public final class AgentRun implements RunLines {
             drainRing();
             write(line);
             open();
-        } else if (debug) {
+        } else if (debug || line.level() == Level.INFO && !line.values().isEmpty()) {
+            // An info a plugin gave values is what its report views count (a local run's Report.lines): kept.
             write(line);
         } else {
             ring.addLast(line);

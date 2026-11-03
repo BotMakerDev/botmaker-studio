@@ -87,6 +87,22 @@ class AgentRunTest {
         assertEquals("Title", read(bot).report().occurrences().getFirst().value("plugin.screen"));
     }
 
+    /** A quiet run keeps an info a plugin gave values, even one said after the run ended, and holds the rest. */
+    @Test
+    void aQuietRunKeepsAnInfoCarryingValuesEvenAfterItsEnd(@TempDir Path bot) {
+        AgentRun run = run(bot, false);
+        PluginChannel sdk = new PluginChannel(run, "com.example:p");
+        run.accept(line(Level.INFO, "held"), null, false);
+        sdk.line(new TraceLine(Instant.ofEpochMilli(1), TraceLine.Level.INFO, "Screens", "on Shop", 1, "", "", "",
+                OptionalInt.empty(), Optional.empty(), Map.of("screen", "Shop")), null);
+        run.ended();
+        sdk.line(new TraceLine(Instant.ofEpochMilli(2), TraceLine.Level.INFO, "Screens", "spent", 1, "", "", "",
+                OptionalInt.empty(), Optional.empty(), Map.of("screen", "Shop", "millis", "1000")), null);
+
+        assertEquals(List.of("on Shop", "spent"), texts(bot));
+        assertEquals(2, read(bot).report().lines().size());
+    }
+
     @Test
     void aRunWithNoFolderKeepsNothingAndRecordsNothingQuiet() {
         AgentRun run = new AgentRun(TracePlan.of(Set.of(), Set.of()), null, Path.of("."), null, false, 0);

@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added (Reports tab)
 
+- **A run's log keeps what a plugin's views count**: with debugging off, an info line a plugin gave values is
+  written, not held in the ring, and the log is no longer closed when the run's JVM ends (each line is flushed as
+  written), so a plugin's last lines, said as the run ends (the SDK's time on each screen), still land.
+
 - A **View** picker: *Any dimension* (as before) or a chart a loaded plugin declares (`reportViews`). The plugin's
   view sets the chart, the dimension and the level, and locks those pickers. A heatmap view can draw one value
   against another, such as from × to. A view can count every line carrying its value, or add up a number such as
