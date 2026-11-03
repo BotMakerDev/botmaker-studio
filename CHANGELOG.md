@@ -17,6 +17,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - A **Reports** tab beside Trace charts a bot's problems, from its runs on this computer or from the issues its
   runners sent: group by any dimension the reports name, totals per value stacked by level or a bar per day, warnings
   or errors only. A bar lists its problems; a problem opens its bot line or its issues on GitHub.
+- The Reports tab's *Chart* picks Bars, Bars by day, Lines, Heatmap (value × day, shaded by count), Donut (each
+  value's share, the total in its hole) or Table (warnings, errors, first and last day seen, issues; every column
+  sorts). A point, cell, slice or row lists its value's problems as a bar does.
 
 ### Added
 

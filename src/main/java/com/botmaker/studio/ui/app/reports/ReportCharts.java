@@ -6,11 +6,14 @@ import com.botmaker.runlog.api.Level;
 import com.botmaker.runlog.api.Occurrence;
 import com.botmaker.runlog.api.Report;
 
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -106,10 +109,11 @@ final class ReportCharts {
         Map<String, List<Point>> per = new LinkedHashMap<>();
         top.forEach(v -> per.put(v, new ArrayList<>()));
         List<Point> rest = new ArrayList<>();
-        List<String> days = new ArrayList<>();
-        for (Counts.Bucket bucket : Counts.overTime(report, dimension, ChronoUnit.DAYS)) {
-            String day = DAY.format(bucket.start());
-            days.add(day);
+        Map<String, Counts.Bucket> buckets = buckets(report, dimension);
+        List<String> days = everyDay(buckets);
+        for (String day : days) {
+            Counts.Bucket bucket = buckets.get(day);
+            if (bucket == null) continue;
             int other = 0;
             for (Counts.Count c : bucket.counts()) {
                 if (top.contains(c.value())) per.get(c.value()).add(new Point(day, c.total()));
@@ -123,6 +127,126 @@ final class ReportCharts {
         });
         if (!rest.isEmpty()) series.add(new Series(OTHER, rest, true));
         return new Chart(days, series);
+    }
+
+    /** {@link #byDay} as lines: every series has a point on every day, zero where it was not met. */
+    static Chart lines(Report report, String dimension, int most) {
+        Chart bars = byDay(report, dimension, most);
+        List<Series> filled = bars.series().stream().map(s -> {
+            Map<String, Integer> at = s.points().stream()
+                    .collect(Collectors.toMap(Point::category, Point::count, Integer::sum));
+            return new Series(s.name(), bars.categories().stream()
+                    .map(day -> new Point(day, at.getOrDefault(day, 0))).toList(), s.rest());
+        }).toList();
+        return new Chart(bars.categories(), filled);
+    }
+
+    /**
+     * A grid of counts: a row per value, a column per day.
+     *
+     * @param values the {@code most} most met values, most first
+     * @param days   each day (UTC) met, oldest first
+     * @param counts {@code counts.get(value).get(day)}, zero where not met
+     */
+    record Heat(List<String> values, List<String> days, List<List<Integer>> counts) {
+        Heat {
+            values = List.copyOf(values);
+            days = List.copyOf(days);
+            counts = counts.stream().map(List::copyOf).toList();
+        }
+
+        /** The largest cell, which is the darkest. */
+        int max() {
+            return counts.stream().flatMap(List::stream).mapToInt(Integer::intValue).max().orElse(0);
+        }
+    }
+
+    /**
+     * The {@code most} most met values of {@code dimension}, each counted per day (UTC) over the last
+     * {@code lastDays} days that end on the latest met: a cell is a node, so a year of history is not drawn whole.
+     */
+    static Heat heatmap(Report report, String dimension, int most, int lastDays) {
+        List<String> top = Counts.by(report, dimension).stream().limit(most).map(Counts.Count::value).toList();
+        Map<String, Counts.Bucket> buckets = buckets(report, dimension);
+        List<String> all = everyDay(buckets);
+        List<String> days = all.subList(Math.max(0, all.size() - lastDays), all.size());
+        List<List<Integer>> counts = top.stream().map(value -> days.stream()
+                .map(day -> buckets.containsKey(day) ? buckets.get(day).counts().stream()
+                        .filter(c -> c.value().equals(value)).mapToInt(Counts.Count::total).sum() : 0)
+                .toList()).toList();
+        return new Heat(top, days, counts);
+    }
+
+    /** Each day (UTC) met, keyed by its {@code yyyy-MM-dd}. */
+    private static Map<String, Counts.Bucket> buckets(Report report, String dimension) {
+        Map<String, Counts.Bucket> byDay = new LinkedHashMap<>();
+        Counts.overTime(report, dimension, ChronoUnit.DAYS).forEach(b -> byDay.put(DAY.format(b.start()), b));
+        return byDay;
+    }
+
+    /** Every day from the first met to the last, the quiet ones too: a gap reads as zero, not as nothing. */
+    private static List<String> everyDay(Map<String, Counts.Bucket> buckets) {
+        if (buckets.isEmpty()) return List.of();
+        List<Counts.Bucket> met = List.copyOf(buckets.values());
+        List<String> days = new ArrayList<>();
+        for (Instant day = met.getFirst().start(); !day.isAfter(met.getLast().start());
+             day = day.plus(1, ChronoUnit.DAYS)) {
+            days.add(DAY.format(day));
+        }
+        return days;
+    }
+
+    /**
+     * One slice of the donut.
+     *
+     * @param rest whether it sums the values past the most met ({@value #OTHER})
+     */
+    record Slice(String value, int count, boolean rest) {
+    }
+
+    /** The {@code most} most met values of {@code dimension} as slices, most first, the rest as one more. */
+    static List<Slice> share(Report report, String dimension, int most) {
+        List<Counts.Count> counts = Counts.by(report, dimension);
+        List<Slice> slices = new ArrayList<>(counts.stream().limit(most)
+                .map(c -> new Slice(c.value(), c.total(), false)).toList());
+        int rest = counts.stream().skip(most).mapToInt(Counts.Count::total).sum();
+        if (rest > 0) slices.add(new Slice(OTHER, rest, true));
+        return slices;
+    }
+
+    /**
+     * One value's line of the table.
+     *
+     * @param firstSeen its earliest occurrence
+     * @param lastSeen  its latest occurrence
+     * @param issues    how many distinct issues its problems were reported in
+     */
+    record TableRow(String value, int warnings, int errors, int total, Instant firstSeen, Instant lastSeen,
+                    int issues) {
+    }
+
+    /** Every value of {@code dimension}, most met first. */
+    static List<TableRow> table(Reports reports, String dimension) {
+        Map<String, Instant> first = new HashMap<>();
+        Map<String, Instant> last = new HashMap<>();
+        Map<String, Set<Integer>> issues = new HashMap<>();
+        for (Occurrence o : reports.report().occurrences()) {
+            String value = o.value(dimension);
+            first.merge(value, o.time(), (a, b) -> a.isBefore(b) ? a : b);
+            last.merge(value, o.time(), (a, b) -> a.isAfter(b) ? a : b);
+            Set<Integer> numbers = issues.computeIfAbsent(value, v -> new HashSet<>());
+            reports.issues().getOrDefault(o.fingerprint(), List.of()).forEach(i -> numbers.add(i.number()));
+        }
+        return Counts.by(reports.report(), dimension).stream()
+                .map(c -> new TableRow(c.value(), c.byLevel().getOrDefault(Level.WARN, 0),
+                        c.byLevel().getOrDefault(Level.ERROR, 0), c.total(), first.get(c.value()),
+                        last.get(c.value()), issues.getOrDefault(c.value(), Set.of()).size()))
+                .toList();
+    }
+
+    /** {@code yyyy-MM-dd}, UTC, as the days are drawn. */
+    static String day(Instant at) {
+        return at == null ? "" : DAY.format(at);
     }
 
     /** The problems whose {@code dimension} is {@code value}, most met first, with their issues. */

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The Reports tab's grouping into chart series, headless. */
 class ReportChartsTest {
@@ -113,6 +114,62 @@ class ReportChartsTest {
         assertEquals(List.of(new ReportCharts.Series(ReportCharts.OTHER, List.of(new ReportCharts.Point("2026-10-28", 5))),
                 new ReportCharts.Series(ReportCharts.OTHER, List.of(new ReportCharts.Point("2026-10-28", 1)), true)),
                 chart.series());
+    }
+
+    @Test
+    void linesHaveAPointEveryDayZeroWhereNotMet() {
+        ReportCharts.Chart chart = ReportCharts.lines(week().report(), "details.Flow", 1);
+
+        assertEquals(List.of("Daily rewards", ReportCharts.OTHER),
+                chart.series().stream().map(ReportCharts.Series::name).toList());
+        ReportCharts.Series other = chart.series().get(1);
+        assertTrue(other.rest());
+        assertEquals(7, other.points().size());
+        assertEquals(new ReportCharts.Point("2026-10-28", 0), other.points().getFirst());
+        assertEquals(new ReportCharts.Point("2026-11-02", 6), other.points().get(5));
+    }
+
+    @Test
+    void aHeatmapIsAValuePerRowADayPerColumn() {
+        ReportCharts.Heat heat = ReportCharts.heatmap(week().report(), "botLine", 15, 31);
+
+        assertEquals(List.of("com.firestone.Daily:42", "com.firestone.Shop:118", "com.firestone.Map:77"),
+                heat.values());
+        assertEquals(7, heat.days().size());
+        assertEquals(List.of(0, 0, 0, 0, 0, 4, 0), heat.counts().get(2));
+        assertEquals(10, heat.max());
+    }
+
+    @Test
+    void quietDaysAreDrawnAsZeroAndAHeatmapKeepsTheLatestDays() {
+        Report gap = new Report(List.of(new Dimension("f", "F")), List.of(
+                new Occurrence(DAY1, Level.WARN, "a", 2, Map.of("f", "Shop")),
+                new Occurrence(DAY1.plus(Duration.ofDays(3)), Level.WARN, "a", 1, Map.of("f", "Shop"))));
+
+        assertEquals(List.of(2, 0, 0, 1), ReportCharts.lines(gap, "f", 6).series().getFirst().points().stream()
+                .map(ReportCharts.Point::count).toList());
+        assertEquals(List.of("2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31"),
+                ReportCharts.byDay(gap, "f", 6).categories());
+        ReportCharts.Heat heat = ReportCharts.heatmap(gap, "f", 6, 2);
+        assertEquals(List.of("2026-10-30", "2026-10-31"), heat.days());
+        assertEquals(List.of(List.of(0, 1)), heat.counts());
+    }
+
+    @Test
+    void aShareIsASlicePerTopValueAndTheRest() {
+        assertEquals(List.of(new ReportCharts.Slice("Daily rewards", 46, false),
+                        new ReportCharts.Slice(ReportCharts.OTHER, 14, true)),
+                ReportCharts.share(week().report(), "details.Flow", 1));
+    }
+
+    @Test
+    void aTableRowHasLevelsDaysAndIssues() {
+        List<ReportCharts.TableRow> table = ReportCharts.table(week(), "botLine");
+
+        assertEquals(new ReportCharts.TableRow("com.firestone.Daily:42", 42, 4, 46, DAY1,
+                DAY1.plus(Duration.ofDays(6)), 1), table.getFirst());
+        assertEquals(2, table.getLast().issues());
+        assertEquals("2026-10-28", ReportCharts.day(DAY1));
     }
 
     @Test

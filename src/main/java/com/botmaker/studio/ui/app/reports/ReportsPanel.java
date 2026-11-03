@@ -13,13 +13,18 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.RunTelemetry;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.value.ObservableValue;
+import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.chart.CategoryAxis;
+import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.PieChart;
 import javafx.scene.chart.StackedBarChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Button;
@@ -28,14 +33,21 @@ import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
 import javafx.scene.control.Tooltip;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.TextAlignment;
 import javafx.util.StringConverter;
 
 import java.nio.file.Path;
@@ -43,6 +55,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -52,7 +65,9 @@ import java.util.function.Supplier;
 /**
  * The Reports tab (run reports spec §5): a bot's problems, from its runs on this computer or from the issues its
  * runners sent, grouped by one of the dimensions the reports name (Studio knows none) — a bar per value stacked by
- * level, or a bar per day stacked by value. A bar lists its problems; a problem opens its bot line or its issues.
+ * level, a bar per day stacked by value, lines over the days, a value × day heatmap, a donut of shares or a sortable
+ * table ({@link Kind}). A bar, point, cell, slice or row lists its problems; a problem opens its bot line or its
+ * issues.
  *
  * <p>Issue titles and values are written by runners: shown as text, never acted on.
  */
@@ -62,6 +77,8 @@ public final class ReportsPanel {
     static final int MOST = 15;
     /** Values stacked at most per day; the rest are {@link ReportCharts#OTHER}. */
     static final int MOST_PER_DAY = 6;
+    /** Days a heatmap draws at most, the latest. */
+    static final int HEAT_DAYS = 31;
 
     /** Where the reports are read from. */
     enum Source {
@@ -79,12 +96,13 @@ public final class ReportsPanel {
     }
 
     /** How the chart is drawn. */
-    enum View {
-        TOTALS("Totals"), BY_DAY("By day");
+    enum Kind {
+        BARS("Bars"), BARS_BY_DAY("Bars by day"), LINES("Lines"), HEATMAP("Heatmap"), DONUT("Donut"),
+        TABLE("Table");
 
         private final String displayName;
 
-        View(String displayName) {
+        Kind(String displayName) {
             this.displayName = displayName;
         }
 
@@ -122,11 +140,12 @@ public final class ReportsPanel {
     private final BorderPane root = new BorderPane();
     private final ComboBox<Source> source = new ComboBox<>();
     private final ComboBox<Dimension> groupBy = new ComboBox<>();
-    private final ComboBox<View> view = new ComboBox<>();
+    private final ComboBox<Kind> kind = new ComboBox<>();
     private final ComboBox<Only> only = new ComboBox<>();
     private final Label notes = new Label();
     private final StackPane chartHolder = new StackPane();
-    private final Label picked = new Label("Click a bar to list its problems.");
+    private static final String PICK_HINT = "Click a value in the chart to list its problems.";
+    private final Label picked = new Label(PICK_HINT);
     private final ListView<ReportCharts.Row> rows = new ListView<>();
     private final FlowPane links = new FlowPane(8, 4);
 
@@ -172,9 +191,9 @@ public final class ReportsPanel {
         source.setConverter(named(s -> s == Source.ISSUES ? "Issues on " + target.map(ReportTarget::toString)
                 .orElse("GitHub") : s.displayName()));
         groupBy.setConverter(named(Dimension::label));
-        view.getItems().setAll(View.values());
-        view.setValue(View.TOTALS);
-        view.setConverter(named(View::displayName));
+        kind.getItems().setAll(Kind.values());
+        kind.setValue(Kind.BARS);
+        kind.setConverter(named(Kind::displayName));
         only.getItems().setAll(Only.values());
         only.setValue(Only.ALL);
         only.setConverter(named(Only::displayName));
@@ -183,10 +202,11 @@ public final class ReportsPanel {
 
         source.setOnAction(e -> load());
         groupBy.setOnAction(e -> redraw());
-        view.setOnAction(e -> redraw());
+        kind.setOnAction(e -> redraw());
         only.setOnAction(e -> redraw());
 
-        HBox bar = new HBox(8, new Label("From"), source, new Label("Group by"), groupBy, view, only, refresh, notes);
+        HBox bar = new HBox(8, new Label("From"), source, new Label("Group by"), groupBy, new Label("Chart"), kind,
+                only, refresh, notes);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(4, 8, 4, 8));
         notes.setWrapText(true);
@@ -265,9 +285,15 @@ public final class ReportsPanel {
             return;
         }
         Reports counted = counted();
-        chartHolder.getChildren().setAll(view.getValue() == View.BY_DAY
-                ? byDay(ReportCharts.byDay(counted.report(), dim.id(), MOST_PER_DAY))
-                : totals(ReportCharts.totals(counted.report(), dim.id(), MOST)));
+        String id = dim.id();
+        chartHolder.getChildren().setAll(switch (kind.getValue() == null ? Kind.BARS : kind.getValue()) {
+            case BARS -> totals(ReportCharts.totals(counted.report(), id, MOST));
+            case BARS_BY_DAY -> byDay(ReportCharts.byDay(counted.report(), id, MOST_PER_DAY));
+            case LINES -> lines(ReportCharts.lines(counted.report(), id, MOST_PER_DAY));
+            case HEATMAP -> heatmap(ReportCharts.heatmap(counted.report(), id, MOST, HEAT_DAYS));
+            case DONUT -> donut(ReportCharts.share(counted.report(), id, MOST_PER_DAY));
+            case TABLE -> table(ReportCharts.table(counted, id));
+        });
     }
 
     private Reports counted() {
@@ -279,7 +305,7 @@ public final class ReportsPanel {
         pickedValue = value;
         Dimension dim = groupBy.getValue();
         if (value == null || dim == null || shown == null) {
-            picked.setText("Click a bar to list its problems.");
+            picked.setText(PICK_HINT);
             rows.getItems().clear();
             return;
         }
@@ -351,6 +377,133 @@ public final class ReportsPanel {
             bars.getData().add(series);
         }
         return bars;
+    }
+
+    /** A line per value over the days; a point lists its value's problems. */
+    private Node lines(ReportCharts.Chart chart) {
+        CategoryAxis days = new CategoryAxis();
+        days.getCategories().setAll(chart.categories());
+        NumberAxis count = new NumberAxis();
+        count.setLabel("Times met");
+        LineChart<String, Number> lines = new LineChart<>(days, count);
+        lines.setAnimated(false);
+        for (ReportCharts.Series s : chart.series()) {
+            XYChart.Series<String, Number> series = new XYChart.Series<>();
+            series.setName(s.name());
+            String value = s.rest() ? null : s.name();
+            for (ReportCharts.Point p : s.points()) {
+                XYChart.Data<String, Number> data = new XYChart.Data<>(p.category(), p.count());
+                clickable(data.nodeProperty(), value, s.name() + " · " + p.category() + ": " + p.count());
+                series.getData().add(data);
+            }
+            lines.getData().add(series);
+        }
+        return lines;
+    }
+
+    /**
+     * A row per value, a column per day, each cell shaded by its count against the largest (JavaFX has no heatmap).
+     * A cell or a row's name lists its value's problems.
+     */
+    private Node heatmap(ReportCharts.Heat heat) {
+        GridPane grid = new GridPane(2, 2);
+        grid.getStyleClass().add("reports-heatmap");
+        grid.setPadding(new Insets(8));
+        for (int d = 0; d < heat.days().size(); d++) {
+            Label day = new Label(heat.days().get(d).substring(5)); // MM-dd: the year is in the tooltip
+            day.setTooltip(new Tooltip(heat.days().get(d)));
+            grid.add(day, d + 1, 0);
+            GridPane.setHalignment(day, HPos.CENTER);
+        }
+        int max = Math.max(1, heat.max());
+        for (int v = 0; v < heat.values().size(); v++) {
+            String value = heat.values().get(v);
+            Label name = new Label(value);
+            name.setMaxWidth(260);
+            name.setTooltip(new Tooltip(value));
+            pickOnClick(name, value);
+            grid.add(name, 0, v + 1);
+            for (int d = 0; d < heat.days().size(); d++) {
+                int n = heat.counts().get(v).get(d);
+                Label cell = new Label(n == 0 ? "" : String.valueOf(n));
+                cell.setMinSize(44, 24);
+                cell.setAlignment(Pos.CENTER);
+                double share = (double) n / max;
+                // One hue, from faint to full; the count is written in the cell, so colour is not the only cue.
+                cell.setStyle(n == 0 ? "-fx-border-color: rgba(128,128,128,0.25);"
+                        : String.format(Locale.ROOT, "-fx-background-color: rgba(214,69,65,%.2f);%s",
+                        0.15 + 0.85 * share, share > 0.5 ? " -fx-text-fill: white;" : ""));
+                cell.setTooltip(new Tooltip(value + " · " + heat.days().get(d) + ": " + n));
+                if (n > 0) pickOnClick(cell, value);
+                grid.add(cell, d + 1, v + 1);
+            }
+        }
+        if (heat.values().isEmpty()) return new Label("No problems to draw.");
+        ScrollPane scroll = new ScrollPane(grid);
+        scroll.setFitToHeight(true);
+        return scroll;
+    }
+
+    /** Each value's share of the problems, a slice each, with the total in the hole; a slice lists its problems. */
+    private Node donut(List<ReportCharts.Slice> slices) {
+        PieChart pie = new PieChart();
+        pie.setAnimated(false);
+        pie.setLegendVisible(false);
+        pie.setStartAngle(90);
+        int total = slices.stream().mapToInt(ReportCharts.Slice::count).sum();
+        for (ReportCharts.Slice s : slices) {
+            PieChart.Data data = new PieChart.Data(s.value(), s.count());
+            pie.getData().add(data);
+            String tip = s.value() + ": " + s.count() + String.format(Locale.ROOT, " (%.0f%%)", 100.0 * s.count() / total);
+            Tooltip.install(data.getNode(), new Tooltip(tip));
+            if (s.rest()) data.getNode().setStyle("-fx-pie-color: #8a8a8a;");
+            else pickOnClick(data.getNode(), s.value());
+        }
+        // PieChart has no hole: a disc of the panel's background over its middle, sized off the pie.
+        Region hole = new Region();
+        hole.getStyleClass().add("reports-donut-hole");
+        hole.setStyle("-fx-background-color: -fx-background; -fx-background-radius: 50%;");
+        hole.setOnMouseClicked(MouseEvent::consume); // the hole is empty: a click there picks no slice
+        Label sum = new Label(total + "\nproblems");
+        sum.setTextAlignment(TextAlignment.CENTER);
+        sum.setMouseTransparent(true);
+        StackPane donut = new StackPane(pie, hole, sum);
+        hole.maxWidthProperty().bind(Bindings.min(donut.widthProperty(), donut.heightProperty()).multiply(0.24));
+        hole.maxHeightProperty().bind(hole.maxWidthProperty());
+        return donut;
+    }
+
+    /** Every value with its counts, first and last day seen and issues; any column sorts, a row lists its problems. */
+    private Node table(List<ReportCharts.TableRow> all) {
+        TableView<ReportCharts.TableRow> table = new TableView<>();
+        table.getStyleClass().add("reports-table");
+        table.getColumns().add(column("Value", r -> r.value()));
+        table.getColumns().add(column("Warnings", ReportCharts.TableRow::warnings));
+        table.getColumns().add(column("Errors", ReportCharts.TableRow::errors));
+        table.getColumns().add(column("Total", ReportCharts.TableRow::total));
+        table.getColumns().add(column("First seen", r -> ReportCharts.day(r.firstSeen())));
+        table.getColumns().add(column("Last seen", r -> ReportCharts.day(r.lastSeen())));
+        table.getColumns().add(column("Issues", ReportCharts.TableRow::issues));
+        table.getColumns().getFirst().setPrefWidth(280);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.setPlaceholder(new Label("No problems to draw."));
+        table.getItems().setAll(all);
+        table.getSelectionModel().selectedItemProperty().addListener((o, was, row) -> {
+            if (row != null) pick(row.value());
+        });
+        return table;
+    }
+
+    private static <T extends Comparable<T>> TableColumn<ReportCharts.TableRow, T> column(
+            String title, Function<ReportCharts.TableRow, T> cell) {
+        TableColumn<ReportCharts.TableRow, T> column = new TableColumn<>(title);
+        column.setCellValueFactory(c -> new ReadOnlyObjectWrapper<>(cell.apply(c.getValue())));
+        return column;
+    }
+
+    private void pickOnClick(Node node, String value) {
+        node.setOnMouseClicked(e -> pick(value));
+        node.setStyle((node.getStyle() == null ? "" : node.getStyle()) + " -fx-cursor: hand;");
     }
 
     /** A bar's node, once the chart made it, lists {@code value}'s problems when clicked (none for null). */

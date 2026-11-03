@@ -7,10 +7,17 @@ import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Scene;
+import javafx.scene.chart.LineChart;
+import javafx.scene.chart.PieChart;
 import javafx.scene.chart.StackedBarChart;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.scene.control.TableView;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.image.PixelReader;
 import javafx.scene.image.WritableImage;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
@@ -84,7 +91,50 @@ class ReportsPanelTest extends FxHeadlessTest {
         shots();
     }
 
-    /** Pictures of both views, light and dark, when asked for. */
+    @Test
+    void everyKindDrawsAndItsValuesPick() throws Exception {
+        chart();
+        onFx(() -> combo(1).getSelectionModel().select(0)); // Bot line
+        String daily = "com.firestone.Daily:42";
+
+        kind(ReportsPanel.Kind.LINES);
+        LineChart<?, ?> lines = (LineChart<?, ?>) root.lookup(".chart");
+        assertEquals(List.of("com.firestone.Daily:42", "com.firestone.Shop:118", "com.firestone.Map:77"),
+                lines.getData().stream().map(s -> s.getName()).toList());
+        clickOn(lines.getData().getFirst().getData().get(3).getNode());
+        assertEquals(daily, panel.pickedValue());
+
+        kind(ReportsPanel.Kind.HEATMAP);
+        GridPane grid = (GridPane) root.lookup(".reports-heatmap");
+        assertNotNull(grid);
+        Node mapCell = grid.getChildren().stream()
+                .filter(n -> GridPane.getRowIndex(n) == 3 && GridPane.getColumnIndex(n) == 6).findFirst().orElseThrow();
+        assertEquals("4", ((Label) mapCell).getText());
+        clickOn(mapCell);
+        assertEquals("com.firestone.Map:77", panel.pickedValue());
+
+        kind(ReportsPanel.Kind.DONUT);
+        PieChart pie = (PieChart) root.lookup(".chart");
+        assertEquals(3, pie.getData().size());
+        // A big slice's box centre may lie on another slice: the click goes to the slice itself.
+        Node slice = pie.getData().getFirst().getNode();
+        onFx(() -> slice.fireEvent(new MouseEvent(MouseEvent.MOUSE_CLICKED, 0, 0, 0, 0, MouseButton.PRIMARY, 1,
+                false, false, false, false, true, false, false, true, false, false, null)));
+        assertEquals(daily, panel.pickedValue());
+
+        kind(ReportsPanel.Kind.TABLE);
+        TableView<?> table = (TableView<?>) root.lookup(".reports-table");
+        assertEquals(3, table.getItems().size());
+        onFx(() -> table.getSelectionModel().select(1));
+        assertEquals("com.firestone.Shop:118", panel.pickedValue());
+        assertFalse(panel.rowsShown().isEmpty());
+    }
+
+    private void kind(ReportsPanel.Kind kind) {
+        onFx(() -> combo(2).getSelectionModel().select(kind));
+    }
+
+    /** Pictures of every kind, light and dark, when asked for. */
     private void shots() throws Exception {
         String to = System.getenv("BM_REPORTS_SHOTS");
         if (to == null || to.isBlank()) return;
@@ -94,14 +144,14 @@ class ReportsPanelTest extends FxHeadlessTest {
                 BlockTheme.setTheme(theme);
                 ThemedWindows.applyThemeClass(root);
             });
-            onFx(() -> combo(1).getSelectionModel().select(0));
-            onFx(() -> combo(2).getSelectionModel().select(ReportsPanel.View.TOTALS));
-            onFx(() -> panel.pick("com.firestone.Daily:42"));
-            snap(out.resolve("totals-" + theme.name().toLowerCase() + ".png"));
-            onFx(() -> combo(1).getSelectionModel().select(3));
-            onFx(() -> combo(2).getSelectionModel().select(ReportsPanel.View.BY_DAY));
-            onFx(() -> panel.pick("Map"));
-            snap(out.resolve("by-day-" + theme.name().toLowerCase() + ".png"));
+            for (ReportsPanel.Kind kind : ReportsPanel.Kind.values()) {
+                boolean overDays = kind == ReportsPanel.Kind.BARS_BY_DAY || kind == ReportsPanel.Kind.LINES;
+                onFx(() -> combo(1).getSelectionModel().select(overDays ? 3 : 0)); // Flow over days, else Bot line
+                kind(kind);
+                onFx(() -> panel.pick(overDays ? "Map" : "com.firestone.Daily:42"));
+                snap(out.resolve(kind.name().toLowerCase().replace('_', '-') + "-"
+                        + theme.name().toLowerCase() + ".png"));
+            }
         }
         onFx(() -> BlockTheme.setTheme(BlockTheme.ThemeType.DEFAULT));
     }
