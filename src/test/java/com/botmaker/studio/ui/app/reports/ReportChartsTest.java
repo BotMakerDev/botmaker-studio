@@ -156,6 +156,16 @@ class ReportChartsTest {
     }
 
     @Test
+    void aForgedFarTimeMakesNoMillionsOfDays() {
+        Report forged = new Report(List.of(new Dimension("f", "F")), List.of(
+                new Occurrence(Instant.parse("0001-01-01T00:00:00Z"), Level.WARN, "a", 1, Map.of("f", "x")),
+                new Occurrence(Instant.parse("9999-12-31T00:00:00Z"), Level.WARN, "a", 1, Map.of("f", "x"))));
+
+        assertEquals(2, ReportCharts.byDay(forged, "f", 6).categories().size());
+        assertEquals(31, ReportCharts.heatmap(forged, "f", 6, 31).days().size());
+    }
+
+    @Test
     void aShareIsASlicePerTopValueAndTheRest() {
         assertEquals(List.of(new ReportCharts.Slice("Daily rewards", 46, false),
                         new ReportCharts.Slice(ReportCharts.OTHER, 14, true)),

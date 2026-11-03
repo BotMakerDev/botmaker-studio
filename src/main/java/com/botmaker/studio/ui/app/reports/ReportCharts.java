@@ -168,8 +168,9 @@ final class ReportCharts {
     static Heat heatmap(Report report, String dimension, int most, int lastDays) {
         List<String> top = Counts.by(report, dimension).stream().limit(most).map(Counts.Count::value).toList();
         Map<String, Counts.Bucket> buckets = buckets(report, dimension);
-        List<String> all = everyDay(buckets);
-        List<String> days = all.subList(Math.max(0, all.size() - lastDays), all.size());
+        List<Counts.Bucket> met = List.copyOf(buckets.values());
+        List<String> days = met.isEmpty() ? List.of()
+                : lastDays(met.getFirst().start(), met.getLast().start(), Math.max(1, lastDays));
         List<List<Integer>> counts = top.stream().map(value -> days.stream()
                 .map(day -> buckets.containsKey(day) ? buckets.get(day).counts().stream()
                         .filter(c -> c.value().equals(value)).mapToInt(Counts.Count::total).sum() : 0)
@@ -184,17 +185,32 @@ final class ReportCharts {
         return byDay;
     }
 
-    /** Every day from the first met to the last, the quiet ones too: a gap reads as zero, not as nothing. */
+    /**
+     * Every day from the first met to the last, the quiet ones too, so a gap reads as zero, not as nothing. Past
+     * {@value #FILLED_DAYS} days, only the days met: a time is a runner's, and a forged year 1 or 9999 must not
+     * make millions of days.
+     */
     private static List<String> everyDay(Map<String, Counts.Bucket> buckets) {
         if (buckets.isEmpty()) return List.of();
         List<Counts.Bucket> met = List.copyOf(buckets.values());
+        if (ChronoUnit.DAYS.between(met.getFirst().start(), met.getLast().start()) >= FILLED_DAYS) {
+            return List.copyOf(buckets.keySet());
+        }
+        return lastDays(met.getFirst().start(), met.getLast().start(), FILLED_DAYS);
+    }
+
+    /** The days from {@code first} to {@code last}, at most the latest {@code most}. */
+    private static List<String> lastDays(Instant first, Instant last, int most) {
+        Instant from = last.minus(most - 1L, ChronoUnit.DAYS);
         List<String> days = new ArrayList<>();
-        for (Instant day = met.getFirst().start(); !day.isAfter(met.getLast().start());
-             day = day.plus(1, ChronoUnit.DAYS)) {
+        for (Instant day = first.isAfter(from) ? first : from; !day.isAfter(last); day = day.plus(1, ChronoUnit.DAYS)) {
             days.add(DAY.format(day));
         }
         return days;
     }
+
+    /** Days a chart over time fills with quiet ones at most. */
+    static final int FILLED_DAYS = 366;
 
     /**
      * One slice of the donut.
