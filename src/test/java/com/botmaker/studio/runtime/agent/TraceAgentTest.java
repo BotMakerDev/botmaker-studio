@@ -74,6 +74,26 @@ class TraceAgentTest {
         assertTrue(lines.isEmpty(), lines.toString());
     }
 
+    /** With debugging off, a run's file still keeps the calls and writes them before the next warning. */
+    @Test
+    void aQuietRunKeepsItsCallsForTheFile() throws Exception {
+        List<TelemetryEvent.Log> written = new ArrayList<>();
+        Diag.set(false);
+        Diag.setSink(lines::add);
+        Diag.setFileSink(null, written::add);
+        try {
+            TracePlan plan = new TracePlan(Set.of(), Set.of(TracedFixture.class.getName()), Set.of());
+            rewritten(BotFixture.class, plan).getMethod("run").invoke(null);
+            Diag.warn("Screens", "stuck");
+        } finally {
+            Diag.setFileSink(null, null);
+        }
+
+        assertTrue(lines.stream().allMatch(l -> l.text().equals("stuck")), lines.toString());
+        assertEquals("add(1, 2) → 3", withoutTime(written.getFirst().text()));
+        assertEquals("stuck", written.getLast().text());
+    }
+
     @Test
     void thePlanSurvivesItsFile() throws IOException {
         Path file = java.nio.file.Files.createTempFile("plan", ".properties");

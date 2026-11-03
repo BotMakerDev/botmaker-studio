@@ -19,7 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * writes one line per call, {@code [ImageFinder] find(ORE) → Match[…]  12 ms}.
  *
  * <p><b>Through the bot's own {@link Diag}</b>, so a traced call is one more debug line: printed to the console,
- * sent to Studio's Trace tab with the bot line that made it, and silent when debugging is off. The source is the
+ * sent to Studio's Trace tab with the bot line that made it, and silent when debugging is off (where the run's
+ * file still keeps the last calls, {@code Diag.setFileSink}). The source is the
  * called class's simple name, and the writer is that class and method, so the tab's class and method filter hides
  * a call's lines like any other. A bot with no {@code botmaker-shared} on its classpath gets the same line on
  * stderr.
@@ -52,6 +53,7 @@ public final class TracedCalls {
     /** Every thread's open repeat, so the run's end reports what is still being counted. */
     private static final Set<Repeat> OPEN = ConcurrentHashMap.newKeySet();
     private static volatile boolean noDiag;
+    private static volatile boolean oldDiag;
 
     private TracedCalls() {}
 
@@ -175,8 +177,22 @@ public final class TracedCalls {
         return repeat;
     }
 
+    /**
+     * Whether a call's line goes anywhere: debugging is on, or the run's file keeps the last lines with it off. A
+     * bot on a {@code botmaker-shared} older than {@code Diag.isRecorded} asks only the switch.
+     */
     private static boolean enabled() {
         if (noDiag) return true;
+        if (!oldDiag) {
+            try {
+                return Diag.isRecorded();
+            } catch (NoSuchMethodError e) {
+                oldDiag = true;
+            } catch (LinkageError e) {
+                noDiag = true;
+                return true;
+            }
+        }
         try {
             return Diag.isEnabled();
         } catch (LinkageError e) {
