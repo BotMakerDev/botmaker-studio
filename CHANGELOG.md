@@ -62,6 +62,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- A bot whose pom asks a newer Java than the one Studio runs on compiles: Studio passes javac its own JDK's
+  release instead (`release version 27 not supported` on Sword x Staff, whose pom a Studio on JDK 27 wrote). A new
+  project's pom names Java 25, BotMaker's, never the JDK that runs Studio.
 - The assistant's plugin tools keep working after **Reload plugins** or opening another project. Each call reaches
   the plugin as it is loaded now; before, a call failed with `NoClassDefFoundError` from the closed plugin's loader.
 

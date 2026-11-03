@@ -18,15 +18,26 @@ public final class JavacRelease {
     /** A Java feature release, digits only: the pom is a cloned bot's too, and anything else would be a javac option. */
     private static final Pattern FEATURE = Pattern.compile("[1-9][0-9]{0,2}");
 
+    /**
+     * The release a new project's pom names (2026-11-03): BotMaker's Java, as {@code botmaker-plugin-parent} pins it,
+     * never the JDK that happens to run Studio. A pom that named Studio's own JDK (27 under a newer system JDK) could
+     * not be compiled by a Studio on 25: {@code release version 27 not supported} on Sword x Staff.
+     */
+    public static final int NEW_PROJECT = 25;
+
     private JavacRelease() {}
 
-    /** {@code --release <n>} for the project in {@code projectDir}, or nothing when its pom names no release. */
+    /**
+     * {@code --release <n>} for the project in {@code projectDir}, or nothing when its pom names no release; a release
+     * above the JDK Studio runs on is that JDK's, which javac can build, and code needing more says so in its errors.
+     */
     public static List<String> args(Path projectDir) {
-        return args(MavenService.readProperties(projectDir));
+        return args(MavenService.readProperties(projectDir), Runtime.version().feature());
     }
 
-    static List<String> args(Map<String, String> properties) {
+    static List<String> args(Map<String, String> properties, int running) {
         String release = properties.getOrDefault("maven.compiler.release", "").strip();
-        return FEATURE.matcher(release).matches() ? List.of("--release", release) : List.of();
+        if (!FEATURE.matcher(release).matches()) return List.of();
+        return List.of("--release", Integer.toString(Math.min(Integer.parseInt(release), running)));
     }
 }

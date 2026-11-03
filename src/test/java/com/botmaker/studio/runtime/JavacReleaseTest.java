@@ -19,11 +19,17 @@ class JavacReleaseTest {
 
     @Test
     void thePomsReleaseIsPassedAndNothingElse() {
-        assertEquals(List.of("--release", "25"), JavacRelease.args(Map.of("maven.compiler.release", " 25 ")));
-        assertEquals(List.of(), JavacRelease.args(Map.of()));
-        assertEquals(List.of(), JavacRelease.args(Map.of("maven.compiler.release", "${java.version}")));
+        assertEquals(List.of("--release", "25"), JavacRelease.args(Map.of("maven.compiler.release", " 25 "), 25));
+        assertEquals(List.of(), JavacRelease.args(Map.of(), 25));
+        assertEquals(List.of(), JavacRelease.args(Map.of("maven.compiler.release", "${java.version}"), 25));
         // A cloned bot's pom is not trusted: a value that is not a release must never reach javac as an option.
-        assertEquals(List.of(), JavacRelease.args(Map.of("maven.compiler.release", "-Xplugin:Evil")));
+        assertEquals(List.of(), JavacRelease.args(Map.of("maven.compiler.release", "-Xplugin:Evil"), 25));
+    }
+
+    @Test
+    void aReleaseAboveTheRunningJdkIsThatJdks() {
+        assertEquals(List.of("--release", "25"), JavacRelease.args(Map.of("maven.compiler.release", "27"), 25));
+        assertEquals(List.of("--release", "21"), JavacRelease.args(Map.of("maven.compiler.release", "21"), 25));
     }
 
     @Test

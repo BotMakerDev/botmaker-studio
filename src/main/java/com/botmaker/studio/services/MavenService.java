@@ -6,6 +6,7 @@ import com.botmaker.plugin.host.PluginPoms;
 import com.botmaker.studio.plugin.DuplicatePlugins;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.studio.runtime.JavacRelease;
 import com.botmaker.studio.sharing.UnpackedBots;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
@@ -337,7 +338,7 @@ public final class MavenService {
         model.setPackaging("jar");
 
         Properties props = new Properties();
-        props.setProperty("maven.compiler.release", String.valueOf(Runtime.version().feature()));
+        props.setProperty("maven.compiler.release", String.valueOf(JavacRelease.NEW_PROJECT));
         props.setProperty("project.build.sourceEncoding", "UTF-8");
         model.setProperties(props);
 
