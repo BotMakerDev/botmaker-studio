@@ -12,6 +12,17 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- **Reports at a run's end**: a ▶ Run that hit problems shows them, ticked, beside the exact issue text each would
+  be (editable), and sends the ticked ones to the bot's author as GitHub issues or comments, through Studio's
+  GitHub sign-in. *This bot from now on* sets the run property `botmaker.reports`: *Ask each time* (default),
+  *Always send*, *Never*. Reports a failed send kept go at the next run's end; a problem sent is not offered
+  ticked again. A bot with no GitHub remote reports nothing.
+- **Trace tab: past runs**: a picker shows a kept run's `run.jsonl` under the same filters; *Submit logs…* opens
+  the reports dialog for the run shown (or the last), *Export logs…* saves its logs as a zip, home folder and user
+  name hidden.
+
 ### Changed
 
 - **Assistant: `read_trace` takes `level` and `run`** (`errors_only` removed): `level: warn` keeps a run's

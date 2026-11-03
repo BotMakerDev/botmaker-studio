@@ -10,6 +10,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.runtime.tryhost.TryHost;
 import com.botmaker.studio.services.trial.TrialCaller;
+import com.botmaker.studio.ui.app.reports.RunProblems;
 import com.botmaker.session.launch.BackgroundLauncher;
 import com.botmaker.studio.util.ClassPathManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
@@ -143,6 +144,7 @@ public class CodeExecutionService {
         cancelled.set(false);
 
         new Thread(() -> {
+            boolean ran = false;
             try {
                 status("Compiling...");
                 Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputClearedEvent()));
@@ -206,6 +208,7 @@ public class CodeExecutionService {
 
                 startTelemetry(pb);
                 currentRunningProcess = pb.start();
+                ran = true;
                 // A stop that landed between the last check and the start found no process to kill.
                 if (cancelled.get()) killRunningProcess();
 
@@ -232,12 +235,15 @@ public class CodeExecutionService {
                 status("Error: " + e.getMessage());
             } finally {
                 trying = false;
+                // This run's folder, read while no next run can have made its own.
+                Path endedRun = ran ? RunProblems.latest(config.projectPath()).orElse(null) : null;
                 isRunning.set(false);
                 currentRunningProcess = null;
                 closeConsole();
                 stopTelemetry();
                 // Tell UI the program has finished so the Stop button disables.
                 eventBus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
+                if (ran) eventBus.publish(new CoreApplicationEvents.BotRunEndedEvent(endedRun));
             }
         }, "CodeRunner").start();
     }

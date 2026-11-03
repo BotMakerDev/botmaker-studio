@@ -11,6 +11,7 @@ import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.runtime.StopKey;
+import com.botmaker.studio.ui.app.reports.RunEndReports;
 import com.botmaker.studio.ui.app.run.RunOverlay;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ContractDependency;
@@ -62,6 +63,7 @@ public class BotProject {
     private DebuggingService debuggingService;
     private StopKey stopKey;
     private RunOverlay runOverlay;
+    private RunEndReports runEndReports;
     private BlockConverter blockConverter;
 
     private BotProject(ProjectConfig config,
@@ -302,6 +304,8 @@ public class BotProject {
         this.stopKey = StopKey.install(eventBus);
         // A small window over the desktop while the bot runs: its controls, its trace, and the plugins' parts.
         this.runOverlay = RunOverlay.install(eventBus, config);
+        // A run's problems, reported to the bot's author as its consent says.
+        this.runEndReports = RunEndReports.install(eventBus, config.projectPath(), projectSettingsService);
 
         // The bot, as a plugin is allowed to see it. After CodeExecutionService, since that is what owns the
         // process; cleared in close(), so a plugin between projects reaches Runs.NONE rather than a channel
@@ -368,6 +372,7 @@ public class BotProject {
         if (stopKey != null) {
             stopKey.close();
         }
+        if (runEndReports != null) runEndReports.close();
         if (runOverlay != null) {
             RunOverlay overlay = runOverlay;
             if (javafx.application.Platform.isFxApplicationThread()) overlay.close();

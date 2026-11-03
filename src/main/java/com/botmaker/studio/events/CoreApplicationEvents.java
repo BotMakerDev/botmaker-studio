@@ -9,6 +9,7 @@ import com.botmaker.studio.ui.dnd.ExpressionDropInfo;
 import com.botmaker.studio.ui.dnd.MoveBlockInfo;
 import org.eclipse.lsp4j.Diagnostic;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
@@ -184,6 +185,13 @@ public class CoreApplicationEvents {
     public record StopRunRequestedEvent() implements ApplicationEvent {}
     public record ProgramStartedEvent() implements ApplicationEvent {}
     public record ProgramStoppedEvent() implements ApplicationEvent {}
+    /**
+     * The bot's own process ended after a run (▶ Run, never a try or a debug session), published off the FX thread
+     * after {@link ProgramStoppedEvent}: its run folder is written, and its problems can be reported
+     * ({@code ui/app/reports/RunEndReports}). {@code run} is its folder, read before the next run could start; null
+     * when it kept no log.
+     */
+    public record BotRunEndedEvent(Path run) implements ApplicationEvent {}
 
     /**
      * ▶ Try {@code statement} on its own (2026-10-06): from the canvas's right-click or an overlay row's ⋮. The

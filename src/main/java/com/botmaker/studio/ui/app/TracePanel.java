@@ -1,11 +1,20 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.TraceLine;
+import com.botmaker.runlog.ReportTarget;
+import com.botmaker.runlog.RunLog;
+import com.botmaker.runlog.RunLogs;
+import com.botmaker.runlog.api.LogLine;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.RunTelemetry;
 import com.botmaker.studio.services.ProjectSettingsService;
+import com.botmaker.studio.ui.Choosers;
+import com.botmaker.studio.ui.app.reports.ReportConsent;
+import com.botmaker.studio.ui.app.reports.RunEndReports;
+import com.botmaker.studio.ui.app.reports.RunProblems;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
@@ -25,7 +34,9 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
@@ -37,6 +48,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.BiConsumer;
@@ -58,13 +70,24 @@ final class TracePanel {
 
     static final int MAX_LINES = 5_000;
     static final String ALL_SOURCES = "All sources";
+    /** The run picker's first item: the running bot's lines, as they come. */
+    static final String LIVE = "This run";
 
     private static final String TRACE_CELL = "trace-cell";
     private static final DateTimeFormatter TIME =
             DateTimeFormatter.ofPattern("HH:mm:ss.SSS", Locale.ROOT).withZone(ZoneId.systemDefault());
 
     private final Path sourceRoot;
+    private final Path project;
+    private final EventBus eventBus;
+    private final ProjectSettingsService settings;
     private final BiConsumer<Path, Integer> onReveal;
+    /** The run shown: {@link #LIVE}, or a past run's folder name. */
+    private final ComboBox<String> runPicker = new ComboBox<>();
+    /** The running bot's lines that came while a past run is shown, put back when it is shown again. */
+    private final List<TraceLine> liveAside = new ArrayList<>();
+    private boolean live = true;
+    private boolean refreshing;
 
     private final Deque<TraceLine> all = new ArrayDeque<>();
     private final ObservableList<TraceLine> shown = FXCollections.observableArrayList();
@@ -78,9 +101,12 @@ final class TracePanel {
     private final List<EventBus.Subscription> subscriptions = new ArrayList<>();
     private final VBox node;
 
-    TracePanel(EventBus eventBus, Path sourceRoot, ProjectSettingsService settings,
+    TracePanel(EventBus eventBus, Path project, Path sourceRoot, ProjectSettingsService settings,
                BiConsumer<Path, Integer> onReveal) {
         this.sourceRoot = sourceRoot;
+        this.project = project;
+        this.eventBus = eventBus;
+        this.settings = settings;
         this.onReveal = onReveal;
         this.writers = new TraceWriters(this::groupOf, hidden -> {
             if (settings != null && settings.current() != null) {
@@ -92,7 +118,32 @@ final class TracePanel {
             writers.load(settings.current().hiddenTraceWriters());
         }
 
-        HBox bar = new HBox(new Label("Show: "));
+        runPicker.getItems().add(LIVE);
+        runPicker.setValue(LIVE);
+        runPicker.setTooltip(new Tooltip("The running bot's lines, or a past run's log"));
+        runPicker.setOnShowing(e -> {
+            String chosen = runPicker.getValue();
+            List<String> items = new ArrayList<>(List.of(LIVE));
+            RunProblems.runs(project).forEach(r -> items.add(r.getFileName().toString()));
+            // Resetting the items clears the value for a moment: that is no pick.
+            refreshing = true;
+            try {
+                runPicker.getItems().setAll(items);
+                runPicker.setValue(chosen);
+            } finally {
+                refreshing = false;
+            }
+        });
+        runPicker.setOnAction(e -> {
+            if (!refreshing) pick(runPicker.getValue());
+        });
+        Button submit = new Button("Submit logs…");
+        submit.setTooltip(new Tooltip("Send the problems of the run shown, or of the last run, to the bot's author"));
+        submit.setOnAction(e -> submit());
+        Button export = new Button("Export logs…");
+        export.setTooltip(new Tooltip("Save the run's logs as a zip, home folder and user name hidden"));
+        export.setOnAction(e -> export());
+        HBox bar = new HBox(runPicker, new Label(" Show: "));
         for (TraceLine.Level level : List.of(TraceLine.Level.DEBUG, TraceLine.Level.INFO,
                 TraceLine.Level.WARN, TraceLine.Level.ERROR)) {
             ToggleButton toggle = new ToggleButton(level.displayName());
@@ -118,7 +169,7 @@ final class TracePanel {
         writers.offer(traceable());
         Region gap = new Region();
         HBox.setHgrow(gap, Priority.ALWAYS);
-        bar.getChildren().addAll(sourceFilter, search, writersToggle, gap, summary, clear);
+        bar.getChildren().addAll(sourceFilter, search, writersToggle, gap, summary, clear, submit, export);
         bar.getStyleClass().add("diagnostics-filter-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
 
@@ -142,14 +193,20 @@ final class TracePanel {
         node = new VBox(bar, body);
         showSummary();
 
-        subscriptions.add(eventBus.subscribe(CoreApplicationEvents.TraceLineEvent.class, e -> add(e.line()), true));
+        subscriptions.add(eventBus.subscribe(CoreApplicationEvents.TraceLineEvent.class, e -> {
+            if (live) add(e.line());
+            else if (e.line() != null) liveAside.add(e.line());
+        }, true));
         // A run's trace is that run's: the next one starts on an empty tab. The plugins may have changed since.
         subscriptions.add(eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> {
+            runPicker.setValue(LIVE);
             clear();
             writers.offer(traceable());
         }, true));
-        subscriptions.add(eventBus.subscribe(CoreApplicationEvents.DebugSessionStartedEvent.class,
-                e -> clear(), true));
+        subscriptions.add(eventBus.subscribe(CoreApplicationEvents.DebugSessionStartedEvent.class, e -> {
+            runPicker.setValue(LIVE);
+            clear();
+        }, true));
     }
 
     VBox node() {
@@ -223,6 +280,79 @@ final class TracePanel {
         all.clear();
         shown.clear();
         showSummary();
+    }
+
+    /** Shows run {@code name}'s log, the same filters on it, or {@link #LIVE} the running bot's lines again. */
+    private void pick(String name) {
+        if (name == null) return;
+        if (LIVE.equals(name)) {
+            if (live) return;
+            live = true;
+            clear();
+            liveAside.forEach(this::add);
+            liveAside.clear();
+            return;
+        }
+        if (live) {
+            liveAside.addAll(all);
+            live = false;
+        }
+        clear();
+        switch (RunLogs.read(project.resolve(RunLog.FOLDER).resolve(name).resolve(RunLog.FILE))) {
+            case RunLogs.Unreadable why -> status("Run " + name + ": " + why.reason());
+            case RunLogs.Readable read -> read.lines().forEach(l -> add(traceLine(l)));
+        }
+    }
+
+    /** A past run's log line as the live trace carries it. */
+    static TraceLine traceLine(LogLine l) {
+        return new TraceLine(Instant.ofEpochMilli(l.atMillis()), TraceLine.Level.fromId(l.level().id()), l.source(),
+                l.text(), l.count(), l.writerClass(), l.writerMethod(), l.className(),
+                l.line() >= 0 ? OptionalInt.of(l.line()) : OptionalInt.empty(), Optional.empty());
+    }
+
+    /** The past run shown, else the newest run kept. */
+    private Optional<Path> chosenRun() {
+        return live || runPicker.getValue() == null ? RunProblems.latest(project)
+                : Optional.of(project.resolve(RunLog.FOLDER).resolve(runPicker.getValue()));
+    }
+
+    /** <i>Submit logs…</i>: the run's problems in the reports dialog, whatever the bot's consent. */
+    private void submit() {
+        Optional<Path> run = chosenRun();
+        List<RunProblems.Draft> drafts = run.map(RunProblems::drafts).orElse(List.of());
+        if (drafts.isEmpty()) {
+            status(run.isEmpty() ? "No run kept a log yet." : "Run " + run.get().getFileName()
+                    + " had no problem to report.");
+            return;
+        }
+        RunEndReports.open(node.getScene() == null ? null : node.getScene().getWindow(), project, run.get(),
+                ReportTarget.of(project).orElse(null), drafts,
+                ReportConsent.of(settings == null ? null : settings.current()), RunProblems.signedIn(), settings,
+                this::status);
+    }
+
+    /** <i>Export logs…</i>: the run's text files, scrubbed, as a zip the user places. */
+    private void export() {
+        Optional<Path> run = chosenRun();
+        if (run.isEmpty()) {
+            status("No run kept a log yet.");
+            return;
+        }
+        Choosers.save(node.getScene() == null ? null : node.getScene().getWindow(), "Export logs", null,
+                run.get().getFileName() + ".zip", Choosers.Filter.of("Zip", "zip")).ifPresent(out -> {
+            try {
+                RunProblems.export(run.get(), out);
+                status("Logs exported to " + out + ".");
+            } catch (IOException e) {
+                status("Logs not exported: " + e.getMessage());
+            }
+        });
+    }
+
+    private void status(String message) {
+        Platform.runLater(
+                () -> eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(message)));
     }
 
     /** What is listed now, for a test. */
