@@ -5,6 +5,11 @@ also holds the 2026-09-06 Studio ↔ SDK decoupling ledger, with a verdict per i
 
 ## Open
 
+- **A headless core: the MCP without Studio running** (2026-11-04, the user's call: a later plan). Today
+  `assist/McpEndpoint` runs inside Studio and its tools edit through `CodeEditor`, `CompileGuard` and the FX model;
+  `botmaker mcp-bridge` only forwards to it. A core holding the project, the grammar (in plugin-host after
+  `2026-11-04-private-values` phase 1), AST rewrite, the compile guard, history and runs would serve the MCP alone,
+  Studio becoming one client that shows the edits live, with one owner of the files.
 - **What a save leaves out or may cost** (`RepairPoints`, 2026-10-30): a nested repository with its own `.git` is left
   out (a tracked one keeps only its commit). Each compile with changed or untracked files writes a commit, tree and
   blobs the next one orphans, and Studio never runs `git gc`; the growth is unmeasured.
