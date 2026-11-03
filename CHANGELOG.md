@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added (Reports button)
+
+- **📊 Reports in Studio's toolbar row**, after Parameters: opens the bottom Reports tab on this computer's runs,
+  read again. Enabled with a project open.
+
 ### Added (plugin runs)
 
 - **A plugin's declared runs** (`runs(MyRuns.class)`, contract 2026-11-03): each is a "▶ title" button at the end

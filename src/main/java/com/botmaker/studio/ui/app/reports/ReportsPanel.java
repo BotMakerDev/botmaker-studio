@@ -195,6 +195,12 @@ public final class ReportsPanel {
         return root;
     }
 
+    /** Shows this computer's runs, read again (the toolbar's Reports button). */
+    public void showRuns() {
+        if (source.getValue() == Source.RUNS) load();
+        else source.setValue(Source.RUNS); // its action loads
+    }
+
     public void dispose() {
         loads.incrementAndGet(); // a load still under way draws nothing
         subscriptions.forEach(EventBus.Subscription::close);

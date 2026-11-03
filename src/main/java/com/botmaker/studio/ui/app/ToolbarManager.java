@@ -49,6 +49,8 @@ public class ToolbarManager {
     private Runnable onProjectSettings;
     /** Opens the Parameters dialog; the same action the Project menu fires. */
     private Runnable onParameters;
+    /** Shows the Reports tab, read again; wired by {@link UIManager}. */
+    private Runnable onReports;
 
     /** Turns the reader-mode preview on and off, and what it is when the bar is built. */
     private Runnable onPreviewAsUser;
@@ -146,6 +148,11 @@ public class ToolbarManager {
         this.onParameters = callback;
     }
 
+    /** Sets the callback invoked when the toolbar's Reports button is clicked. */
+    public void setOnReports(Runnable callback) {
+        this.onReports = callback;
+    }
+
     /**
      * Wires the reader-mode toggle. Reader mode renders the bot the way somebody who only wants to <em>run</em>
      * it sees it — full colour, no controls — and until now an author could not get to it at all: the only
@@ -203,7 +210,7 @@ public class ToolbarManager {
      * and the same builder is the point rather than a tidiness: an item built by a second path is an item that
      * drifts, and the first thing anybody would notice is that the host's buttons are the ones that line up.
      */
-    private List<ToolbarItem> studioItems() {
+    List<ToolbarItem> studioItems() {
         List<ToolbarItem> own = new ArrayList<>();
 
         // 🧭 Setup stood first in this group until 2026-08-31 and is the SDK plugin's 📋 Project Setup item
@@ -230,6 +237,13 @@ public class ToolbarManager {
                 .tooltip("The project's variables: every value the bot reads, with its tag and its editor")
                 .onBar(20)
                 .onPress(() -> c -> run(onParameters)));
+
+        // The bottom Reports tab, read again: a run's problems were one tab among six, found only by looking.
+        own.add(ToolbarItem.id("reports").label("📊 Reports")
+                .tooltip("The bot's runs: logs, problems and charts")
+                .onBar(25)
+                .enabledWhen(EnabledWhen.PROJECT_OPEN)
+                .onPress(() -> c -> run(onReports)));
 
         // 🎮 Pilot stood here until 2026-08-30 and is the SDK plugin's item now, placed by the same merge as
         // any other plugin's. It is the case this surface was added for: a whole feature behind one button,
