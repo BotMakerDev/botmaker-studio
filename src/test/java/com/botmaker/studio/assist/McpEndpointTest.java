@@ -356,7 +356,7 @@ class McpEndpointTest {
                 "list_targets", "set_target", "move_caret", "show_area", "add_file", "delete_file", "find_usages",
                 "rename", "open", "review", "undo", "redo",
                 "run_bot", "run_activity", "try_statement", "stop", "quit_studio", "run_state", "read_trace",
-                "versions", "plugins", "plugin_guide", "migration", "params", "delete_field", "get_settings",
+                "reports", "versions", "plugins", "plugin_guide", "migration", "params", "delete_field", "get_settings",
                 "set_setting", "list_bots", "create_project", "fake_snap"), names,
                 "a plugin's list_files does not shadow Studio's");
         for (String passes : McpTools.WHILE_MOVING) {
@@ -719,7 +719,7 @@ class McpEndpointTest {
         String never = text(call("run_bot", "{\"wait\":5}"));
         assertTrue(never.contains("It did not start"), never);
 
-        String errors = text(call("read_trace", "{\"errors_only\":true}"));
+        String errors = text(call("read_trace", "{\"level\":\"warn\"}"));
         assertTrue(errors.contains("no ore") && !errors.contains("looking"), errors);
         assertTrue(text(call("read_trace", "{\"this_run\":false}")).contains("an earlier run"));
     }

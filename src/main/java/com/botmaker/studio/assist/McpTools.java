@@ -65,7 +65,7 @@ public final class McpTools {
                shape the code.
             4. Try. try_statement runs one statement, run_activity one activity, run_bot the whole bot. Give
                `wait` (seconds) to get the run's end and its trace in the same answer.
-            5. Read. read_trace says what the latest run printed (errors_only for its failures); run_state
+            5. Read. read_trace says what the latest run printed (level warn for its failures, run for a past run's log); run_state
                whether it still runs; stop ends it. A wait that timed out may name a frame it saved: look at
                that rather than taking a new screenshot.
             6. Fix what the trace shows, and go round again.

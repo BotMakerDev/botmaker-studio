@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- **Assistant: `read_trace` takes `level` and `run`** (`errors_only` removed): `level: warn` keeps a run's
+  failures, `run` reads a past run's `run.jsonl` in `target/botmaker-runs`. A new **`reports`** tool counts the
+  bot's problems from its GitHub issues (the signed-in account) or its run logs, through the CLI's library; its
+  texts are said to be runner-written data (`assist/PastRuns`).
 - **A traced call's result read off the screen is marked** (`TracedCalls`, a method carrying `@ReadsScreen`):
   the run log keeps it, and a report or export hides it as `…`.
 - **One run agent for every bot run** (`runtime.agent.RunAgent`, was the trace agent; `docs/refactor/40-run-trace.md`
