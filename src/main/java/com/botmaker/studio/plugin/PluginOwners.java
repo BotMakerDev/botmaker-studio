@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.plugin.api.PluginState;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.project.ProjectConfig;
@@ -60,6 +61,14 @@ public final class PluginOwners {
     public static Path folder(Path resourcesRoot, PluginCoordinate plugin) {
         String segment = ManagedHolders.segment(plugin);
         return segment == null ? resourcesRoot : resourcesRoot.resolve(ROOT).resolve(segment.replace('.', '/'));
+    }
+
+    /**
+     * {@code plugin}'s state folder of the bot at {@code projectDir}, {@link PluginState#folder} (2026-11-03), by its
+     * coordinate as it is: the plugin's runtime names it from the same, so no former groupId is mapped here.
+     */
+    public static Path stateFolder(Path projectDir, PluginCoordinate plugin) {
+        return PluginState.folder(projectDir, plugin.groupId(), plugin.artifactId());
     }
 
     /** The ids of the plugins holding data in {@code config}'s project, in folder order. */

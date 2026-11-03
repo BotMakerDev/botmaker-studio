@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.PluginState;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.plugin.api.source.ManagedMethod;
@@ -723,12 +724,7 @@ public final class ManagedHolders {
 
     /** {@code text} as one package name, or null when it cannot be one. */
     private static String packagePart(String text) {
-        StringBuilder out = new StringBuilder();
-        for (char c : text.toLowerCase(Locale.ROOT).toCharArray()) {
-            out.append(Character.isJavaIdentifierPart(c) && c != '$' ? c : '_');
-        }
-        if (!out.isEmpty() && Character.isDigit(out.charAt(0))) out.insert(0, '_');
-        String name = out.toString();
+        String name = PluginState.part(text);
         return SourceVersion.isIdentifier(name) && !SourceVersion.isKeyword(name) ? name : null;
     }
 

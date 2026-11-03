@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added (plugin state)
+
+- **A plugin's state of the bot** (`StudioServices.stateDir()`): each plugin gets
+  `.botmaker/plugins/<group>/<artifact>/` of the open bot, in no version. A run copy moved to a newer tag keeps the
+  older tag's plugin states (`UnpackedBots.dropOlder`) instead of deleting them with its folder.
+
 ### Fixed
 
 - **A run no longer covers the desktop in black** (`DesktopLayer`): the run layer grows to the desktop only while a

@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.vcs;
 
+import com.botmaker.plugin.api.PluginState;
+import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -213,6 +215,25 @@ class ProjectVcsTest {
         List<ProjectVcs.CommitInfo> history = vcs.history();
         assertEquals(3, history.size());
         assertTrue(history.get(0).message().startsWith("Roll back to"));
+    }
+
+    /** A plugin's state of the bot (2026-11-03) is in no version, and a restore leaves it as it is. */
+    @Test
+    void aVersionNeitherTakesNorRestoresPluginState(@TempDir Path dir) throws IOException {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Files.writeString(dir.resolve("Bot.java"), "v1");
+        vcs.init();
+        String firstSha = vcs.history().get(0).sha();
+        Path state = Files.createDirectories(dir.resolve(".botmaker/plugins/g/a")).resolve("game.json");
+        Files.writeString(state, "learned");
+        Files.writeString(dir.resolve("Bot.java"), "v2");
+        vcs.checkpoint(VersionOrigin.SAVE, "v2");
+
+        vcs.restoreTo(firstSha);
+
+        assertEquals("learned", Files.readString(state));
+        assertTrue(vcs.filesAtHead(path -> path.startsWith(".botmaker/")).isEmpty(), "no version holds it");
+        assertTrue(PluginState.ROOT.startsWith(ProjectConfig.STUDIO_DIR + "/"), "the contract's folder is excluded");
     }
 
     /**

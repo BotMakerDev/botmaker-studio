@@ -19,6 +19,8 @@ import javafx.scene.control.DialogPane;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -92,6 +94,23 @@ public final class HostServices implements StudioServices {
         if (project == null) return Path.of("");
         Path root = project.resourcesRoot();
         return PluginHost.calling().map(plugin -> PluginOwners.folder(root, plugin.coordinate())).orElse(root);
+    }
+
+    /**
+     * The calling plugin's state folder of the open bot ({@link PluginOwners#stateFolder}), created here; empty between
+     * projects, for a call of the host's own, or when the folder cannot be made.
+     */
+    @Override
+    public Optional<Path> stateDir() {
+        if (project == null) return Optional.empty();
+        return PluginHost.calling().flatMap(plugin -> {
+            Path dir = PluginOwners.stateFolder(project.projectPath(), plugin.coordinate());
+            try {
+                return Optional.of(Files.createDirectories(dir));
+            } catch (IOException e) {
+                return Optional.empty();
+            }
+        });
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.botmaker.studio.sharing;
 import com.botmaker.cli.bmk.BotFile;
 import com.botmaker.cli.bmk.BotFiles;
 import com.botmaker.cli.bmk.BotJson;
+import com.botmaker.plugin.api.PluginState;
 import com.botmaker.studio.services.MavenService;
 
 import java.io.IOException;
@@ -155,8 +156,16 @@ public final class BmkOpen {
                     return new NeedsTrust(bot, entry, pinned.isPresent());
                 }
                 // A folder an earlier open left half done, or another file's: unpacked again from this one.
-                deleteTree(dir);
-                BotFile.read(bmk, dir);
+                // The plugins' state of the bot is this machine's, not the file's: set aside, put back.
+                Path state = dir.resolve(PluginState.ROOT);
+                Path aside = dir.resolveSibling("." + dir.getFileName() + ".state");
+                if (Files.isDirectory(state) && !Files.exists(aside)) Files.move(state, aside);
+                try {
+                    deleteTree(dir);
+                    BotFile.read(bmk, dir);
+                } finally {
+                    if (Files.isDirectory(aside) && !Files.exists(state)) UnpackedBots.moveState(aside, state);
+                }
                 Result result = finish(dir, bot, sha, fetch);
                 if (result instanceof Opened) UnpackedBots.dropOlder(root, dir);
                 return result;

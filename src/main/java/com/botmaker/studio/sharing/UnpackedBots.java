@@ -2,6 +2,7 @@ package com.botmaker.studio.sharing;
 
 import com.botmaker.cli.bmk.BotFile;
 import com.botmaker.cli.bmk.BotJson;
+import com.botmaker.plugin.api.PluginState;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.shared.tools.UserDirs;
 import com.botmaker.studio.services.MavenService;
@@ -143,13 +144,22 @@ public final class UnpackedBots {
     /**
      * Deletes every tag of {@code dir}'s bot older than {@code dir} (2026-10-25, the user's call: one folder per run
      * copy), once {@code dir} is checked; a newer tag stays. The runner's values are keyed by {@code owner/repo}, so
-     * they stay too. A folder that will not go is left for the next open to try again: it never fails this one. Its
-     * {@link #CHECKED} goes first, so a delete cut short (a jar Windows holds) leaves no folder that passes for a bot.
+     * they stay too. So do the plugins' states ({@link PluginState#ROOT}, 2026-11-03): the newest older tag's move into
+     * {@code dir} when it has none of its own. A folder that will not go is left for the next open to try again: it
+     * never fails this one. Its {@link #CHECKED} goes first, so a delete cut short (a jar Windows holds) leaves no
+     * folder that passes for a bot.
      */
     static void dropOlder(Path root, Path dir) {
         Path tag = dir.toAbsolutePath().normalize();
         if (at(root, tag).isEmpty()) return;
-        children(tag.getParent()).filter(other -> NEWEST_LAST.compare(other, tag) < 0).forEach(older -> {
+        Path state = tag.resolve(PluginState.ROOT);
+        List<Path> olders = children(tag.getParent()).filter(other -> NEWEST_LAST.compare(other, tag) < 0)
+                .sorted(NEWEST_LAST.reversed()).toList();
+        // Only the newest older state is ever taken; one that will not move keeps its folder for the next open.
+        Optional<Path> newestState = Files.exists(state) ? Optional.empty()
+                : olders.stream().filter(older -> Files.isDirectory(older.resolve(PluginState.ROOT))).findFirst();
+        Optional<Path> stuck = newestState.filter(older -> !moveState(older.resolve(PluginState.ROOT), state));
+        olders.stream().filter(older -> stuck.map(s -> !s.equals(older)).orElse(true)).forEach(older -> {
             try {
                 Files.deleteIfExists(older.resolve(CHECKED));
                 BmkOpen.deleteTree(older);
@@ -157,6 +167,18 @@ public final class UnpackedBots {
                 System.err.println("Could not delete " + older + ": " + e.getMessage());
             }
         });
+    }
+
+    /** Moves the plugins' state {@code from} one folder {@code to} another; false, said, when it will not move. */
+    static boolean moveState(Path from, Path to) {
+        try {
+            Files.createDirectories(to.getParent());
+            Files.move(from, to);
+            return true;
+        } catch (IOException e) {
+            System.err.println("Could not keep the plugins' state " + from + ": " + e.getMessage());
+            return false;
+        }
     }
 
     /** By tag: semantic versions compared as versions, others by name, and a version after any other name. */
