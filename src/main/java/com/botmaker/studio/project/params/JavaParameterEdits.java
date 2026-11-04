@@ -16,11 +16,15 @@ import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
+import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MemberValuePair;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.NormalAnnotation;
+import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
@@ -72,6 +76,79 @@ public final class JavaParameterEdits {
             rewrite.set(fragment, VariableDeclarationFragment.INITIALIZER_PROPERTY, initializer.copyInto(ast), null);
             addImports(unit, rewrite, initializer.imports());
         });
+    }
+
+    /**
+     * Replaces what the {@code default} method {@code methodName} of the schema {@code schema} returns with
+     * {@code value} — an {@code EDITOR} parameter's value is the author's, so it is the schema's own (2026-11-04).
+     * Unchanged when there is no such method or its body is not one {@code return}.
+     */
+    public static String setDefault(String source, String schema, String methodName, JavaValue value) {
+        if (value == null) return source;
+        CompilationUnit unit = BotParser.syntax(source);
+        AST ast = unit.getAST();
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        TypeDeclaration type = typeDeclaration(unit, schema);
+        MethodDeclaration method = type == null ? null : methodOf(type, methodName);
+        Expression returned = method == null ? null : ValuesClasses.returned(method).orElse(null);
+        if (returned == null) return source;
+        rewrite.replace(returned, value.copyInto(ast), null);
+        addImports(unit, rewrite, value.imports());
+        return AstRewriteHelper.applyRewrite(rewrite, source);
+    }
+
+    /**
+     * {@code source}, the values class {@code valuesClass}, with {@code methodName} overridden to return
+     * {@code value}: the override replaced when there is one, added after the others when not. Its return type is
+     * written from {@code form}, with the imports it needs. Unchanged when there is no such class, or {@code form}
+     * has no node.
+     */
+    public static String override(String source, String valuesClass, String name, Type form, JavaValue value) {
+        if (value == null) return source;
+        CompilationUnit unit = BotParser.syntax(source);
+        AST ast = unit.getAST();
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        TypeDeclaration type = typeDeclaration(unit, valuesClass);
+        if (type == null) return source;
+        // The return type is written from the parameter's form, importing what it names, wherever the schema
+        // found it (its own package, a wildcard import): the values class sits in another package.
+        Set<String> imports = new LinkedHashSet<>(value.imports());
+        org.eclipse.jdt.core.dom.Type returnType = ValueTypes.node(ast, form, imports).orElse(null);
+        if (returnType == null) return source;
+        MethodDeclaration present = methodOf(type, name);
+        Expression returned = present == null ? null : ValuesClasses.returned(present).orElse(null);
+        if (returned != null) {
+            rewrite.replace(returned, value.copyInto(ast), null);
+        } else {
+            MethodDeclaration method = ast.newMethodDeclaration();
+            MarkerAnnotation overrides = ast.newMarkerAnnotation();
+            overrides.setTypeName(ast.newSimpleName("Override"));
+            method.modifiers().add(overrides);
+            method.modifiers().add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+            method.setReturnType2(returnType);
+            method.setName(ast.newSimpleName(name));
+            Block body = ast.newBlock();
+            ReturnStatement ret = ast.newReturnStatement();
+            ret.setExpression(value.copyInto(ast));
+            body.statements().add(ret);
+            method.setBody(body);
+            ListRewrite members = rewrite.getListRewrite(type, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+            if (present != null) {
+                members.replace(present, method, null);
+            } else {
+                members.insertLast(method, null);
+            }
+        }
+        addImports(unit, rewrite, List.copyOf(imports));
+        return AstRewriteHelper.applyRewrite(rewrite, source);
+    }
+
+    /** The method called {@code name} declared directly in {@code type}, or {@code null}. */
+    private static MethodDeclaration methodOf(TypeDeclaration type, String name) {
+        for (MethodDeclaration method : type.getMethods()) {
+            if (method.getName().getIdentifier().equals(name)) return method;
+        }
+        return null;
     }
 
     // A rename is not here (2026-09-27): it is project-wide and found by binding, so it is

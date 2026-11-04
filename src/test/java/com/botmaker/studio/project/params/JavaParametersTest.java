@@ -91,6 +91,90 @@ class JavaParametersTest {
         assertTrue(source.contains("@Param(category = \"Run\")"), source);
     }
 
+    // ---- a schema (2026-11-04) ----------------------------------------------------------------------------
+
+    /** An EDITOR method of a schema is the author's: its value is the default body, committed with the bot. */
+    @Test
+    void anEditorParameterIsTheDefault(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "RunChoices.java", schema("""
+                    @Param.Shown(category = "Limits", description = "How many tries")
+                    default int tries() { return 10; }
+                """));
+        JavaParameter tries = only(config);
+        assertTrue(tries.schema() && tries.editable(), tries.note());
+        assertEquals("RunChoices", tries.className());
+        assertEquals("10", tries.row().value());
+        assertEquals("Limits", tries.row().category());
+        assertEquals("How many tries", tries.row().description());
+
+        assertTrue(JavaParameters.setValue(config, null, tries, java("3"), TestValues.GRAMMAR).isPresent());
+
+        String source = Files.readString(config.mainPackageDir().resolve("RunChoices.java"));
+        assertTrue(source.contains("default int tries() { return 3; }"), source);
+        assertFalse(Files.exists(config.mainPackageDir().resolve("values")), "nothing private was written");
+        assertInstanceOf(JavaParameters.Outcome.Refused.class, JavaParameters.declare(config, null, only(config),
+                tries.row().toBuilder().category("Run").build(), tries.form(), TestValues.GRAMMAR));
+    }
+
+    /**
+     * A PUBLIC method is the runner's: its value goes to this computer's values class, created on the first one and
+     * kept to the methods it overrides, and the schema's default stays as the author wrote it.
+     */
+    @Test
+    void aPublicParameterIsWrittenToTheValuesClass(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "RunChoices.java", schema("""
+                    default int tries() { return 10; }
+
+                    default String mode() { return "fast"; }
+                """).replace("@Param\n", "@Param(visibility = Param.PUBLIC)\n"));
+        JavaParameter tries = JavaParameters.find(config, null, "RunChoices", "tries", TestValues.GRAMMAR)
+                .orElseThrow();
+        assertEquals(Visibility.PUBLIC, tries.row().visibility(), "the schema's visibility is its methods'");
+
+        Optional<ParameterRow> stored = JavaParameters.setValue(config, null, tries, java("3"), TestValues.GRAMMAR);
+
+        assertEquals("3", stored.orElseThrow().value(), "the row reads the override back");
+        Path values = config.mainPackageDir().resolve("values/RunChoicesValues.java");
+        String written = Files.readString(values);
+        assertTrue(written.startsWith("package com.refbot.values;"), written);
+        assertTrue(written.contains("import com.refbot.RunChoices;"), written);
+        assertTrue(written.contains("implements RunChoices"), written);
+        assertTrue(written.contains("public int tries()"), written);
+        assertTrue(written.contains("return 3;"), written);
+        assertFalse(written.contains("mode()"), "only what this computer set");
+        String schema = Files.readString(config.mainPackageDir().resolve("RunChoices.java"));
+        assertTrue(schema.contains("return 10;"), schema);
+
+        JavaParameter again = JavaParameters.find(config, null, "RunChoices", "tries", TestValues.GRAMMAR)
+                .orElseThrow();
+        assertEquals(values.toAbsolutePath().normalize(), again.valuesFile().toAbsolutePath().normalize());
+        JavaParameters.setValue(config, null, again, java("4"), TestValues.GRAMMAR);
+        String rewritten = Files.readString(values);
+        assertTrue(rewritten.contains("return 4;") && !rewritten.contains("return 3;"), rewritten);
+    }
+
+    /** The values class imports its return type itself, whichever way the schema named it (here a wildcard). */
+    @Test
+    void aValuesClassImportsItsReturnTypes(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "RunChoices.java", schema("""
+                    default Duration rest() { return java.time.Duration.ofMillis(3000L); }
+                """).replace("@Param\n", "@Param(visibility = Param.PUBLIC)\n")
+                .replace("import com.botmaker", "import java.time.*;\nimport com.botmaker"));
+        JavaParameter rest = JavaParameters.find(config, null, "RunChoices", "rest", TestValues.GRAMMAR)
+                .orElseThrow();
+        assertTrue(rest.editable(), rest.note());
+
+        assertTrue(JavaParameters.setValue(config, null, rest, java("java.time.Duration.ofMillis(60000L)"),
+                TestValues.GRAMMAR).isPresent());
+
+        String written = Files.readString(config.mainPackageDir().resolve("values/RunChoicesValues.java"));
+        assertTrue(written.contains("import java.time.Duration;"), written);
+        assertTrue(written.contains("public Duration rest()"), written);
+    }
+
     // ---- adding -----------------------------------------------------------------------------------------
 
     @Test
@@ -457,6 +541,19 @@ class JavaParametersTest {
                 %s
                 }
                 """.formatted(fields);
+    }
+
+    /** A {@code @Param} schema interface {@code RunChoices} holding {@code methods}. */
+    private static String schema(String methods) {
+        return """
+                package com.refbot;
+
+                import com.botmaker.plugin.api.params.Param;
+
+                @Param
+                public interface RunChoices {
+                %s}
+                """.formatted(methods);
     }
 
     private static void write(ProjectConfig config, String name, String source) throws IOException {

@@ -237,6 +237,28 @@ class ProjectVcsTest {
     }
 
     /**
+     * This computer's values of the bot's schemas (2026-11-04) are in no version, and a restore leaves them as they
+     * are: they hold the runner's choices, which must never reach the bot's remote.
+     */
+    @Test
+    void valuesAreNeverVersioned(@TempDir Path dir) throws IOException {
+        ProjectVcs vcs = new ProjectVcs(dir);
+        Path bot = Files.createDirectories(dir.resolve("src/main/java/com/refbot"));
+        Files.writeString(bot.resolve("Bot.java"), "v1");
+        vcs.init();
+        String firstSha = vcs.history().get(0).sha();
+        Path values = Files.createDirectories(bot.resolve("values")).resolve("RunChoicesValues.java");
+        Files.writeString(values, "private");
+        Files.writeString(bot.resolve("Bot.java"), "v2");
+        vcs.checkpoint(VersionOrigin.SAVE, "v2");
+
+        vcs.restoreTo(firstSha);
+
+        assertEquals("private", Files.readString(values));
+        assertTrue(vcs.filesAtHead(path -> path.contains("/values/")).isEmpty(), "no version holds it");
+    }
+
+    /**
      * A submodule's {@code .git} is a file naming the repository elsewhere. Studio read it as "no history" and
      * ran {@code git init} over it, which failed creating {@code .git/} where the file sat.
      */

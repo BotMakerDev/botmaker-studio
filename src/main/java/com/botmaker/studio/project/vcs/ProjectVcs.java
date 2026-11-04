@@ -1626,9 +1626,19 @@ public final class ProjectVcs {
         Files.writeString(exclude, existing + separator + added);
     }
 
-    /** What {@link #excludeStudioState} keeps out of every version: Studio's state, and an old Studio's leftover. */
+    /**
+     * What {@link #excludeStudioState} keeps out of every version: Studio's state, an old Studio's leftover, and
+     * this computer's values of the bot's schemas ({@link #VALUES}).
+     */
     static final List<String> EXCLUDED = List.of("/" + ProjectConfig.STUDIO_DIR + "/",
-            "/src/main/resources/botmaker-project.properties", BMK);
+            "/src/main/resources/botmaker-project.properties", BMK, ProjectVcs.VALUES);
+
+    /**
+     * Every {@code values} package of the bot's sources (2026-11-04): this computer's values classes of its
+     * {@code @Param} schemas, which hold the runner's choices and so never reach a version, a push or a publish. A
+     * restore keeps them: a hard reset leaves an excluded file alone.
+     */
+    public static final String VALUES = "/src/main/java/**/values/";
 
     private void writeGitignore() throws IOException {
         Path gitignore = projectDir.resolve(".gitignore");

@@ -122,10 +122,12 @@ public final class JavaParameters {
             // The bot's own constants, so Flows.MAIN or Activities.Rest.class in an initialiser reads as a value.
             ManagedConstants.Lookup names = new ManagedConstants.Lookup(ManagedConstants.over(index), grammar);
             BotRecords records = BotRecords.over(grammar, units.values());
+            // This machine's values classes, so a PUBLIC schema method shows what it overrides (2026-11-04).
+            ValuesClasses values = ValuesClasses.over(units, index.sources());
             List<JavaParameter> out = new ArrayList<>();
             units.forEach((file, unit) -> out.addAll(
                     JavaParameterSource.read(file, index.sources().get(file), unit, grammar, records, names,
-                            managed)));
+                            managed, values)));
             return List.copyOf(out);
         });
     }
@@ -255,6 +257,10 @@ public final class JavaParameters {
             return new Outcome.Refused(parameter.qualified() + " is a plugin's parameter: only its value can be"
                     + " changed. " + parameter.owner());
         }
+        if (parameter.schema() && !declarationKept) {
+            return new Outcome.Refused(parameter.qualified() + " is a method of the schema " + parameter.className()
+                    + ": change its name, type or how it is shown in that interface.");
+        }
 
         if (!wanted.name().equals(name)) {
             Optional<String> refused = rename(config, state, parameter, wanted.name());
@@ -358,6 +364,10 @@ public final class JavaParameters {
         if (parameter.declaredByPlugin()) {
             return new Outcome.Refused(parameter.qualified() + " is a plugin's parameter, and BotMaker writes it"
                     + " back while the plugin is in the project. " + parameter.owner());
+        }
+        if (parameter.schema()) {
+            return new Outcome.Refused(parameter.qualified() + " is a method of the schema " + parameter.className()
+                    + ": remove it from that interface.");
         }
         BotIndex index = BotIndex.of(config, state);
         int start = fieldStart(index, parameter);
@@ -616,8 +626,70 @@ public final class JavaParameters {
     /** Replaces a parameter's value with {@code initializer}'s tree. */
     private static boolean writeValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                       JavaValue initializer) {
+        if (parameter.writesValuesClass()) return writeValuesClass(config, state, parameter, initializer);
+        if (parameter.schema()) {
+            return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setDefault(
+                    source, parameter.className(), parameter.name(), initializer));
+        }
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
                 source, parameter.className(), parameter.name(), initializer));
+    }
+
+    /**
+     * Writes a {@code PUBLIC} schema method's value as this machine's override, in the schema's values class
+     * (2026-11-04): the one this machine has, else {@code values/<Schema>Values.java} in the bot's package, created.
+     * The values class is never committed ({@link ValuesClasses}).
+     */
+    private static boolean writeValuesClass(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                            JavaValue initializer) {
+        if (config == null) return false;
+        BotIndex index = BotIndex.of(config, state);
+        Path schemaFile = parameter.file().toAbsolutePath().normalize();
+        CompilationUnit schemaUnit = index.read(units -> units.get(schemaFile));
+        if (schemaUnit == null) return false;
+        String valuesClass = parameter.className() + ValuesClasses.SUFFIX;
+        Optional<Path> held = index.read(units -> ValuesClasses.over(units, index.sources()))
+                .of(parameter.className()).map(ValuesClasses.Held::file);
+        Path file = held.isPresent() ? held.get() : createValuesClass(config, state, schemaUnit, parameter.className());
+        if (file == null) return false;
+        return rewrite(config, state, file, source -> JavaParameterEdits.override(
+                source, valuesClass, parameter.name(), parameter.form(), initializer));
+    }
+
+    /**
+     * Writes an empty values class of the top-level schema {@code schema} into {@code <bot>.values}, known to the
+     * editor at once, and answers where it is; {@code null} when it could not be written. An existing file is kept.
+     */
+    private static Path createValuesClass(ProjectConfig config, ProjectState state, CompilationUnit schemaUnit,
+                                          String schema) {
+        String schemaPackage = schemaUnit.getPackage() == null ? ""
+                : schemaUnit.getPackage().getName().getFullyQualifiedName();
+        String valuesPackage = config.mainPackage() + "." + ValuesClasses.PACKAGE;
+        Path file = config.mainPackageDir().resolve(ValuesClasses.PACKAGE)
+                .resolve(schema + ValuesClasses.SUFFIX + ".java");
+        if (Files.isRegularFile(file)) return file;
+        String source = """
+                package %s;
+
+                import %s;
+
+                /**
+                 * This computer's values of {@link %s}: each method here overrides the schema's default. Never
+                 * committed, versioned or published.
+                 */
+                public final class %s implements %s {
+                }
+                """.formatted(valuesPackage, schemaPackage.isEmpty() ? schema : schemaPackage + "." + schema, schema,
+                schema + ValuesClasses.SUFFIX, schema);
+        if (!ProjectWrites.create(config, file, source, "Create " + schema + ValuesClasses.SUFFIX)) return null;
+        if (state != null && state.getFile(file).isEmpty()) {
+            try {
+                state.addFile(new ProjectFile(file, Files.readString(file)));
+            } catch (IOException unreadable) {
+                // Read from disk by the next walk instead.
+            }
+        }
+        return file;
     }
 
     /**

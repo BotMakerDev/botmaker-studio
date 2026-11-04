@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.grammar.BotNames;
 import com.botmaker.plugin.host.grammar.JavaExpressions;
@@ -17,15 +18,17 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.Type;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
+import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Reads {@code @Param} fields out of <b>one</b> Java source, with no project, no filesystem and no host.
@@ -98,8 +101,34 @@ public final class JavaParameterSource {
      */
     public static List<JavaParameter> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
                                            BotRecords records, BotNames names, List<ManagedValue<?>> known) {
+        return read(file, source, unit, grammar, records, names, known, ValuesClasses.NONE);
+    }
+
+    /**
+     * The same, with this machine's {@code values}: a {@code PUBLIC} method of a {@code @Param} schema shows the
+     * value its values class overrides it with, else its {@code default}.
+     */
+    public static List<JavaParameter> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
+                                           BotRecords records, BotNames names, List<ManagedValue<?>> known,
+                                           ValuesClasses values) {
         List<JavaParameter> out = new ArrayList<>();
         unit.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(TypeDeclaration type) {
+                // A schema is a public top-level interface: its values class, in another package, implements it.
+                boolean schemaShaped = type.isInterface() && type.isPackageMemberTypeDeclaration()
+                        && Modifier.isPublic(type.getModifiers());
+                Annotation schema = schemaShaped ? BotAnnotation.PARAM.on(type) : null;
+                if (schema == null) return true;
+                Map<String, Object> shared = BotAnnotation.PARAM.members(schema);
+                for (MethodDeclaration method : type.getMethods()) {
+                    if (!Modifier.isDefault(method.getModifiers())) continue;
+                    out.add(readMethod(file, source, grammar, records, names, type.getName().getIdentifier(), shared,
+                            method, values));
+                }
+                return true;
+            }
+
             @Override
             public boolean visit(FieldDeclaration field) {
                 Annotation annotation = paramAnnotation(field);
@@ -126,7 +155,7 @@ public final class JavaParameterSource {
         String initializer = fragment.getInitializer() == null ? ""
                 : text(source, fragment.getInitializer());
 
-        java.lang.reflect.Type form = ValueTypeResolver.of(grammar, field.getType(), fragment.getExtraDimensions(),
+        Type form = ValueTypeResolver.of(grammar, field.getType(), fragment.getExtraDimensions(),
                 records.declaredNames());
         // The grammar declines a bot's own class by design — only the host's view of the bot's own source can
         // read one — so the second reader is asked for exactly that case and for no other.
@@ -149,6 +178,69 @@ public final class JavaParameterSource {
     }
 
     /**
+     * One {@code default} method of a {@code @Param} schema (2026-11-04). Its {@link Param.Shown} members win over
+     * the schema's own ({@code shared}); a {@code PUBLIC} one reads its value from this machine's values class when
+     * that overrides it, and from its {@code default} body otherwise.
+     */
+    private static JavaParameter readMethod(Path file, String source, ValueGrammar grammar, BotRecords records,
+                                            BotNames names, String schema, Map<String, Object> shared,
+                                            MethodDeclaration method, ValuesClasses values) {
+        Annotation shownOn = BotAnnotation.PARAM_SHOWN.on(method);
+        Map<String, Object> shown = shownOn == null ? Map.of() : BotAnnotation.PARAM_SHOWN.members(shownOn);
+        String name = method.getName().getIdentifier();
+        Visibility visibility = Visibility.fromId(either(shown, shared, "visibility"));
+
+        Expression value = ValuesClasses.returned(method).orElse(null);
+        String held = source;
+        Path valuesFile = null;
+        if (visibility == Visibility.PUBLIC) {
+            Optional<ValuesClasses.Held> overriding = values.of(schema).filter(v -> v.returns().containsKey(name));
+            if (overriding.isPresent()) {
+                value = overriding.get().returns().get(name);
+                held = overriding.get().source();
+                valuesFile = overriding.get().file();
+            }
+        }
+        String initializer = value == null ? "" : text(held, value);
+
+        Type form = ValueTypeResolver.of(grammar, method.getReturnType2(),
+                method.getExtraDimensions(), records.declaredNames());
+        boolean readable = value != null && (form instanceof ValueTypes.BotClass declared
+                ? records.partsOf(declared, initializer).isPresent()
+                : grammar.read(form, new SourceNode(value, held), names).isPresent());
+        String note = whyNotEditable(grammar, form, records, readable, initializer, value != null);
+
+        ParameterRow row = ParameterRow.named(name, ValueTypes.sourceName(form))
+                .value(initializer)
+                .description(string(shown, "description"))
+                .category(either(shown, shared, "category"))
+                .visibility(visibility)
+                .build();
+        return new JavaParameter(file, schema, row, form, initializer, note.isEmpty(), note, "", "", true,
+                valuesFile);
+    }
+
+    /** {@code member} as {@code first} sets it, else as {@code second} does. */
+    private static String either(Map<String, Object> first, Map<String, Object> second, String member) {
+        String own = string(first, member);
+        return own.isBlank() ? string(second, member) : own;
+    }
+
+    /** Why a schema method's value cell is read-only, or {@code ""}: the field rules a method has no use for left out. */
+    private static String whyNotEditable(ValueGrammar grammar, Type form, BotRecords records,
+                                         boolean readable, String initializer, boolean oneReturn) {
+        if (form instanceof ValueTypes.BotClass declared) {
+            String why = records.whyNotEditable(declared);
+            if (why != null) return why;
+        }
+        String unknown = grammar.firstUnknown(form);
+        if (unknown != null) return unknownReason(form, unknown);
+        if (!oneReturn) return "its body is not one return of a value, so it is kept rather than replaced";
+        if (!readable) return "written by hand as " + initializer + ", which is kept rather than replaced";
+        return "";
+    }
+
+    /**
      * Why {@code field}'s declaration is a plugin's — the reason its {@code ManagedValue.param} gives — when it
      * carries a plugin's mark, {@code @SdkValue(SdkValue.Id.DO_SETUP)}; {@code ""} for the bot's own field. A
      * mark no loaded plugin declares still locks it: the bot's code was written to read that field by name.
@@ -167,7 +259,7 @@ public final class JavaParameterSource {
      * reason — is the failure this whole design exists to avoid. A field is never <em>rejected</em>: it is
      * still listed, still shows what it holds, and still tells the author what to change.
      */
-    private static String whyNotEditable(ValueGrammar grammar, FieldDeclaration field, java.lang.reflect.Type form,
+    private static String whyNotEditable(ValueGrammar grammar, FieldDeclaration field, Type form,
                                          BotRecords records, boolean readable, String initializer) {
         int modifiers = field.getModifiers();
         if (!Modifier.isPublic(modifiers)) {
@@ -198,7 +290,7 @@ public final class JavaParameterSource {
     }
 
     /** The sentence for a type with a leaf nothing declares: the type itself, or one of its arguments. */
-    public static String unknownReason(java.lang.reflect.Type type, String unknown) {
+    public static String unknownReason(Type type, String unknown) {
         return ValueTypes.isLeaf(type)
                 ? "no installed plugin declares " + unknown + " as a value type"
                 : "type argument " + unknown + " is not a known value type";

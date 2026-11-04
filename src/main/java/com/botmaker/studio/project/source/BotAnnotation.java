@@ -51,6 +51,8 @@ import java.util.Set;
 public enum BotAnnotation {
 
     PARAM(Param.class, "com.botmaker.plugin.basics.params.Param"),
+    /** How one method of a {@code @Param} schema is shown (2026-11-04). */
+    PARAM_SHOWN(Param.Shown.class),
     /** A refactor that guessed, on a bot's function (2026-09-27). No earlier name: it began in the contract. */
     REFACTOR(Refactor.class),
     /** The author's mapping from one type's values to another's, on a bot's method (2026-10-12). */
@@ -156,16 +158,20 @@ public enum BotAnnotation {
             case BooleanLiteral literal -> Optional.of(literal.booleanValue());
             case QualifiedName qualified when names.stream()
                     .anyMatch(name -> SourceNames.refersTo(qualified.getQualifier(), name)) ->
-                    ownConstant(qualified.getName().getIdentifier());
+                    ownConstant(type, qualified.getName().getIdentifier());
+            // A nested annotation spells its outer one's constants: @Param.Shown(visibility = Param.PUBLIC).
+            case QualifiedName qualified when type.getDeclaringClass() != null
+                    && SourceNames.refersTo(qualified.getQualifier(), type.getDeclaringClass().getCanonicalName()) ->
+                    ownConstant(type.getDeclaringClass(), qualified.getName().getIdentifier());
             case null -> Optional.empty();
             default -> JdkLiterals.readAny(expression).filter(Number.class::isInstance).map(BotAnnotation::normal);
         };
     }
 
-    /** A {@code static final} field this annotation declares, by reflection on the contract's class. */
-    private Optional<Object> ownConstant(String name) {
+    /** A {@code static final} field {@code owner} declares, by reflection on the contract's class. */
+    private static Optional<Object> ownConstant(Class<?> owner, String name) {
         try {
-            Field field = type.getField(name);
+            Field field = owner.getField(name);
             if (!Modifier.isStatic(field.getModifiers()) || !Modifier.isFinal(field.getModifiers())) {
                 return Optional.empty();
             }

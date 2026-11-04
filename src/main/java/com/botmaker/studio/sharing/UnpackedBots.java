@@ -5,6 +5,7 @@ import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.plugin.api.PluginState;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.shared.tools.UserDirs;
+import com.botmaker.studio.project.params.ValuesClasses;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -159,7 +160,11 @@ public final class UnpackedBots {
         Optional<Path> newestState = Files.exists(state) ? Optional.empty()
                 : olders.stream().filter(older -> Files.isDirectory(older.resolve(PluginState.ROOT))).findFirst();
         Optional<Path> stuck = newestState.filter(older -> !moveState(older.resolve(PluginState.ROOT), state));
-        olders.stream().filter(older -> stuck.map(s -> !s.equals(older)).orElse(true)).forEach(older -> {
+        // The runner's values classes (2026-11-04) go with them, newest first, each where the new tag has none yet;
+        // a tag whose values will not move keeps its folder, like a stuck state.
+        List<Path> keep = olders.stream().filter(older -> !moveValues(older, tag)).toList();
+        olders.stream().filter(older -> stuck.map(s -> !s.equals(older)).orElse(true))
+                .filter(older -> !keep.contains(older)).forEach(older -> {
             try {
                 Files.deleteIfExists(older.resolve(CHECKED));
                 BmkOpen.deleteTree(older);
@@ -167,6 +172,32 @@ public final class UnpackedBots {
                 System.err.println("Could not delete " + older + ": " + e.getMessage());
             }
         });
+    }
+
+    /**
+     * Moves every {@code values} package under {@code older}'s sources to the same place in {@code tag}, where
+     * {@code tag} has none: this computer's values of the bot's schemas, never in a tag, kept across an update.
+     * False when one would not move or could not be looked for: then {@code older} must not be deleted.
+     */
+    static boolean moveValues(Path older, Path tag) {
+        Path sources = older.resolve("src/main/java");
+        if (!Files.isDirectory(sources)) return true;
+        List<Path> found;
+        try (Stream<Path> walk = Files.walk(sources)) {
+            found = walk.filter(Files::isDirectory)
+                    .filter(dir -> dir.getFileName().toString().equals(ValuesClasses.PACKAGE)).toList();
+        } catch (IOException e) {
+            System.err.println("Could not look for values in " + older + ": " + e.getMessage());
+            return false;
+        }
+        boolean moved = true;
+        for (Path values : found) {
+            // A values package inside another moves with it.
+            if (found.stream().anyMatch(outer -> !outer.equals(values) && values.startsWith(outer))) continue;
+            Path to = tag.resolve(older.relativize(values));
+            if (!Files.exists(to)) moved &= moveState(values, to);
+        }
+        return moved;
     }
 
     /** Moves the plugins' state {@code from} one folder {@code to} another; false, said, when it will not move. */

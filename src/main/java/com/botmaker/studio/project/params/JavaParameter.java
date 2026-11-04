@@ -30,9 +30,15 @@ import java.nio.file.Path;
  *                    blank for the bot's own parameter (2026-10-11)
  * @param managedId   the id of the plugin's mark on the field, {@code …SdkValue$Id.VM}, which names the
  *                    declaration (and its condition, {@code ManagedParam.appliesIn}); blank for the bot's own
+ * @param schema      whether this is a method of a {@code @Param} interface (2026-11-04) rather than a field: its
+ *                    {@code default} body is the author's value, and a {@code PUBLIC} one's value is this machine's,
+ *                    in {@code valuesFile}
+ * @param valuesFile  the values class overriding this method, where the row's value was read; {@code null} when no
+ *                    values class overrides it (the row shows the default) and for a field
  */
 public record JavaParameter(Path file, String className, ParameterRow row, Type form, String initializer,
-                            boolean editable, String note, String owner, String managedId) {
+                            boolean editable, String note, String owner, String managedId, boolean schema,
+                            Path valuesFile) {
 
     public JavaParameter {
         form = form == null ? ValueTypes.NONE : form;
@@ -40,6 +46,20 @@ public record JavaParameter(Path file, String className, ParameterRow row, Type 
         note = note == null ? "" : note;
         owner = owner == null ? "" : owner;
         managedId = managedId == null ? "" : managedId;
+    }
+
+    /** A {@code @Param} field. */
+    public JavaParameter(Path file, String className, ParameterRow row, Type form, String initializer,
+                         boolean editable, String note, String owner, String managedId) {
+        this(file, className, row, form, initializer, editable, note, owner, managedId, false, null);
+    }
+
+    /**
+     * Whether a change of value goes to the values class rather than to the declaration: a schema method shown to
+     * the runner ({@code PUBLIC}). An {@code EDITOR} one is the author's, written as its {@code default} body.
+     */
+    public boolean writesValuesClass() {
+        return schema && row.visibility() == Visibility.PUBLIC;
     }
 
     /**
@@ -77,7 +97,8 @@ public record JavaParameter(Path file, String className, ParameterRow row, Type 
      * a field is still in would be a walk that can only confirm what is here.
      */
     public JavaParameter withRow(ParameterRow newRow) {
-        return new JavaParameter(file, className, newRow, form, initializer, editable, note, owner, managedId);
+        return new JavaParameter(file, className, newRow, form, initializer, editable, note, owner, managedId, schema,
+                valuesFile);
     }
 
     /**
@@ -85,11 +106,12 @@ public record JavaParameter(Path file, String className, ParameterRow row, Type 
      * with {@code ""} and {@code ""}.
      */
     public JavaParameter owned(String why, String id) {
-        return new JavaParameter(file, className, row, form, initializer, editable, note, why, id);
+        return new JavaParameter(file, className, row, form, initializer, editable, note, why, id, schema, valuesFile);
     }
 
     /** The same field, retyped to {@code newForm}. */
     public JavaParameter withForm(Type newForm) {
-        return new JavaParameter(file, className, row, newForm, initializer, editable, note, owner, managedId);
+        return new JavaParameter(file, className, row, newForm, initializer, editable, note, owner, managedId, schema,
+                valuesFile);
     }
 }

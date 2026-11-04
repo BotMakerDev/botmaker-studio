@@ -12,6 +12,18 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added (private values)
+
+- **A `@Param` schema's methods are rows of the Parameters window** (2026-11-04): each `default` method of an
+  interface marked `@Param`, filed and shown by `@Param.Shown` or the interface's own members. Setting an `EDITOR`
+  one rewrites its `default` body (the author's value, committed); setting a `PUBLIC` one writes this computer's
+  override into `values/<Schema>Values.java` in the bot's package, created on the first value, and the row reads
+  the override back. Renaming, retyping, refiling or removing a schema's method is refused with a sentence: done in
+  the interface for now.
+- **`values/` is in no version** (`ProjectVcs.VALUES` in `.git/info/exclude`), so the runner's choices never reach
+  a push, a publish or a `.bmk`; a restore keeps it, and a run copy moved to a newer tag takes the older tag's
+  values packages along (`UnpackedBots.moveValues`).
+
 ### Changed (value grammar)
 
 - **The value grammar lives in `botmaker-plugin-host`** (`com.botmaker.plugin.host.grammar`, 2026-11-04):
