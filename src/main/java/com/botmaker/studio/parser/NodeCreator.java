@@ -1,14 +1,17 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.EditContext;
+
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.factories.ExpressionFactory;
-import com.botmaker.studio.parser.factories.InitializerFactory;
+import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.parser.handlers.MethodHandler;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.ExpressionType;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.*;
 
 
@@ -94,7 +97,7 @@ public class NodeCreator {
     }
 
     public static Expression createDefaultInitializer(AST ast, ResolvedType type) {
-        return InitializerFactory.createDefaultInitializer(ast, type);
+        return InitializerFactory.createDefaultInitializer(ast, type, PluginHost.typesOnly());
     }
 
     /**

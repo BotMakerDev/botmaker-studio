@@ -1,5 +1,7 @@
 package com.botmaker.studio.index;
 
+import com.botmaker.java.index.LibraryType;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

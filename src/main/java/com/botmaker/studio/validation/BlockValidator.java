@@ -2,7 +2,7 @@ package com.botmaker.studio.validation;
 
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.parser.factories.UnfilledSlot;
+import com.botmaker.java.edit.factories.UnfilledSlot;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Block;

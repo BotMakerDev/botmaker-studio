@@ -1,5 +1,7 @@
 package com.botmaker.studio.index;
 
+import com.botmaker.java.index.LibraryIndex;
+import com.botmaker.java.index.LibraryType;
 import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.util.ClassPathManager;
@@ -28,14 +30,14 @@ import java.util.function.Supplier;
  *
  * <p>Each jar is scanned once into {@link LibraryType} records, and they are cached to disk as JSON, one
  * {@code .json} file per jar. The in-memory index hands out those records, which
- * {@link com.botmaker.studio.suggestions.ProjectAnalyzer} consumes directly. It handed out ClassGraph's own
+ * {@link com.botmaker.java.types.ProjectAnalyzer} consumes directly. It handed out ClassGraph's own
  * {@code ClassInfo} and cached ClassGraph's JSON until ClassGraph 6 removed it (2026-10-18).
  *
  * <p>Beside each cache sits the list of its packages ({@code .packages}), and a jar is read from its JSON
  * only once one of them is under the allowed prefixes, or once it is asked for by name: an open reads the
  * one or two jars it offers from, not all of them.
  */
-public class TypeSummaryManager {
+public class TypeSummaryManager implements LibraryIndex {
 
     /**
      * Package prefixes whose classes are exposed to the user as "allowed" library types. Everything indexed

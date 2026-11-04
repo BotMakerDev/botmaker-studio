@@ -4,6 +4,7 @@ import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.plugin.PluginHost;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.nio.file.Path;
@@ -187,6 +188,33 @@ public class ProjectState implements SourceSet {
     @Override
     public Path sourceRoot() {
         return getSourcePath();
+    }
+
+    /** Parses a file that has no tree yet and keeps the tree on it. A parse that fails leaves the file without one. */
+    @Override
+    public Optional<CompilationUnit> parsedUnit(Path file) {
+        return getFile(file).map(open -> {
+            if (open.getAst() != null) return open.getAst();
+            try {
+                ASTParser parser = boundParser();
+                parser.setSource(open.getContent().toCharArray());
+                parser.setUnitName(open.getPath().toAbsolutePath().toString());
+                open.setAst((CompilationUnit) parser.createAST(null));
+            } catch (RuntimeException e) {
+                System.err.println("Failed to parse AST for: " + open.getPath());
+            }
+            return open.getAst();
+        });
+    }
+
+    @Override
+    public Optional<String> ownerOf(String simpleName) {
+        return PluginHost.typesOnly().ownerOf(simpleName);
+    }
+
+    @Override
+    public Optional<String> freshValue(String canonicalName) {
+        return PluginHost.typesOnly().freshValue(canonicalName);
     }
 
     // =========================================================================

@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The whole drop, end to end: the drag layer publishes ids, {@code CodeEditorService} resolves them to AST
- * nodes and calls the editor. Both halves were covered — {@link com.botmaker.studio.types.TypeExpectation}
+ * nodes and calls the editor. Both halves were covered — {@link com.botmaker.java.types.TypeExpectation}
  * for the cue, {@code EmptySlotDropTest} for the rewrite — and the path between them was not, which is where
  * a drop that lit the slot green and then did nothing lived.
  */

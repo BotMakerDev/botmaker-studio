@@ -5,7 +5,7 @@ import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceFormatter;

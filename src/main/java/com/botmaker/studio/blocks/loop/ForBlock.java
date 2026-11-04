@@ -12,9 +12,8 @@ import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BodyLayoutBuilder;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.components.TextFieldComponents;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
-import javafx.scene.control.TextField;
 import org.eclipse.jdt.core.dom.EnhancedForStatement;
 import org.eclipse.jdt.core.dom.SimpleName;
 

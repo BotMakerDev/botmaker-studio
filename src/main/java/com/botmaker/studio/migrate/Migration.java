@@ -1,7 +1,7 @@
 package com.botmaker.studio.migrate;
 
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;

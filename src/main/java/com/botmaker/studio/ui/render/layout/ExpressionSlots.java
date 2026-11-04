@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.render.layout;
 
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.layout.Region;
 

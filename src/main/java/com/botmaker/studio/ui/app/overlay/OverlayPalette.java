@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
-import com.botmaker.studio.util.MethodSignature;
+import com.botmaker.java.types.MethodSignature;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Menu;

@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser.factories;
 
+import com.botmaker.java.edit.factories.InitializerFactory;
+
 import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.palette.ExpressionType.Form;
 import com.botmaker.studio.palette.ExpressionType.InfixOp;
@@ -7,11 +9,11 @@ import com.botmaker.studio.palette.ExpressionType.Literal;
 import com.botmaker.studio.palette.ExpressionType.Op;
 import com.botmaker.studio.palette.ExpressionType.PrefixOp;
 import com.botmaker.studio.palette.ExpressionType.Reference;
-import com.botmaker.studio.parser.EditContext;
-import com.botmaker.studio.parser.handlers.LambdaCallHandler;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.util.DefaultNames;
+import com.botmaker.java.edit.EditContext;
+import com.botmaker.java.edit.handlers.LambdaCallHandler;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.edit.DefaultNames;
 import org.eclipse.jdt.core.dom.*;
 
 public class ExpressionFactory {

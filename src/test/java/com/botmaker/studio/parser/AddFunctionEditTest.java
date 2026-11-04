@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.EditContext;
+
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -7,7 +9,7 @@ import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

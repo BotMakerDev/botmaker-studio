@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser.guard;
 
 import com.botmaker.studio.config.AppVersion;
-import com.botmaker.studio.parser.BlockId;
+import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;

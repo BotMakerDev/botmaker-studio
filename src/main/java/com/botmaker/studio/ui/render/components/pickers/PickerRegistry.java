@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.studio.core.ValueSlot;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.ConditionalExpression;

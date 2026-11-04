@@ -3,8 +3,8 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
 import com.botmaker.plugin.api.palette.Hidden;
 import com.botmaker.plugin.api.palette.Palette;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.util.MethodSignature;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.types.MethodSignature;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

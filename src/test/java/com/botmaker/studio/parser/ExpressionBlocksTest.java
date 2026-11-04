@@ -19,7 +19,7 @@ import com.botmaker.studio.blocks.expr.UnknownExpressionBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.palette.ExpressionType;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.AST;

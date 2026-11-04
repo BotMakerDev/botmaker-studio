@@ -12,7 +12,7 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import javafx.scene.Node;
 import javafx.scene.Parent;

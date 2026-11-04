@@ -3,12 +3,13 @@ package com.botmaker.studio.migrate;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Uses;
-import com.botmaker.studio.parser.EditContext;
-import com.botmaker.studio.parser.ImportManager;
+import com.botmaker.java.edit.EditContext;
+import com.botmaker.java.edit.ImportManager;
 import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.CompileGuard.Problem;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
@@ -572,7 +573,7 @@ public final class Rewrite {
         if (entries.isEmpty()) return text;
         CompilationUnit unit = BotParser.syntax(text);
         ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
-        EditContext ctx = EditContext.of(unit, rewrite, null, null);
+        EditContext ctx = EditContext.of(unit, rewrite, null, PluginHost.typesOnly());
         boolean any = false;
         for (Map.Entry<Integer, List<String>> entry : entries.entrySet()) {
             int at = moved(entry.getKey(), file, one);

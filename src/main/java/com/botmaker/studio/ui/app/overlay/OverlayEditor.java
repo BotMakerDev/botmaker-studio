@@ -49,7 +49,7 @@ import com.botmaker.studio.ui.app.trial.TrialMenu;
 import com.botmaker.studio.ui.app.run.DesktopLayer;
 import com.botmaker.studio.ui.app.run.RunBarDock;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
-import com.botmaker.studio.util.MethodSignature;
+import com.botmaker.java.types.MethodSignature;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

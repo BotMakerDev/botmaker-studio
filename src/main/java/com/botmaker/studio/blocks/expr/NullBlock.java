@@ -1,10 +1,10 @@
 package com.botmaker.studio.blocks.expr;
 
 import com.botmaker.studio.core.AbstractExpressionBlock;
-import com.botmaker.studio.parser.factories.UnfilledSlot;
+import com.botmaker.java.edit.factories.UnfilledSlot;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;

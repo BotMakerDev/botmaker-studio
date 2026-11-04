@@ -1,36 +1,41 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.BlockId;
+import com.botmaker.java.edit.EditContext;
+import com.botmaker.java.edit.ImportManager;
+import com.botmaker.java.edit.SwitchCases;
+import com.botmaker.java.edit.UseFix;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.parser.factories.InitializerFactory;
+import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
-import com.botmaker.studio.parser.handlers.BranchChainHandler;
-import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
-import com.botmaker.studio.parser.handlers.ExpressionFormHandler;
-import com.botmaker.studio.parser.handlers.InstantiationHandler;
-import com.botmaker.studio.parser.handlers.LambdaCallHandler;
+import com.botmaker.java.edit.handlers.BranchChainHandler;
+import com.botmaker.java.edit.handlers.EnumManipulationHandler;
+import com.botmaker.java.edit.handlers.ExpressionFormHandler;
+import com.botmaker.java.edit.handlers.InstantiationHandler;
+import com.botmaker.java.edit.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.handlers.ListHandler;
 import com.botmaker.studio.parser.handlers.MethodHandler;
-import com.botmaker.studio.parser.handlers.OperatorReplacementHandler;
-import com.botmaker.studio.parser.handlers.RawExpressionHandler;
+import com.botmaker.java.edit.handlers.OperatorReplacementHandler;
+import com.botmaker.java.edit.handlers.RawExpressionHandler;
 import com.botmaker.studio.parser.handlers.RestoreHandler;
-import com.botmaker.studio.parser.handlers.StatementSourceHandler;
-import com.botmaker.studio.parser.handlers.SwitchNormalizer;
-import com.botmaker.studio.parser.handlers.TryHandler;
+import com.botmaker.java.edit.handlers.StatementSourceHandler;
+import com.botmaker.java.edit.handlers.SwitchNormalizer;
+import com.botmaker.java.edit.handlers.TryHandler;
 import com.botmaker.studio.parser.handlers.TypeHandler;
 import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.parser.guard.RefusedEdit;
 import com.botmaker.studio.parser.guard.UnusedImports;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
-import com.botmaker.studio.parser.helpers.Precedence;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.Precedence;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.CallMigrator;
@@ -46,8 +51,8 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
@@ -491,7 +496,8 @@ public class CodeEditor {
             Block block = (Block) stmt.getParent();
             rewriter.getListRewrite(block, Block.STATEMENTS_PROPERTY).insertBefore(decl, stmt, null);
             rewriter.replace(toReplace, ast.newSimpleName(name), null);
-            ImportManager.addImportForSimpleName(cu, rewriter, type.leafType().simpleName(), analyzer, null);
+            ImportManager.addImportForSimpleName(cu, rewriter, type.leafType().simpleName(), analyzer,
+                    PluginHost.typesOnly());
             return AstRewriteHelper.applyRewrite(rewriter, code);
         });
     }
@@ -884,7 +890,7 @@ public class CodeEditor {
     public void addEnumToClass(TypeDeclaration typeDecl, EnumDraft draft, int index) {
         if (draft == null) return;
         insert(typeDecl, EditKind.SIGNATURE, false,
-                (cu, code) -> EnumManipulationHandler.addEnumToClass(cu, code, typeDecl, draft, index));
+                (cu, code) -> EnumManipulationHandler.addEnumToClass(cu, code, typeDecl, draft.name(), draft.constants(), index));
     }
 
     public void deleteEnumFromClass(EnumDeclaration enumDecl) {
@@ -1206,7 +1212,7 @@ public class CodeEditor {
     /**
      * Renames a local variable — a declared local, a lambda's, a loop's, a {@code catch}'s or a pattern's
      * variable, a method's parameter from its own body — together with every use of it in its scope
-     * ({@link Usages#local}). One entry point since 2026-09-27; there were five, each walking its own scope its
+     * ({@code LocalUses.of}). One entry point since 2026-09-27; there were five, each walking its own scope its
      * own way. {@link #replaceSimpleName} changes which variable a use names, and is not a rename.
      */
     public void renameLocal(SimpleName declName, String newName) {
@@ -1661,7 +1667,7 @@ public class CodeEditor {
     }
 
     private static String setReturnExpression(CompilationUnit cu, String originalCode, ReturnStatement returnStmt, Object selection, ProjectAnalyzer analyzer) {
-        EditContext ctx = EditContext.of(cu, analyzer, null);
+        EditContext ctx = EditContext.of(cu, analyzer, PluginHost.typesOnly());
         ResolvedType contextType = ProjectAnalyzer.inferExpectedType(returnStmt.getExpression() != null
                 ? returnStmt.getExpression() : returnStmt);
         Expression newExpr = NodeCreator.createExpression(ctx, selection, contextType);
@@ -1675,7 +1681,7 @@ public class CodeEditor {
     }
 
     private static String replaceExpression(CompilationUnit cu, String originalCode, Expression toReplace, ExpressionType type, ProjectAnalyzer analyzer) {
-        EditContext ctx = EditContext.of(cu, analyzer, null);
+        EditContext ctx = EditContext.of(cu, analyzer, PluginHost.typesOnly());
         // The resolved type, not its simple name: a lambda is seeded from the functional interface's method,
         // which only a binding knows.
         ResolvedType contextType = ProjectAnalyzer.inferExpectedType(toReplace);

@@ -273,11 +273,11 @@ class StatementMenuTest extends FxHeadlessTest {
                     }
                 }
                 """;
-        var cu = com.botmaker.studio.suggestions.ProjectAnalyzer.createCompilationUnit(
+        var cu = com.botmaker.java.types.ProjectAnalyzer.createCompilationUnit(
                 com.botmaker.studio.TestSupport.runtimeClassPath(), host,
                 com.botmaker.studio.TestSupport.SOURCE_ROOT);
         var main = ((org.eclipse.jdt.core.dom.TypeDeclaration) cu.types().getFirst()).getMethods()[2];
-        var analyzer = new com.botmaker.studio.suggestions.ProjectAnalyzer(null,
+        var analyzer = new com.botmaker.java.types.ProjectAnalyzer(null,
                 new com.botmaker.studio.project.ProjectState());
         AtomicReference<BlockType> picked = new AtomicReference<>();
 

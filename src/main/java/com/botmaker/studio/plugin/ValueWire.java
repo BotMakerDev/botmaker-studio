@@ -6,8 +6,8 @@ import com.botmaker.java.grammar.ValueContainer;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.types.JdkType;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.JdkType;
+import com.botmaker.java.types.ResolvedType;
 
 import java.lang.reflect.Type;
 import java.util.List;

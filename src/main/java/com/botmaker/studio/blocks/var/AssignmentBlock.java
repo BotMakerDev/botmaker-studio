@@ -7,7 +7,7 @@ import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.*;
 

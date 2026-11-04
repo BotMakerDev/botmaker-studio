@@ -1,13 +1,13 @@
 package com.botmaker.studio.blocks.expr;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
+import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import javafx.scene.Node;
 import javafx.scene.control.ComboBox;

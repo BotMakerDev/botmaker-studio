@@ -2,7 +2,7 @@ package com.botmaker.studio.core;
 
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.BlockShape;
-import com.botmaker.studio.parser.handlers.ExpressionFormHandler;
+import com.botmaker.java.edit.handlers.ExpressionFormHandler;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 import com.botmaker.studio.ui.render.menu.TypePicker;
@@ -17,7 +17,7 @@ import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.SelectorComponents;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;

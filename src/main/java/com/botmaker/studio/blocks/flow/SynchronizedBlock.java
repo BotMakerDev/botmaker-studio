@@ -8,7 +8,7 @@ import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import javafx.scene.Node;
 import org.eclipse.jdt.core.dom.SynchronizedStatement;

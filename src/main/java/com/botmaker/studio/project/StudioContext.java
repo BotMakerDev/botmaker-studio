@@ -5,7 +5,7 @@ import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
 

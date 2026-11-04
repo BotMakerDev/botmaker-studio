@@ -2,9 +2,9 @@ package com.botmaker.studio.suggestions;
 
 import com.botmaker.studio.TestSupport;
 
-import com.botmaker.studio.index.LibraryType;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.util.VariableScopeVisitor;
+import com.botmaker.java.index.LibraryType;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.VariableScopeVisitor;
 import org.eclipse.jdt.core.dom.*;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

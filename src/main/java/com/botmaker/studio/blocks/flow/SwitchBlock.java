@@ -1,7 +1,7 @@
 package com.botmaker.studio.blocks.flow;
 
 import com.botmaker.studio.palette.BlockCategory;
-import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
+import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.core.AbstractStatementBlock;
@@ -16,7 +16,7 @@ import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;

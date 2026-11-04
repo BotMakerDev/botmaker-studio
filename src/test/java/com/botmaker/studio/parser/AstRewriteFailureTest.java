@@ -2,7 +2,7 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.studio.palette.BlockCategory;
 import com.botmaker.studio.palette.BlockType;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
@@ -60,7 +60,7 @@ class AstRewriteFailureTest {
     private record Failing(ASTRewrite rewriter, String mismatchedCode) {}
 
     private static Failing failingRewrite() {
-        CompilationUnit cu = com.botmaker.studio.suggestions.ProjectAnalyzer.createCompilationUnit(
+        CompilationUnit cu = com.botmaker.java.types.ProjectAnalyzer.createCompilationUnit(
                 com.botmaker.studio.TestSupport.runtimeClassPath(), SOURCE,
                 com.botmaker.studio.TestSupport.SOURCE_ROOT);
         assertNotNull(cu, "fixture must parse");

@@ -1,9 +1,12 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.studio.parser.factories.InitializerFactory;
+import com.botmaker.java.edit.EditContext;
+
+import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.handlers.MethodHandler;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -48,7 +51,8 @@ public class FunctionalInterfaceDefaultTest {
     void consumerDefaultsToSingleParamBlockLambda() {
         AST ast = newAst();
         Expression expr = InitializerFactory.createDefaultInitializer(
-                ast, ResolvedType.named("java.util.function.Consumer<com.botmaker.sdk.api.vision.MatchResult>"));
+                ast, ResolvedType.named("java.util.function.Consumer<com.botmaker.sdk.api.vision.MatchResult>"),
+                PluginHost.typesOnly());
 
         LambdaExpression lambda = assertInstanceOf(LambdaExpression.class, expr);
         assertEquals(1, lambda.parameters().size());
@@ -94,7 +98,7 @@ public class FunctionalInterfaceDefaultTest {
     @Test
     void runnableDefaultsToNoArgBlockLambda() {
         AST ast = newAst();
-        Expression expr = InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Runnable"));
+        Expression expr = InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Runnable"), PluginHost.typesOnly());
 
         LambdaExpression lambda = assertInstanceOf(LambdaExpression.class, expr);
         assertTrue(lambda.parameters().isEmpty());

@@ -1,5 +1,8 @@
 package com.botmaker.studio.parser.factories;
 
+import com.botmaker.java.edit.factories.InitializerFactory;
+import com.botmaker.java.edit.factories.UnfilledSlot;
+import com.botmaker.java.edit.handlers.TryHandler;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
@@ -10,18 +13,18 @@ import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.Initializer;
-import com.botmaker.studio.parser.EditContext;
-import com.botmaker.studio.parser.handlers.LambdaCallHandler;
+import com.botmaker.java.edit.EditContext;
+import com.botmaker.java.edit.handlers.LambdaCallHandler;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.managed.HolderFiles;
 import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.source.BotIndex;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.JdkType;
-import com.botmaker.studio.types.PrimitiveKind;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.util.MethodSignature;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.JdkType;
+import com.botmaker.java.types.PrimitiveKind;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.types.MethodSignature;
 import org.eclipse.jdt.core.dom.*;
 
 import java.util.ArrayList;
@@ -92,7 +95,7 @@ public class StatementFactory {
         MethodInvocation methodCall = ast.newMethodInvocation();
         methodCall.setName(ast.newSimpleName(target.getName()));
         for (ITypeBinding p : target.getParameterTypes()) {
-            methodCall.arguments().add(InitializerFactory.createDefaultInitializer(ast, ResolvedType.of(p)));
+            methodCall.arguments().add(InitializerFactory.createDefaultInitializer(ast, ResolvedType.of(p), PluginHost.typesOnly()));
         }
         return ast.newExpressionStatement(methodCall);
     }
@@ -161,8 +164,7 @@ public class StatementFactory {
      */
     private static Statement createTryStatement(AST ast, ProjectAnalyzer analyzer, ASTNode context) {
         SingleVariableDeclaration param = ast.newSingleVariableDeclaration();
-        param.setType(ast.newSimpleType(ast.newSimpleName(
-                com.botmaker.studio.parser.handlers.TryHandler.DEFAULT_CATCH_TYPE)));
+        param.setType(ast.newSimpleType(ast.newSimpleName(TryHandler.DEFAULT_CATCH_TYPE)));
         param.setName(ast.newSimpleName(uniqueName(analyzer, context, "e")));
         CatchClause clause = ast.newCatchClause();
         clause.setException(param);
@@ -801,7 +803,7 @@ public class StatementFactory {
             assignment.setRightHandSide(emptySlot(ast));
         } else {
             assignment.setLeftHandSide(ast.newSimpleName(target.name()));
-            assignment.setRightHandSide(InitializerFactory.createDefaultInitializer(ast, target.type()));
+            assignment.setRightHandSide(InitializerFactory.createDefaultInitializer(ast, target.type(), PluginHost.typesOnly()));
         }
         return ast.newExpressionStatement(assignment);
     }

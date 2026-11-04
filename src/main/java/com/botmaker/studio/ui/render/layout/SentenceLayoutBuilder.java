@@ -79,7 +79,7 @@ public class SentenceLayoutBuilder {
      */
     public SentenceLayoutBuilder addExpressionSlot(com.botmaker.studio.core.ExpressionBlock expression,
                                                    com.botmaker.studio.services.CodeEditorService context,
-                                                   com.botmaker.studio.types.ResolvedType expectedType) {
+                                                   com.botmaker.java.types.ResolvedType expectedType) {
         nodes.add(expressionSlotNode(expression, context, expectedType));
         return this;
     }
@@ -92,7 +92,7 @@ public class SentenceLayoutBuilder {
      */
     public static Node expressionSlotNode(com.botmaker.studio.core.ExpressionBlock expression,
                                           CodeEditorService context,
-                                          com.botmaker.studio.types.ResolvedType expectedType) {
+                                          com.botmaker.java.types.ResolvedType expectedType) {
         if (expression == null) {
             Label placeholder = new Label("⟨expression⟩");
             placeholder.getStyleClass().add(StyleClasses.PLACEHOLDER);
@@ -152,7 +152,7 @@ public class SentenceLayoutBuilder {
      */
     private static void makeDroppable(Node slotNode, com.botmaker.studio.core.ExpressionBlock expression,
                                       CodeEditorService context,
-                                      com.botmaker.studio.types.ResolvedType expectedType) {
+                                      com.botmaker.java.types.ResolvedType expectedType) {
         ExpressionSlots.makeDroppable(slotNode, expression, context, expectedType);
     }
 }

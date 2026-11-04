@@ -2,9 +2,9 @@ package com.botmaker.studio.migrate;
 
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.meta.Refactor;
-import com.botmaker.studio.parser.ImportManager;
+import com.botmaker.java.edit.ImportManager;
 import com.botmaker.studio.parser.guard.CompileGuard.Problem;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.project.source.BotIndex;

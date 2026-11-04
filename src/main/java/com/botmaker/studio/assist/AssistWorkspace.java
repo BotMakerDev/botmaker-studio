@@ -1,6 +1,6 @@
 package com.botmaker.studio.assist;
 
-import com.botmaker.studio.index.TypeSummaryManager;
+import com.botmaker.java.index.LibraryIndex;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueGrammar;
@@ -10,7 +10,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.project.managed.ManagedConstants;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -38,7 +38,7 @@ public record AssistWorkspace(ProjectConfig config,
                               Path sourceRoot,
                               ProjectTemplate template,
                               StudioProjectSettings settings,
-                              TypeSummaryManager index,
+                              LibraryIndex index,
                               RefusalJournal journal,
                               ValueGrammar grammar,
                               List<ManagedConstants.Constant> constants,
@@ -53,13 +53,13 @@ public record AssistWorkspace(ProjectConfig config,
 
     /** A workspace that knows none of the bot's other files. */
     public AssistWorkspace(ProjectConfig config, Path file, List<String> classpath, Path sourceRoot,
-                           ProjectTemplate template, StudioProjectSettings settings, TypeSummaryManager index,
+                           ProjectTemplate template, StudioProjectSettings settings, LibraryIndex index,
                            RefusalJournal journal, ValueGrammar grammar, List<ManagedConstants.Constant> constants) {
         this(config, file, classpath, sourceRoot, template, settings, index, journal, grammar, constants, List.of());
     }
 
     /** {@code file} of the open project. FX thread, as {@link ProjectState} is. */
-    public static AssistWorkspace of(ProjectConfig config, ProjectState state, TypeSummaryManager index, Path file) {
+    public static AssistWorkspace of(ProjectConfig config, ProjectState state, LibraryIndex index, Path file) {
         // Copied, not shared: the live files change as the canvas re-parses.
         List<ProjectFile> others = state.getAllFiles().stream()
                 .filter(each -> !each.getPath().equals(file))

@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.BlockId;
+
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import org.junit.jupiter.api.DisplayNameGeneration;

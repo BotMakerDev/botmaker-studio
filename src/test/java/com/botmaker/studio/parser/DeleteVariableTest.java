@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.UseFix;
+
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;

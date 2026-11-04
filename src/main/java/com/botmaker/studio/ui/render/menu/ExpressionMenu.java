@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.render.menu;
 
-import com.botmaker.studio.index.LibraryType;
+import com.botmaker.java.index.LibraryType;
 import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
+import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.palette.ExpressionCategory;
 import com.botmaker.studio.palette.ExpressionType;
@@ -12,11 +12,11 @@ import com.botmaker.studio.parser.ExpressionChoice;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.plugin.HostParameters;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.util.DefaultNames;
-import com.botmaker.studio.util.MethodSignature;
-import com.botmaker.studio.util.VariableScopeVisitor;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.edit.DefaultNames;
+import com.botmaker.java.types.MethodSignature;
+import com.botmaker.java.types.VariableScopeVisitor;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Menu;

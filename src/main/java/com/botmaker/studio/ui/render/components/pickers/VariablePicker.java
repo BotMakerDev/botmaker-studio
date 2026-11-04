@@ -3,12 +3,11 @@ package com.botmaker.studio.ui.render.components.pickers;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.plugin.HostParameters;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Tooltip;
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldAccess;
 import org.eclipse.jdt.core.dom.QualifiedName;
 

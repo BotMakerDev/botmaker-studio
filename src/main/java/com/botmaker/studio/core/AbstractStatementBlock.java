@@ -8,7 +8,7 @@ import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.LayoutComponents;
 import com.botmaker.studio.ui.render.components.PlaceholderComponents;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;

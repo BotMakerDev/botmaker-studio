@@ -4,7 +4,7 @@ import com.botmaker.studio.blocks.func.CallOwner;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.studio.parser.ExpressionChoice;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Menu;

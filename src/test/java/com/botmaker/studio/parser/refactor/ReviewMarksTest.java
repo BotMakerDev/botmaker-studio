@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.refactor;
 
-import com.botmaker.studio.parser.EditContext;
+import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;

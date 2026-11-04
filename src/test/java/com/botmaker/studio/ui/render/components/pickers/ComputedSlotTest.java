@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.studio.core.ValueSlot;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;

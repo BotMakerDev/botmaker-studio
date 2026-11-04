@@ -5,7 +5,7 @@ import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.nio.file.Path;

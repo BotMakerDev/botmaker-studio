@@ -20,7 +20,7 @@ import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.studio.sharing.BmkExport;
 import com.botmaker.studio.sharing.BotSource;
 import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.app.dev.PickerGalleryWindow;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.Choosers;

@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser.handlers;
 
+import com.botmaker.java.edit.handlers.BranchChainHandler;
+
 import com.botmaker.studio.parser.EditorFixture;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.ExpressionStatement;

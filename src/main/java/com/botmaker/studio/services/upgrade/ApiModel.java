@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.github.SemVer;
-import com.botmaker.studio.index.LibraryType;
+import com.botmaker.java.index.LibraryType;
 import com.botmaker.studio.index.TypeSummaryManager;
 
 import java.nio.file.Path;

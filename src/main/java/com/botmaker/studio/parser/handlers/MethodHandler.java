@@ -1,8 +1,9 @@
 package com.botmaker.studio.parser.handlers;
 
+import com.botmaker.java.edit.EditContext;
+import com.botmaker.java.edit.handlers.EnumManipulationHandler;
+import com.botmaker.java.edit.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.ExpressionChoice;
-
-import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.NodeCreator;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.FunctionDraft;
@@ -11,18 +12,18 @@ import com.botmaker.studio.palette.SignatureTypes;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.parser.factories.InitializerFactory;
+import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
-import com.botmaker.studio.parser.helpers.DefaultValueHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.DefaultValueHelper;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.palette.ExpressionType;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;

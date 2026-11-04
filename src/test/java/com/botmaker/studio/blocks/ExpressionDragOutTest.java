@@ -2,7 +2,7 @@ package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.studio.parser.ExpressionChoice;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;

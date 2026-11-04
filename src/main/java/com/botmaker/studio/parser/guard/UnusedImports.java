@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.guard;
 
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.CompilationUnit;

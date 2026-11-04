@@ -3,7 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.MemberEntry;
 import com.botmaker.plugin.api.catalog.PaletteCatalog;
-import com.botmaker.studio.util.MethodSignature;
+import com.botmaker.java.types.MethodSignature;
 
 import java.util.LinkedHashSet;
 import java.util.List;

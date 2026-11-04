@@ -28,7 +28,7 @@ import org.eclipse.jdt.core.dom.NodeFinder;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.parser.BlockId;
+import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.plugin.HostHistory;
 import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostServices;

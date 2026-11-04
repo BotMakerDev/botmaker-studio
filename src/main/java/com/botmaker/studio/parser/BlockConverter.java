@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.BlockId;
+
 import com.botmaker.studio.blocks.ClassBlock;
 import com.botmaker.studio.blocks.InterfaceBlock;
 import com.botmaker.studio.blocks.RecordBlock;
@@ -28,20 +30,20 @@ import com.botmaker.studio.blocks.var.DeclareClassVariableBlock;
 import com.botmaker.studio.blocks.var.DeclareEnumBlock;
 import com.botmaker.studio.blocks.var.VariableDeclarationBlock;
 import com.botmaker.studio.core.*;
-import com.botmaker.studio.parser.handlers.BranchChainHandler;
-import com.botmaker.studio.parser.handlers.LambdaCallHandler;
-import com.botmaker.studio.parser.helpers.FileTypeDetector;
-import com.botmaker.studio.parser.helpers.NumberLiterals;
+import com.botmaker.java.edit.handlers.BranchChainHandler;
+import com.botmaker.java.edit.handlers.LambdaCallHandler;
+import com.botmaker.java.edit.helpers.FileTypeDetector;
+import com.botmaker.java.edit.helpers.NumberLiterals;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.types.JdkType;
+import com.botmaker.java.types.JdkType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import org.eclipse.jdt.core.dom.*;
 
 import java.util.*;
 
-import static com.botmaker.studio.suggestions.ProjectAnalyzer.createCompilationUnit;
+import static com.botmaker.java.types.ProjectAnalyzer.createCompilationUnit;
 
 /**
  * Converts Java source into a tree of {@link CodeBlock}s. Stateless: all per-parse state is

@@ -2,7 +2,7 @@ package com.botmaker.studio.blocks.func;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.parser.helpers.FileTypeDetector;
+import com.botmaker.java.edit.helpers.FileTypeDetector;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import javafx.scene.Node;
 import javafx.scene.control.Label;

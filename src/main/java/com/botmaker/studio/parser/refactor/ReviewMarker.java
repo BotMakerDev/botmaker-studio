@@ -1,9 +1,10 @@
 package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.plugin.api.meta.Refactor;
-import com.botmaker.studio.parser.EditContext;
+import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.parse.SourceSet;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -106,7 +107,7 @@ public final class ReviewMarker {
         });
         if (enclosing.isEmpty()) return source;
 
-        EditContext ctx = EditContext.of(unit, null, null);
+        EditContext ctx = EditContext.of(unit, null, PluginHost.typesOnly());
         for (MethodDeclaration method : enclosing) ReviewMarks.mark(ctx, method, List.of(entry));
         String marked = ctx.applyTo(source);
         // A mark that does not parse is worth less than no mark at all: the file the user has to review is the

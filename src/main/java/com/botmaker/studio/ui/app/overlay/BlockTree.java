@@ -185,7 +185,7 @@ public final class BlockTree {
 
     /**
      * How the method picker names a method: {@code run()}, {@code aim(Rect area, int tries)}. Built from the
-     * declaration's own AST node rather than from {@link com.botmaker.studio.util.MethodSignature}, which models
+     * declaration's own AST node rather than from {@link com.botmaker.java.types.MethodSignature}, which models
      * a <em>resolved SDK</em> method — these are the user's own, and may not compile at all while being edited.
      */
     static String methodLabel(MethodDeclarationBlock m) {

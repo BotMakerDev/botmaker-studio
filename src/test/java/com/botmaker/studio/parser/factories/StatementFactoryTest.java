@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser.factories;
 
+import com.botmaker.java.edit.factories.UnfilledSlot;
+
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockCategory;
@@ -7,9 +9,9 @@ import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.BlockType.ControlFlow.Kind;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.Initializer;
-import com.botmaker.studio.parser.EditContext;
+import com.botmaker.java.edit.EditContext;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;

@@ -1,6 +1,6 @@
 package com.botmaker.studio.palette;
 
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

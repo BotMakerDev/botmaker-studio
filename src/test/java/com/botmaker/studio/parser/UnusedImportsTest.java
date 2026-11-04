@@ -1,7 +1,9 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.ImportManager;
+
 import com.botmaker.studio.parser.guard.UnusedImports;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Statement;

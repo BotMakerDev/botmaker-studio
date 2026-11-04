@@ -6,7 +6,7 @@ import com.botmaker.studio.ui.app.SignatureEdits;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
-import com.botmaker.studio.util.DefaultNames;
+import com.botmaker.java.edit.DefaultNames;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;

@@ -1,8 +1,8 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.parser.ImportManager;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.ImportManager;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNames;

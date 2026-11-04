@@ -6,7 +6,7 @@ import com.botmaker.plugin.api.source.ParameterWrite;
 import com.botmaker.plugin.api.source.RunParameter;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ParamValues;

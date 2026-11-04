@@ -22,6 +22,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - The parser and the value grammar come from `botmaker-java` (2026-11-04): `com.botmaker.plugin.host.grammar` is now
   `com.botmaker.java.grammar`. Nothing changes in the window.
+- The types, `ProjectAnalyzer`, `ImportManager`, `EditContext`, `BlockId`, `InitializerFactory` and the stateless
+  handlers and helpers are `botmaker-java`'s (2026-11-04), in `com.botmaker.java.types`, `index` and `edit`.
+  `ProjectAnalyzer` reads a `SourceSet` and a `LibraryIndex`, which `TypeSummaryManager` implements; `Usages.local` is
+  `LocalUses.of`. A default for a functional-interface slot whose type no project file declares is its lambda again,
+  not an exception.
 
 ### Changed (one parser)
 

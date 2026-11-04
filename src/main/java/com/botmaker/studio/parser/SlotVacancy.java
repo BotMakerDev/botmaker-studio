@@ -24,7 +24,7 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
  * <p>{@code CodeEditor.placeInEmptySlot} is the mirror of {@link #mayBeEmpty}: the same two shapes, read as
  * "where does a value go when this slot holds nothing". If one of them learns a third shape, so must the other.
  *
- * <p>Sentences for the refusals live in {@link com.botmaker.studio.types.SlotFit}, with the rest of the
+ * <p>Sentences for the refusals live in {@link com.botmaker.java.types.SlotFit}, with the rest of the
  * drag-and-drop wording.
  */
 public final class SlotVacancy {
@@ -55,7 +55,7 @@ public final class SlotVacancy {
      * <p>This is the JLS's list ({@code ExpressionStatement}), not a judgement about usefulness: a call, an
      * assignment, a {@code new}, and the increment/decrement forms. A comparison or a literal is a value and
      * nothing else, and dropping one on a body is refused with
-     * {@link com.botmaker.studio.types.SlotFit#NOT_A_STATEMENT} rather than written as source that will not
+     * {@link com.botmaker.java.types.SlotFit#NOT_A_STATEMENT} rather than written as source that will not
      * compile.
      */
     public static boolean canStandAlone(Expression value) {

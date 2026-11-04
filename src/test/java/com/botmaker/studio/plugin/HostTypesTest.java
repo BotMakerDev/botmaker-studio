@@ -1,7 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.slot.TypeRef;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodInvocation;

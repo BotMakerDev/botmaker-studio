@@ -1,8 +1,9 @@
 package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.studio.parser.EditContext;
+import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
@@ -181,7 +182,7 @@ public record PluginHolders(Map<Path, String> files, List<String> references) {
             return null;
         }
 
-        EditContext ctx = EditContext.of(unit, null, null);
+        EditContext ctx = EditContext.of(unit, null, PluginHost.typesOnly());
         for (Object each : unit.imports()) {
             ImportDeclaration imported = (ImportDeclaration) each;
             String target = imported.getName().getFullyQualifiedName();

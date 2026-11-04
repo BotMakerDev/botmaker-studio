@@ -23,7 +23,7 @@ import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.OpenStep;
 import com.botmaker.studio.services.ProgressReporter;
 import com.botmaker.studio.services.ProjectSettingsService;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
 

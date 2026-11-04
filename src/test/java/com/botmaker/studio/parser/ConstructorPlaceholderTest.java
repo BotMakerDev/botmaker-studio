@@ -1,11 +1,14 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.ImportManager;
+
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.parser.factories.InitializerFactory;
+import com.botmaker.java.edit.factories.InitializerFactory;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
@@ -76,7 +79,7 @@ class ConstructorPlaceholderTest {
     @Test
     void withNoAnalyzerTheOldPlaceholderStands() {
         AST ast = AST.newAST(AST.getJLSLatest(), false);
-        Expression seeded = InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Template"));
+        Expression seeded = InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Template"), PluginHost.typesOnly());
 
         assertEquals("new Template()", seeded.toString());
     }
@@ -98,9 +101,9 @@ class ConstructorPlaceholderTest {
         // Color line below has always been: an expression the host drops into a file it is not importing
         // into has to name its type completely. Studio's ImportManager shortens it on the next pass.
         assertEquals("com.botmaker.sdk.api.vision.Precision.DEFAULT",
-                InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Precision"), null, null, analyzer).toString());
+                InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Precision"), null, PluginHost.typesOnly(), analyzer).toString());
         assertEquals("new java.awt.Color(255,255,255)",
-                InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Color"), null, null, analyzer).toString());
+                InitializerFactory.createDefaultInitializer(ast, ResolvedType.named("Color"), null, PluginHost.typesOnly(), analyzer).toString());
     }
 
     /**

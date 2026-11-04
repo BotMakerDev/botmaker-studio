@@ -23,7 +23,9 @@ import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.PluginFiles;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -40,6 +42,7 @@ import java.util.Set;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  * The plugins this Studio has loaded, and the one place their contributions are composed.
@@ -704,6 +707,29 @@ public final class PluginHost {
     public static String freshInitializer(String canonicalName) {
         return grammar.named(canonicalName).flatMap(grammar::freshInitializer).map(JavaValue::source).orElse(null);
     }
+
+    /**
+     * A view of no source file that answers what the bound plugins know about types: the qualified name a facade
+     * claims, and a type's fresh value. It serves a writer that has no project view, such as the palette's
+     * defaults, so it does not lose the plugins' seeds.
+     */
+    public static SourceSet typesOnly() {
+        return TYPES_ONLY;
+    }
+
+    private static final SourceSet TYPES_ONLY = new SourceSet() {
+        @Override public Stream<Path> files() { return Stream.empty(); }
+        @Override public Optional<CompilationUnit> unit(Path file) { return Optional.empty(); }
+        @Override public Optional<String> text(Path file) { return Optional.empty(); }
+        @Override public List<String> classpath() { return List.of(); }
+        @Override public Path sourceRoot() { return null; }
+        @Override public Optional<String> ownerOf(String simpleName) {
+            return Optional.ofNullable(qualifiedName(simpleName));
+        }
+        @Override public Optional<String> freshValue(String canonicalName) {
+            return Optional.ofNullable(freshInitializer(canonicalName));
+        }
+    };
 
     /**
      * The values the bound plugins maintain through their own windows — what {@code LockResolver} asks

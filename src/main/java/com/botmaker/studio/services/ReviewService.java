@@ -1,8 +1,9 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.parser.EditContext;
+import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.source.BotParser;
@@ -232,7 +233,7 @@ public final class ReviewService {
             MethodDeclaration target = markedTarget(unit, item);
             if (target == null) return null;
 
-            EditContext ctx = EditContext.of(unit, null, null);
+            EditContext ctx = EditContext.of(unit, null, PluginHost.typesOnly());
             if (!change.test(ctx, target)) return null;
             String rewritten = ctx.applyTo(source);
             // Same rule as every other rewrite in Studio: a result that does not parse is not written.

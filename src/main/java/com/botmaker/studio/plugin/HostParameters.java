@@ -5,8 +5,8 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.params.ParameterRow;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;

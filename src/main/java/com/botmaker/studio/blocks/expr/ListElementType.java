@@ -1,6 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.*;
 
 /**

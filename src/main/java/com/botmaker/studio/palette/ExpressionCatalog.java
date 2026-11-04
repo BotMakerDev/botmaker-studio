@@ -7,10 +7,10 @@ import com.botmaker.studio.palette.ExpressionType.Op;
 import com.botmaker.studio.palette.ExpressionType.PrefixOp;
 import com.botmaker.studio.palette.ExpressionType.Reference;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.types.JdkType;
-import com.botmaker.studio.types.PrimitiveKind;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.types.TypeExpectation;
+import com.botmaker.java.types.JdkType;
+import com.botmaker.java.types.PrimitiveKind;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.types.TypeExpectation;
 
 import java.util.List;
 import java.util.Optional;

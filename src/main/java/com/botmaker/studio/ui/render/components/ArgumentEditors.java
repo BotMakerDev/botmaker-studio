@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.render.components;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.render.components.pickers.PickerContext;
 import com.botmaker.studio.ui.render.components.pickers.PickerRegistry;
 import javafx.scene.Node;

@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.params.JavaParameterSource;

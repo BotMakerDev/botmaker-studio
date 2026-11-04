@@ -79,7 +79,7 @@ public class BlockDragDropEditTest {
         root = result.root();
         assertNotNull(root, "Converter should produce a root block for the class");
 
-        editor = new CodeEditor(null, state, bus, new com.botmaker.studio.suggestions.ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, bus, new com.botmaker.java.types.ProjectAnalyzer(null, state));
     }
 
     @Test
@@ -212,7 +212,7 @@ public class BlockDragDropEditTest {
         BlockConverter.ConvertResult result = TestSupport.convertAndPublish(
                 converter, s, source, new BlockDragAndDropManager(bus), false, false);
         s.setCompilationUnit(result.cu());
-        CodeEditor ed = new CodeEditor(null, s, bus, new com.botmaker.studio.suggestions.ProjectAnalyzer(null, s));
+        CodeEditor ed = new CodeEditor(null, s, bus, new com.botmaker.java.types.ProjectAnalyzer(null, s));
 
         BodyBlock body = collect(result.root(), BodyBlock.class).stream()
                 .filter(b -> !b.getStatements().isEmpty()).findFirst().orElseThrow();

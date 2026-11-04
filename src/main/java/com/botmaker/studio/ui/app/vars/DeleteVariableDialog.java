@@ -1,13 +1,13 @@
 package com.botmaker.studio.ui.app.vars;
 
 import com.botmaker.studio.nav.Usages;
-import com.botmaker.studio.parser.UseFix;
-import com.botmaker.studio.parser.factories.InitializerFactory;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
+import com.botmaker.java.edit.UseFix;
+import com.botmaker.java.edit.factories.InitializerFactory;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.app.Refactors;
 import com.botmaker.studio.ui.app.RefusalDialog;
 import javafx.stage.Window;

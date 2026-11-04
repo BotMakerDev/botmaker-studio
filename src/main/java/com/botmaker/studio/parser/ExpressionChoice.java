@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 
 import java.util.List;
 

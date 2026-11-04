@@ -2,7 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.parser.EditorFixture;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodInvocation;

@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.studio.core.ValueSlot;
-import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
+import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;
 import javafx.scene.control.ComboBox;
 
@@ -23,7 +23,7 @@ public final class EnumPicker {
      * Resolves {@code paramType} to an enum-aware {@link ResolvedType}, or {@code null} if it isn't an
      * enum. SDK library params arrive as name-only types whose {@code isEnum()} is always false, so we
      * re-resolve them through the project/library index
-     * ({@link com.botmaker.studio.suggestions.ProjectAnalyzer#findTypeByName}).
+     * ({@link com.botmaker.java.types.ProjectAnalyzer#findTypeByName}).
      */
     public static ResolvedType resolveEnum(CodeEditorService context, ResolvedType paramType) {
         ResolvedType resolved = resolveEnumType(context, paramType);

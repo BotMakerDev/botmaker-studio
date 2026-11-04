@@ -1,5 +1,7 @@
 package com.botmaker.studio.index;
 
+import com.botmaker.java.index.LibraryType;
+
 import com.botmaker.shared.config.CacheDirs;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

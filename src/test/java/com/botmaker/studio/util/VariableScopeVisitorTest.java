@@ -1,7 +1,9 @@
 package com.botmaker.studio.util;
 
+import com.botmaker.java.types.VariableScopeVisitor;
+
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Block;

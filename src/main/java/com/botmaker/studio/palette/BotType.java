@@ -12,8 +12,8 @@ import com.botmaker.studio.palette.Initializer.StrLit;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.types.JdkType;
-import com.botmaker.studio.types.PrimitiveKind;
+import com.botmaker.java.types.JdkType;
+import com.botmaker.java.types.PrimitiveKind;
 
 import java.util.ArrayList;
 import java.util.List;

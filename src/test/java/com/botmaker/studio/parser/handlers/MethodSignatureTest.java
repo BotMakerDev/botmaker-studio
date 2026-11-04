@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.handlers;
 
-import com.botmaker.studio.parser.EditContext;
+import com.botmaker.java.edit.EditContext;
 
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.palette.BotType;
@@ -8,11 +8,10 @@ import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

@@ -1,11 +1,11 @@
 package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.studio.palette.ExpressionType;
-import com.botmaker.studio.parser.EditContext;
+import com.botmaker.java.edit.EditContext;
 import com.botmaker.studio.parser.NodeCreator;
-import com.botmaker.studio.parser.factories.InitializerFactory;
-import com.botmaker.studio.parser.helpers.AstRewriteHelper;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.edit.factories.InitializerFactory;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;

@@ -1,7 +1,9 @@
 package com.botmaker.studio.suggestions;
 
+import com.botmaker.java.types.ProjectAnalyzer;
+
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;

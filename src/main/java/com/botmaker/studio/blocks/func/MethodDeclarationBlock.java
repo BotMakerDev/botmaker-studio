@@ -7,7 +7,7 @@ import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.blocks.misc.AnnotationRow;
 import com.botmaker.studio.ui.app.AddFunctionDialog;
 import com.botmaker.studio.ui.app.SignatureEdits;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.core.AbstractStatementBlock;

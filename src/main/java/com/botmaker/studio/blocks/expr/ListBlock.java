@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
+import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

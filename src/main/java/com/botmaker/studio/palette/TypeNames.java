@@ -1,5 +1,6 @@
 package com.botmaker.studio.palette;
 
+import com.botmaker.java.edit.DefaultNames;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.ValueTypes;
 
@@ -34,7 +35,7 @@ public final class TypeNames {
         if (simple.isEmpty()) return "value";
         String lowered = Character.toLowerCase(simple.charAt(0)) + simple.substring(1);
         return javax.lang.model.SourceVersion.isName(lowered)
-                ? lowered : com.botmaker.studio.util.DefaultNames.forType(simple);
+                ? lowered : DefaultNames.forType(simple);
     }
 
     private static String arguments(List<Type> arguments) {

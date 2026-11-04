@@ -3,6 +3,8 @@ package com.botmaker.studio.project.managed;
 import com.botmaker.plugin.api.PluginState;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.host.PluginCoordinate;
+import com.botmaker.java.edit.ImportManager;
+import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.plugin.api.source.ManagedMethod;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
@@ -524,10 +526,9 @@ public final class ManagedHolders {
         else body.insertLast(method, null);
         String pkg = unit.getPackage() == null ? "" : unit.getPackage().getName().getFullyQualifiedName();
         for (String each : imports) {
-            if (!isImplicit(each, pkg)) com.botmaker.studio.parser.ImportManager.addImport(unit, rewrite, each);
+            if (!isImplicit(each, pkg)) ImportManager.addImport(unit, rewrite, each);
         }
-        return SourceFormatter.formatChanged(source,
-                com.botmaker.studio.parser.helpers.AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /**

@@ -1,20 +1,21 @@
 package com.botmaker.studio.ui.dnd;
 
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
 
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.parser.SlotVacancy;
 import com.botmaker.studio.parser.StatementPlacement;
-import com.botmaker.studio.parser.helpers.BlockNodes;
+import com.botmaker.java.edit.helpers.BlockNodes;
 import com.botmaker.studio.blocks.ClassBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.types.SlotFit;
-import com.botmaker.studio.types.TypeExpectation;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.types.SlotFit;
+import com.botmaker.java.types.TypeExpectation;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.ITypeBinding;
@@ -63,7 +64,7 @@ public class BlockDragAndDropManager {
      * <p>Carried on the dragboard for the same reason {@link #JUMP_KIND_FORMAT} is: drag-over has only the
      * block id, and the binding that answers this lives on the AST node the id names, service-side. Absent
      * whenever the type doesn't resolve — and absent is read as unknown, which
-     * {@link com.botmaker.studio.types.TypeExpectation#fits} accepts, so an unresolved file keeps working.
+     * {@link com.botmaker.java.types.TypeExpectation#fits} accepts, so an unresolved file keeps working.
      */
     public static final DataFormat EXPRESSION_TYPE_FORMAT = new DataFormat("application/x-java-expression-type");
 
@@ -333,7 +334,7 @@ public class BlockDragAndDropManager {
     }
 
     /** @param targetBody the body the "+" inserts into — blocks illegal there are left out of the menu */
-    public void enableSeparatorClick(Pane separator, com.botmaker.studio.suggestions.ProjectAnalyzer analyzer,
+    public void enableSeparatorClick(Pane separator, ProjectAnalyzer analyzer,
                                    ASTNode targetBody, Consumer<BlockType> onInsert) {
         Button plus = InsertionSeam.plusOf(separator);
         if (plus == null) return;
@@ -612,7 +613,7 @@ public class BlockDragAndDropManager {
      * red outline and a tooltip naming the reason, rather than by the cursor alone.
      *
      * @param slotType what the slot expects; unresolved slots pass {@link ResolvedType#UNKNOWN} and accept
-     *                 anything, matching how {@link com.botmaker.studio.types.TypeExpectation} filters menus
+     *                 anything, matching how {@link com.botmaker.java.types.TypeExpectation} filters menus
      */
     public void addExpressionDropHandlers(Region target, CodeBlock slot, ResolvedType slotType) {
         target.getStyleClass().add("expression-drop-target");

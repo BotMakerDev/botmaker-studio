@@ -2,8 +2,8 @@ package com.botmaker.studio.blocks.expr;
 
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.types.ResolvedType;
-import com.botmaker.studio.suggestions.ProjectAnalyzer;
+import com.botmaker.java.types.ResolvedType;
+import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.render.menu.MenuComponents;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
