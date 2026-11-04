@@ -1,5 +1,6 @@
 package com.botmaker.studio.palette;
 
+import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.types.ResolvedType;
 import org.junit.jupiter.api.Test;
 

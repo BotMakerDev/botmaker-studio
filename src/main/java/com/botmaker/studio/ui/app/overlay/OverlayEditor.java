@@ -23,7 +23,7 @@ import com.botmaker.studio.events.CoreApplicationEvents.ProgramStoppedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.StatusMessageEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.UIBlocksUpdatedEvent;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.plugin.HostOverlayContext;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
@@ -32,7 +32,8 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.project.managed.ManagedConstants;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
+import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.CursorNavigator;
 import com.botmaker.studio.services.ProjectSettingsService;
@@ -576,7 +577,7 @@ public final class OverlayEditor {
             targetChosen = true;
             return;
         }
-        Supplier<BotIndex> index = BotIndex.prepare(context.getConfig(), state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(context.getConfig(), state);
         Thread.ofVirtual().name("overlay-targets").start(() -> {
             List<OverlayTargets.Target> found;
             try {
@@ -919,7 +920,7 @@ public final class OverlayEditor {
                                    MethodSignature overload) {
         pendingOverload = overload;
         insertBlock(new BlockType.LibraryCall("OVL_" + facade.simpleName() + "_" + method, method,
-                com.botmaker.studio.palette.BlockCategory.INPUT, facade.type(), method, List.of()));
+                com.botmaker.java.edit.palette.BlockCategory.INPUT, facade.type(), method, List.of()));
     }
 
     private void addBelow(Node anchor) {

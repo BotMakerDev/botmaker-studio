@@ -2,8 +2,8 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.palette.EnumDraft;
-import com.botmaker.studio.parser.guard.CompileGuard;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.edit.guard.CompileGuard;
+import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;

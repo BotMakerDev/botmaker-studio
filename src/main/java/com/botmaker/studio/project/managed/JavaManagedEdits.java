@@ -4,7 +4,7 @@ import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;

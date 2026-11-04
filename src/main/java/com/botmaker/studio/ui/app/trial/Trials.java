@@ -16,7 +16,8 @@ import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
+import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.overlay.ProbeCalls;
 import com.botmaker.studio.services.trial.LastRunValues;
 import com.botmaker.studio.services.trial.TrialCaller;
@@ -204,7 +205,7 @@ public final class Trials {
      * the FX thread, where the run takes its snapshot of the project.
      */
     private void start(TrialPlan.Plan plan, Map<String, TrialCaller.Value> values, Method entry) {
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         bus.publish(new StatusMessageEvent("Preparing to try " + plan.label() + "…"));
         Thread.ofVirtual().name("trial-caller").start(() -> {
             TrialCaller.Source caller;

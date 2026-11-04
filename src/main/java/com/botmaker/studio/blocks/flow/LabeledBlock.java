@@ -5,7 +5,7 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
 import javafx.scene.Node;

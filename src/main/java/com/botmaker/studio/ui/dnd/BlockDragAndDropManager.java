@@ -4,7 +4,7 @@ import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
 
 import com.botmaker.studio.palette.BlockCatalog;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.parser.SlotVacancy;
 import com.botmaker.studio.parser.StatementPlacement;
 import com.botmaker.java.edit.helpers.BlockNodes;

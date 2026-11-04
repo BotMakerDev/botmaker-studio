@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.OverlayPart;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.ExpressionMethodReference;

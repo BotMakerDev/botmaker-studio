@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 
 import java.util.ArrayList;
 import java.util.Collection;

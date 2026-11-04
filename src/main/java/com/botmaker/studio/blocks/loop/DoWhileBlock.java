@@ -1,6 +1,6 @@
 package com.botmaker.studio.blocks.loop;
 
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BlockWithChildren;

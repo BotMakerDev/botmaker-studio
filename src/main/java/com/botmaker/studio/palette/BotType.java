@@ -1,14 +1,15 @@
 package com.botmaker.studio.palette;
 
+import com.botmaker.java.edit.palette.Initializer;
 import com.botmaker.plugin.api.value.PluginType;
-import com.botmaker.studio.palette.Initializer.BoolLit;
-import com.botmaker.studio.palette.Initializer.CharLit;
-import com.botmaker.studio.palette.Initializer.DoubleLit;
-import com.botmaker.studio.palette.Initializer.IntLit;
-import com.botmaker.studio.palette.Initializer.NewInstance;
-import com.botmaker.studio.palette.Initializer.Raw;
-import com.botmaker.studio.palette.Initializer.StaticCall;
-import com.botmaker.studio.palette.Initializer.StrLit;
+import com.botmaker.java.edit.palette.Initializer.BoolLit;
+import com.botmaker.java.edit.palette.Initializer.CharLit;
+import com.botmaker.java.edit.palette.Initializer.DoubleLit;
+import com.botmaker.java.edit.palette.Initializer.IntLit;
+import com.botmaker.java.edit.palette.Initializer.NewInstance;
+import com.botmaker.java.edit.palette.Initializer.Raw;
+import com.botmaker.java.edit.palette.Initializer.StaticCall;
+import com.botmaker.java.edit.palette.Initializer.StrLit;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.ValueGrammar;

@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.palette.BlockCatalog;
-import com.botmaker.studio.palette.BlockCategory;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.ui.render.menu.PinnedStatements;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
 import javafx.scene.control.ContextMenu;
@@ -110,7 +110,7 @@ class StatementMenuTest extends FxHeadlessTest {
                 .filter(i -> BlockCatalog.DO_WHILE.displayName().equals(i.getText())).findFirst().orElseThrow();
         List<String> lines = new ArrayList<>();
         collectLabels(doWhile.getContent(), lines);
-        assertTrue(lines.contains(com.botmaker.studio.palette.PaletteDescriptions.of(BlockCatalog.DO_WHILE)), lines.toString());
+        assertTrue(lines.contains(com.botmaker.java.edit.palette.PaletteDescriptions.of(BlockCatalog.DO_WHILE)), lines.toString());
     }
 
     @Test

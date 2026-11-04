@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.render.menu;
 
-import com.botmaker.studio.parser.ExpressionChoice;
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;

@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.dnd;
 
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.blocks.ClassBlock;
 import com.botmaker.studio.core.BodyBlock;
 

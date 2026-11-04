@@ -43,7 +43,7 @@ class JavaParameterSourceTest {
                     @Param
                     public static int tries = Limits.TRIES;
                 """);
-        org.eclipse.jdt.core.dom.CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        org.eclipse.jdt.core.dom.CompilationUnit unit = com.botmaker.java.parse.BotParser.syntax(source);
         com.botmaker.java.grammar.BotNames names = new com.botmaker.java.grammar.BotNames() {
             @Override
             public java.util.Optional<Object> named(org.eclipse.jdt.core.dom.QualifiedName written) {

@@ -4,13 +4,13 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Entry;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VcsFileStatus;
@@ -609,7 +609,7 @@ public class FileExplorerManager {
         String newName = dialog.showAndWait().map(String::strip).orElse("");
         if (newName.isEmpty() || newName.equals(oldName)) return;
 
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         ProjectState.Snapshot before = state.snapshot();
         status("Renaming " + oldName + "…");
         onWorker("explorer-rename", () -> {
@@ -656,7 +656,7 @@ public class FileExplorerManager {
         confirm.setHeaderText("Delete " + file.getFileName() + "?");
         if (confirm.showAndWait().filter(javafx.scene.control.ButtonType.OK::equals).isEmpty()) return;
 
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         ProjectState.Snapshot before = state.snapshot();
         status("Checking what uses " + file.getFileName() + "…");
         onWorker("explorer-delete", () -> {

@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.java.edit.ImportManager;
 
 import com.botmaker.java.types.ResolvedType;

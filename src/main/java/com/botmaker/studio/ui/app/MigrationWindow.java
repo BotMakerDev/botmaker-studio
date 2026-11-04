@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
@@ -15,7 +15,7 @@ import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.managed.MigrationSteps.Choice;
 import com.botmaker.studio.project.managed.MigrationSteps.Shape;
 import com.botmaker.studio.project.managed.MigrationSteps.Step;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
@@ -117,7 +117,7 @@ final class MigrationWindow {
 
     private void show(Window owner, Class<?> to) {
         List<Class<?>> targets = MigrationSteps.targets(grammar, declared, from);
-        methods = ManagedMigrations.methods(BotIndex.of(config, state), grammar);
+        methods = ManagedMigrations.methods(BotSources.index(config, state), grammar);
 
         Label heading = new Label("Copy every " + from.getSimpleName() + " into");
         target.getItems().setAll(targets);
@@ -260,7 +260,7 @@ final class MigrationWindow {
             }
             answered.add(step.get());
         }
-        BotIndex index = BotIndex.of(config, state);
+        BotIndex index = BotSources.index(config, state);
         Map<Path, String> created = holderFor(index, to);
         Path migrations = config.mainPackageDir().resolve(MigrationSteps.CLASS + ".java");
         preview.setDisable(true);
@@ -303,7 +303,7 @@ final class MigrationWindow {
                 }
                 written(plan, index);
                 // What the steps are seeded from is now in the bot.
-                methods = ManagedMigrations.methods(BotIndex.of(config, state), grammar);
+                methods = ManagedMigrations.methods(BotSources.index(config, state), grammar);
                 status.setText(plan.summary() + "." + kept + failed);
                 after.run();
             }

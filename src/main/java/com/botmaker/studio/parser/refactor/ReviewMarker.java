@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser.refactor;
 
+import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;

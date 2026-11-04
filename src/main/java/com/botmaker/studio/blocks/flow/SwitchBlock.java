@@ -1,6 +1,6 @@
 package com.botmaker.studio.blocks.flow;
 
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 

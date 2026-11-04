@@ -1,10 +1,11 @@
 package com.botmaker.studio.parser.refactor;
 
+import com.botmaker.java.edit.refactor.MethodReferences;
 import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.Initializer;
+import com.botmaker.java.edit.palette.Initializer;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
-import com.botmaker.studio.parser.refactor.MethodReferences.CallSite;
+import com.botmaker.java.edit.refactor.MethodReferences.CallSite;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.java.types.SlotFit;
 import org.eclipse.jdt.core.dom.ASTNode;

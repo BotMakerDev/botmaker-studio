@@ -8,7 +8,7 @@ import com.botmaker.studio.migrate.PluginRules;
 import com.botmaker.studio.migrate.Rewrite;
 import com.botmaker.studio.migrate.Rule;
 import com.botmaker.studio.migrate.Sites;
-import com.botmaker.studio.nav.Uses;
+import com.botmaker.java.index.nav.Uses;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

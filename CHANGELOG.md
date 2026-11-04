@@ -27,6 +27,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `ProjectAnalyzer` reads a `SourceSet` and a `LibraryIndex`, which `TypeSummaryManager` implements; `Usages.local` is
   `LocalUses.of`. A default for a functional-interface slot whose type no project file declares is its lambda again,
   not an exception.
+- `BotIndex`, `BotParser`, `CompileGuard`, `UnusedImports`, `nav`'s usages and renames, `MethodReferences`,
+  `ReviewMarks`, `ExpressionFactory` and the palette's block and expression kinds are `botmaker-java`'s (2026-11-04).
+  The open project's index is `BotSources.index` and `prepareIndex`, which were `BotIndex.of` and `prepare` over the
+  config and the state. Nothing changes in the window.
 
 ### Changed (one parser)
 

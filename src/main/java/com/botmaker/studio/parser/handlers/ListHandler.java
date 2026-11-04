@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.handlers;
 
-import com.botmaker.studio.palette.ExpressionType;
+import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.studio.parser.NodeCreator;
 import com.botmaker.java.edit.factories.InitializerFactory;
@@ -54,7 +54,7 @@ public class ListHandler {
 
     /**
      * Inserts an element built from a menu {@code selection} (a {@link ExpressionType} or a
-     * {@link com.botmaker.studio.parser.ExpressionChoice}) at {@code insertIndex}. Unlike {@link #addElementToList},
+     * {@link com.botmaker.java.edit.ExpressionChoice}) at {@code insertIndex}. Unlike {@link #addElementToList},
      * which only ever inserts a bare placeholder, this reuses the shared
      * {@link NodeCreator#createExpression} builder so the list's "+" menu can offer the same type-aware
      * picks (variable / method / constructor / enum constant) the replace menu does.

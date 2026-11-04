@@ -3,7 +3,7 @@ package com.botmaker.studio.blocks.var;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.blocks.TypeClauses;
 import com.botmaker.studio.blocks.TypeHeader;
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;

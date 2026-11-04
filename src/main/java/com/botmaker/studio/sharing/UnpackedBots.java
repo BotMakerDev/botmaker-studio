@@ -6,7 +6,7 @@ import com.botmaker.plugin.api.PluginState;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.shared.tools.UserDirs;
 import com.botmaker.java.grammar.ParamsFitter;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;
 import com.fasterxml.jackson.databind.ObjectMapper;

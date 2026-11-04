@@ -6,7 +6,7 @@ import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.services.BotSources;
 
 import java.nio.file.Path;
@@ -41,7 +41,7 @@ public final class JavaManagedValues {
     /** The same, against a given grammar — the seam a test uses, and the one place the grammar enters. */
     public static List<ManagedMethod> scan(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return List.of();
-        return over(BotIndex.of(config, state), grammar);
+        return over(BotSources.index(config, state), grammar);
     }
 
     /**

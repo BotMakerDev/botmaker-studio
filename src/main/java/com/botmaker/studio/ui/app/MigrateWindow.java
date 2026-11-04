@@ -12,14 +12,15 @@ import com.botmaker.studio.migrate.PluginRules;
 import com.botmaker.studio.migrate.Rewrite;
 import com.botmaker.studio.migrate.Rule;
 import com.botmaker.studio.migrate.Sites;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.managed.MigrationSummary;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
+import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -377,7 +378,7 @@ final class MigrateWindow {
 
     /** Reads the bot again, on a worker, and shows what it found. */
     private void reload() {
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         List<ManagedValue<?>> declared = PluginHost.managedValues();
         long asked = ++readAsked;
         background("Reading what the last plugin change broke…", () -> {

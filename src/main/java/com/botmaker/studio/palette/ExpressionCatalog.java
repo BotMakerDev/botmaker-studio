@@ -1,11 +1,12 @@
 package com.botmaker.studio.palette;
 
-import com.botmaker.studio.palette.ExpressionType.Form;
-import com.botmaker.studio.palette.ExpressionType.InfixOp;
-import com.botmaker.studio.palette.ExpressionType.Literal;
-import com.botmaker.studio.palette.ExpressionType.Op;
-import com.botmaker.studio.palette.ExpressionType.PrefixOp;
-import com.botmaker.studio.palette.ExpressionType.Reference;
+import com.botmaker.java.edit.palette.ExpressionType;
+import com.botmaker.java.edit.palette.ExpressionType.Form;
+import com.botmaker.java.edit.palette.ExpressionType.InfixOp;
+import com.botmaker.java.edit.palette.ExpressionType.Literal;
+import com.botmaker.java.edit.palette.ExpressionType.Op;
+import com.botmaker.java.edit.palette.ExpressionType.PrefixOp;
+import com.botmaker.java.edit.palette.ExpressionType.Reference;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.types.JdkType;
 import com.botmaker.java.types.PrimitiveKind;
@@ -15,7 +16,7 @@ import com.botmaker.java.types.TypeExpectation;
 import java.util.List;
 import java.util.Optional;
 
-import static com.botmaker.studio.palette.ExpressionCategory.*;
+import static com.botmaker.java.edit.palette.ExpressionCategory.*;
 
 /**
  * The canonical set of insertable {@link ExpressionType}s — the single source of truth that replaces

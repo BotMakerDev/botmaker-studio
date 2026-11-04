@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.ImportManager;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.SourceFormatter;
@@ -10,9 +10,9 @@ import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.studio.project.source.BotIndex;
-import com.botmaker.studio.project.source.BotParser;
-import com.botmaker.studio.project.source.ValueTypeResolver;
+import com.botmaker.java.index.BotIndex;
+import com.botmaker.java.parse.BotParser;
+import com.botmaker.java.index.ValueTypeResolver;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;

@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.vars;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.palette.TypeNames;
+import com.botmaker.java.edit.palette.TypeNames;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.studio.ui.render.components.types.TypeChooser;

@@ -7,7 +7,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.palette.ApiDocs;
+import com.botmaker.java.edit.palette.ApiDocs;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.project.ProjectFile;
@@ -76,8 +76,8 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
     }
 
     @Override
-    protected com.botmaker.studio.palette.BlockCategory category() {
-        return com.botmaker.studio.palette.BlockCategory.FUNCTIONS;
+    protected com.botmaker.java.edit.palette.BlockCategory category() {
+        return com.botmaker.java.edit.palette.BlockCategory.FUNCTIONS;
     }
 
     /** True for a call into code the bot does not own: a plugin's, the JDK's or a library's. */

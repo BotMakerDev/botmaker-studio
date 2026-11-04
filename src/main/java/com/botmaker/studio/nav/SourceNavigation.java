@@ -1,5 +1,6 @@
 package com.botmaker.studio.nav;
 
+import com.botmaker.java.index.nav.StructureKind;
 import com.botmaker.studio.core.CodeBlock;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;

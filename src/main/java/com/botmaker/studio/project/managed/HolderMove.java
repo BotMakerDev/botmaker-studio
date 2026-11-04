@@ -1,9 +1,9 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;

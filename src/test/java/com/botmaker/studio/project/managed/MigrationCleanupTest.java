@@ -1,11 +1,11 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
 import com.botmaker.studio.project.managed.MigrationTypes.Shot;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

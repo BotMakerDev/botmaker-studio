@@ -1,6 +1,8 @@
 package com.botmaker.studio.nav;
 
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.nav.TypeDelete;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.services.ClassFiles;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

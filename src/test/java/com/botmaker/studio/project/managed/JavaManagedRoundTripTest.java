@@ -6,7 +6,7 @@ import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.TestValues;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;

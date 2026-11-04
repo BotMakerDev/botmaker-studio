@@ -8,9 +8,9 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.migrate.PluginRules;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.project.managed.HolderMove;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.plugin.PluginHost;
@@ -27,7 +27,7 @@ import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.studio.services.ReviewService;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import com.botmaker.studio.services.ScreenCaptureService;
@@ -792,7 +792,7 @@ public class UIManager implements ProjectWindow {
             return;
         }
         long asked = ++holdersAsked;
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         Thread worker = new Thread(() -> {
             String text;
             try {
@@ -819,7 +819,7 @@ public class UIManager implements ProjectWindow {
     private void moveHolders() {
         if (movingHolders) return;
         movingHolders = true;
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         ProjectState.Snapshot before = state.snapshot();
         Thread worker = new Thread(() -> {
             Optional<Refactor.Outcome> outcome;
@@ -869,7 +869,7 @@ public class UIManager implements ProjectWindow {
             editorCanvas.showBroken(MigrateWindow.Pending.NONE, this::openMigrate);
             return;
         }
-        java.util.function.Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         Thread worker = new Thread(() -> {
             MigrateWindow.Pending count;
             try {

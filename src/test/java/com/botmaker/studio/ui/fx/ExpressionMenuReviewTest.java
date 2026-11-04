@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.blocks.func.CallOwner;
 import com.botmaker.studio.parser.EditorFixture;
-import com.botmaker.studio.parser.ExpressionChoice;
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;

@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.palette.BlockCatalog;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ArrayType;
 import org.eclipse.jdt.core.dom.BodyDeclaration;

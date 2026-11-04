@@ -6,7 +6,7 @@ import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.managed.ManagedConstants;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
@@ -70,7 +70,7 @@ class ProbeCallsTest {
     private Optional<ProbeCalls.Job> jobAt(int index) {
         ManagedConstants.Lookup constants = new ManagedConstants.Lookup(
                 List.of(new ManagedConstants.Constant(pkg + ".Pictures", "ONE", "\"1\"")), PluginHost.grammar());
-        return BotIndex.of(config, null).read(units -> {
+        return BotSources.index(config, null).read(units -> {
             CompilationUnit unit = units.entrySet().stream()
                     .filter(e -> e.getKey().getFileName().toString().equals("Calls.java"))
                     .findFirst().orElseThrow().getValue();

@@ -11,7 +11,7 @@ import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -159,7 +159,7 @@ public final class ManagedConstants {
      * The same over {@code index}'s sources — the bot a parameter scan already holds, so a {@code @Param} field
      * initialised with {@code Flows.MAIN} reads as that flow (2026-10-11).
      */
-    public static List<Constant> over(com.botmaker.studio.project.source.BotIndex index) {
+    public static List<Constant> over(com.botmaker.java.index.BotIndex index) {
         return walked(PluginHost.managedValues(), each -> index.sources().forEach(each));
     }
 

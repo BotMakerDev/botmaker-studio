@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
@@ -93,7 +93,7 @@ final class UsagesPanel {
             return;
         }
         summary.setText("Searching for " + name + "…");
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         Thread worker = new Thread(() -> {
             List<Usages.Usage> found = Usages.across(index.get(), key, name);
             Platform.runLater(() -> {

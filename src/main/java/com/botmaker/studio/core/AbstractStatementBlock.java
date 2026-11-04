@@ -4,7 +4,7 @@ import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.palette.ExpressionType;
+import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.LayoutComponents;
 import com.botmaker.studio.ui.render.components.PlaceholderComponents;

@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.dnd.InsertionSeam;
 import javafx.scene.Node;

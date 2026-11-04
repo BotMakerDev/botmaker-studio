@@ -2,7 +2,7 @@ package com.botmaker.studio.services.trial;
 
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;
@@ -75,7 +75,7 @@ class TrialPlanTest {
 
     /** {@code run}'s statement at {@code index}, planned through {@code plan}. */
     private <T> T at(int index, Function<Statement, T> plan) {
-        return BotIndex.of(config, null).read(units -> {
+        return BotSources.index(config, null).read(units -> {
             CompilationUnit unit = units.entrySet().stream()
                     .filter(e -> e.getKey().getFileName().toString().equals("Calls.java"))
                     .findFirst().orElseThrow().getValue();

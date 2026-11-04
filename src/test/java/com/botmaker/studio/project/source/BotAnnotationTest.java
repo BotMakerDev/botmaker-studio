@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.source;
 
+import com.botmaker.java.parse.BotParser;
 import com.botmaker.java.grammar.BotAnnotation;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;

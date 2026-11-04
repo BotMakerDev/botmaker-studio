@@ -3,8 +3,8 @@ package com.botmaker.studio.services;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.index.ApiDocsParser;
-import com.botmaker.studio.palette.ApiDocs;
+import com.botmaker.java.index.ApiDocsParser;
+import com.botmaker.java.edit.palette.ApiDocs;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 

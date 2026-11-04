@@ -9,7 +9,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.managed.ManagedMigrations;
 import com.botmaker.studio.project.managed.MigrationCleanup;
 import com.botmaker.studio.project.managed.MigrationSteps;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
@@ -161,7 +161,7 @@ final class ReviewPanel {
             return;
         }
         // The buffers are read here; the parse, which a large bot pays for, on a worker.
-        java.util.function.Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        java.util.function.Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         Thread worker = new Thread(() -> {
             Migrations found;
             try {

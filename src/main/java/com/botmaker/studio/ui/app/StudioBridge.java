@@ -20,8 +20,8 @@ import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.migrate.Migration;
 import com.botmaker.studio.migrate.Rewrite;
 import com.botmaker.studio.migrate.Rule;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.services.ReviewService;
 import org.eclipse.jdt.core.dom.NodeFinder;
@@ -36,7 +36,7 @@ import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.managed.ManagedRenames;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.services.overlay.OverlayTargets;
@@ -155,7 +155,7 @@ final class StudioBridge implements StudioDriver {
         Asked asked = onFx(() -> {
             List<OverlayPart.TargetType> types = new ArrayList<>();
             for (PluginHost.OwnedOverlay owned : PluginHost.overlayParts()) types.addAll(owned.part().targets());
-            return new Asked(types, BotIndex.prepare(ctx.config(), ctx.state()));
+            return new Asked(types, BotSources.prepareIndex(ctx.config(), ctx.state()));
         });
         return asked.types().isEmpty() ? List.of() : OverlayTargets.find(asked.index().get(), asked.types());
     }
@@ -236,7 +236,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String runActivity(String key) {
         OverlayTargets.Target target = target(key);
-        BotIndex index = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state())).get();
+        BotIndex index = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state())).get();
         record OnItsOwn(String packageName, boolean valued) {}
         OnItsOwn runnable = index.read(units -> {
             CompilationUnit unit = units.get(target.file());
@@ -532,7 +532,7 @@ final class StudioBridge implements StudioDriver {
 
     /** The bot's index: its sources read on FX, parsed on the caller's thread. */
     private BotIndex index() {
-        return onFx(() -> BotIndex.prepare(ctx.config(), ctx.state())).get();
+        return onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state())).get();
     }
 
     /** Shows {@code file} in the editor, saying so when it was not the one shown. FX thread. */
@@ -905,7 +905,7 @@ final class StudioBridge implements StudioDriver {
     /** Migrate's rows and its values section, as {@link MigrateWindow#listing} says them. */
     @Override
     public String listMigrations() {
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         try {
             BotIndex index = prepared.get();
             List<ManagedValue<?>> declared = PluginHost.managedValues();
@@ -924,7 +924,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String seedRule(String element) {
         notReading();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         Path file;
         Refactor.Outcome outcome;
@@ -952,7 +952,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String writeRule(String element, String body, String imports) {
         notReading();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         Refactor.Outcome outcome;
         try {
@@ -978,7 +978,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String applyRules(boolean confirm) {
         if (confirm) notReading();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         boolean markable = onFx(() -> ReviewMarker.available(ctx.state()));
         BotIndex index;
         Rewrite.Result result;
@@ -1014,7 +1014,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String removeFinished(boolean confirm) {
         if (confirm) notReading();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         List<Rule> done;
         Migration.Removal removal;
@@ -1077,7 +1077,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String copyValues(String from, String to, boolean confirm) {
         if (confirm) notReading();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         MigrationSteps.Draft draft;
         try {
@@ -1117,7 +1117,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String switchUses(String from, String to, String names) {
         notReading();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         MigrationCleanup.Switched switched;
         try {
@@ -1157,7 +1157,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String removeMigrated(String from, String to, boolean confirm) {
         if (confirm) notReading();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         MigrationCleanup.Cleared cleared;
         Class<?> target;
@@ -1428,7 +1428,7 @@ final class StudioBridge implements StudioDriver {
     @Override
     public String listParams() {
         record Read(Supplier<BotIndex> index, ValueGrammar grammar) {}
-        Read read = onFx(() -> new Read(BotIndex.prepare(ctx.config(), ctx.state()), PluginHost.grammar()));
+        Read read = onFx(() -> new Read(BotSources.prepareIndex(ctx.config(), ctx.state()), PluginHost.grammar()));
         List<JavaParameter> params = JavaParameters.over(read.index().get(), read.grammar());
         if (params.isEmpty()) return "The bot has no parameters (@Param fields).";
         List<String> lines = new ArrayList<>();
@@ -1479,7 +1479,7 @@ final class StudioBridge implements StudioDriver {
     public String resetParam(String param, boolean confirm) {
         if (confirm) notReading();
         String wanted = param == null ? "" : param.strip();
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         Refactor.Outcome outcome;
         try {
@@ -1504,7 +1504,7 @@ final class StudioBridge implements StudioDriver {
     public String deleteField(String file, String field) {
         notReading();
         Path at = onFx(() -> path(file));
-        Supplier<BotIndex> prepared = onFx(() -> BotIndex.prepare(ctx.config(), ctx.state()));
+        Supplier<BotIndex> prepared = onFx(() -> BotSources.prepareIndex(ctx.config(), ctx.state()));
         BotIndex index;
         Refactor.Outcome outcome;
         try {

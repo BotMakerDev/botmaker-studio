@@ -1,8 +1,8 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.JavaValue;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

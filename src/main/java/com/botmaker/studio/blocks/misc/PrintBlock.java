@@ -1,6 +1,6 @@
 package com.botmaker.studio.blocks.misc;
 
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.component.ComponentSpec;

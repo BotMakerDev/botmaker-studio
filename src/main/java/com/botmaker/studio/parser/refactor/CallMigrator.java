@@ -1,11 +1,12 @@
 package com.botmaker.studio.parser.refactor;
 
+import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.java.grammar.SourceParser;
-import com.botmaker.studio.parser.refactor.MethodReferences.CallSite;
+import com.botmaker.java.edit.refactor.MethodReferences.CallSite;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
 import com.botmaker.studio.parser.refactor.SignatureMigration.CallChange;
 import com.botmaker.java.parse.SourceSet;

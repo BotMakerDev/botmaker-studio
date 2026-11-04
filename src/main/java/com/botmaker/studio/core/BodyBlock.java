@@ -189,7 +189,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
      * says the user is mid-decision.
      */
     private static void insertAndOpenIfVariable(CodeEditorService context, Node anchor, BodyBlock body,
-                                                com.botmaker.studio.palette.BlockType type, int index) {
+                                                com.botmaker.java.edit.palette.BlockType type, int index) {
         javafx.stage.Window owner = anchor.getScene() == null ? null : anchor.getScene().getWindow();
         // Declare Variable asks for its type and name first, whatever the naming preference: the type is the
         // choice the entry exists to offer.
@@ -203,7 +203,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             return;
         }
         // An enum is named before it is written, so a second one never lands under the first one's name.
-        if (type instanceof com.botmaker.studio.palette.BlockType.EnumDecl) {
+        if (type instanceof com.botmaker.java.edit.palette.BlockType.EnumDecl) {
             ASTNode at = body.getAstNode();
             com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
                             StatementFactory.uniqueTypeName(at, "MyEnum"), StatementFactory.declaredTypeNames(at))

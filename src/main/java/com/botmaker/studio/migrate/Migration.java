@@ -1,10 +1,10 @@
 package com.botmaker.studio.migrate;
 
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.BotAnnotation;
-import com.botmaker.studio.project.source.BotIndex;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.index.BotIndex;
+import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.CompilationUnit;

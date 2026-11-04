@@ -12,7 +12,7 @@ import com.botmaker.java.grammar.ParamsFitter;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.java.grammar.BotAnnotation;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.IExtendedModifier;

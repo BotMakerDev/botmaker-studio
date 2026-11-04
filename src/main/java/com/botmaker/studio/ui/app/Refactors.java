@@ -1,13 +1,14 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.managed.ManagedRenames;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
+import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.scene.Node;
 import javafx.stage.Window;
@@ -38,7 +39,7 @@ public final class Refactors {
     public static void rename(CodeEditorService context, Node anchor, SimpleName name, String newName) {
         ProjectFile active = context.getState().getActiveFile();
         if (active == null || active.getPath() == null || name == null) return;
-        BotIndex index = BotIndex.of(context.getConfig(), context.getState());
+        BotIndex index = BotSources.index(context.getConfig(), context.getState());
         // A plugin's set member is renamed as its plugin would have it, past the lock on the plugin's file.
         Optional<Refactor.Outcome> managed = ManagedRenames.plan(index, active.getPath(), name.getStartPosition(),
                 newName, PluginHost.managedValues(), PluginHost.grammar());

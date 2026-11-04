@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.studio.palette.BlockCatalog;
-import com.botmaker.studio.palette.BlockCategory;
-import com.botmaker.studio.palette.BlockType;
-import com.botmaker.studio.palette.PaletteDescriptions;
+import com.botmaker.java.edit.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockType;
+import com.botmaker.java.edit.palette.PaletteDescriptions;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.parser.StatementPlacement;
 import com.botmaker.studio.parser.factories.StatementFactory;

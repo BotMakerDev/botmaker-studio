@@ -71,7 +71,7 @@ final class StudioActions {
     private final GitHubAuth gitHubAuth = new GitHubAuth();
     private Runnable onPublish = () -> { };
     /** Opens the block a use is in — the canvas's, so {@link UIManager} sets it once the canvas exists. */
-    private java.util.function.Consumer<com.botmaker.studio.nav.Usages.Usage> onReveal = null;
+    private java.util.function.Consumer<com.botmaker.java.index.nav.Usages.Usage> onReveal = null;
     // Reads the plugin index off the same raw CDN the gallery uses, with the same client and no account.
     private final PluginRegistry pluginRegistry = new PluginRegistry();
 
@@ -176,7 +176,7 @@ final class StudioActions {
     }
 
     /** Where the Parameters window sends a person to a use of the parameter they tried to remove. */
-    void setOnReveal(java.util.function.Consumer<com.botmaker.studio.nav.Usages.Usage> onReveal) {
+    void setOnReveal(java.util.function.Consumer<com.botmaker.java.index.nav.Usages.Usage> onReveal) {
         this.onReveal = onReveal;
     }
 

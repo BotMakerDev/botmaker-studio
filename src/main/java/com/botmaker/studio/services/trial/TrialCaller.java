@@ -5,7 +5,7 @@ import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.managed.ManagedIds;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.IAnnotationBinding;
 import org.eclipse.jdt.core.dom.IMethodBinding;

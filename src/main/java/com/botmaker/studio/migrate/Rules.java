@@ -2,10 +2,10 @@ package com.botmaker.studio.migrate;
 
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.java.grammar.ParamsFitter;
-import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.java.grammar.BotAnnotation;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;

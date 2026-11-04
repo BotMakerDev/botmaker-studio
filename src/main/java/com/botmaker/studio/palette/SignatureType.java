@@ -1,5 +1,6 @@
 package com.botmaker.studio.palette;
 
+import com.botmaker.java.edit.palette.TypeNames;
 import java.util.Optional;
 
 /**

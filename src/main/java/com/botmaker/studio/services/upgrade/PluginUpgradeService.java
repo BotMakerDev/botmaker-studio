@@ -6,7 +6,7 @@ import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.migrate.Migration;
 import com.botmaker.studio.migrate.Rewrite;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.PluginFiles;
@@ -17,7 +17,7 @@ import com.botmaker.studio.project.managed.ManagedRepairs;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.params.FieldParameters;
 import com.botmaker.studio.project.params.JavaParameters;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
@@ -330,7 +330,7 @@ public final class PluginUpgradeService {
             return Optional.empty();
         }
         try {
-            BotIndex current = BotIndex.of(config, state);
+            BotIndex current = BotSources.index(config, state);
             return Optional.of(Migration.of(current.against(target.get()), current.classpath()));
         } catch (RuntimeException e) {
             problems.add("This bot could not be checked against " + name() + "'s new classpath: " + e + ".");
@@ -385,7 +385,7 @@ public final class PluginUpgradeService {
         if (target.isEmpty()) return Values.NOTHING;
         FieldParameters.Plan plan;
         try {
-            plan = FieldParameters.plan(config, BotIndex.of(config, state).against(target.get()), PluginHost.grammar());
+            plan = FieldParameters.plan(config, BotSources.index(config, state).against(target.get()), PluginHost.grammar());
         } catch (RuntimeException e) {
             return new Values(0, List.of(), List.of("This bot's @Param fields were left as written: " + e + "."),
                     List.of());
@@ -531,7 +531,7 @@ public final class PluginUpgradeService {
                 return new ValuesPlan(null, List.of(name() + " " + to + " declares no values Studio could read, so"
                         + " this bot's values in its files are left as written."), List.of());
             }
-            BotIndex index = BotIndex.of(config, state).against(staged.classpath());
+            BotIndex index = BotSources.index(config, state).against(staged.classpath());
             String note = ReviewMarker.available(state)
                     ? "Reset by the " + name() + " " + to + " upgrade: it no longer compiled." : null;
             return new ValuesPlan(ManagedRepairs.plan(index, staged.declared(), staged.grammar(), note), List.of(),
@@ -548,7 +548,7 @@ public final class PluginUpgradeService {
         Set<String> own = new LinkedHashSet<>();
         ownDeclared().forEach(v -> own.add(v.id()));
         if (own.isEmpty()) return false;
-        return ManagedRepairs.held(BotIndex.of(config, state)).stream().anyMatch(own::contains);
+        return ManagedRepairs.held(BotSources.index(config, state)).stream().anyMatch(own::contains);
     }
 
     /** Every value the plugins bound from this coordinate declare now; a plugin that throws declares nothing. */
@@ -574,7 +574,7 @@ public final class PluginUpgradeService {
      */
     private List<MigrationSteps.Stranded> stranded(List<ManagedValue<?>> target) {
         try {
-            return MigrationSteps.stranded(BotIndex.of(config, state), PluginHost.grammar(),
+            return MigrationSteps.stranded(BotSources.index(config, state), PluginHost.grammar(),
                     PluginHost.managedValues(), ownDeclared(), target);
         } catch (RuntimeException | LinkageError e) {
             return List.of();

@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.vars;
 
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.UseFix;
 import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;

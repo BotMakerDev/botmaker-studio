@@ -1,7 +1,7 @@
 package com.botmaker.studio.blocks.var;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.ui.app.Refactors;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 

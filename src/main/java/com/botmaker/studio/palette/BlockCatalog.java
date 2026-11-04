@@ -1,20 +1,22 @@
 package com.botmaker.studio.palette;
 
-import com.botmaker.studio.palette.BlockType.ControlFlow;
-import com.botmaker.studio.palette.BlockType.ControlFlow.Kind;
-import com.botmaker.studio.palette.BlockType.EnumDecl;
-import com.botmaker.studio.palette.BlockType.MethodMember;
-import com.botmaker.studio.palette.BlockType.VarDecl;
-import com.botmaker.studio.palette.Initializer.BoolLit;
-import com.botmaker.studio.palette.Initializer.DoubleLit;
-import com.botmaker.studio.palette.Initializer.IntLit;
-import com.botmaker.studio.palette.Initializer.StrLit;
+import com.botmaker.java.edit.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockType.ControlFlow;
+import com.botmaker.java.edit.palette.BlockType.ControlFlow.Kind;
+import com.botmaker.java.edit.palette.BlockType.EnumDecl;
+import com.botmaker.java.edit.palette.BlockType.MethodMember;
+import com.botmaker.java.edit.palette.BlockType.VarDecl;
+import com.botmaker.java.edit.palette.Initializer.BoolLit;
+import com.botmaker.java.edit.palette.Initializer.DoubleLit;
+import com.botmaker.java.edit.palette.Initializer.IntLit;
+import com.botmaker.java.edit.palette.Initializer.StrLit;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import static com.botmaker.studio.palette.BlockCategory.*;
+import static com.botmaker.java.edit.palette.BlockCategory.*;
 
 /**
  * The canonical set of insertable {@link BlockType}s — the single source of truth that replaces

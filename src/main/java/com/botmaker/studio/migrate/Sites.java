@@ -1,7 +1,7 @@
 package com.botmaker.studio.migrate;
 
-import com.botmaker.studio.nav.Uses;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.nav.Uses;
+import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.BodyDeclaration;

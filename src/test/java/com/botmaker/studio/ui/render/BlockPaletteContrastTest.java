@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.render;
 
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import javafx.css.CssParser;
 import javafx.css.Stylesheet;
 import org.junit.jupiter.api.Test;

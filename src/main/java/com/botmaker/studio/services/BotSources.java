@@ -3,6 +3,7 @@ package com.botmaker.studio.services;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
+import com.botmaker.java.index.BotIndex;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -153,6 +154,27 @@ public final class BotSources {
             reader.accept(file, source);
             return false;
         });
+    }
+
+    /**
+     * The open project's {@link BotIndex}, reused while nothing it was built from has changed. Reads the
+     * buffers, so call it where {@link ProjectState} may be read; the parse itself is safe on a worker.
+     */
+    public static BotIndex index(ProjectConfig config, ProjectState state) {
+        return prepareIndex(config, state).get();
+    }
+
+    /**
+     * {@link #index} in two halves: the sources are read now, on the thread that may read {@link ProjectState},
+     * and the parse happens when the answer is asked for — on a worker, for a search the user waits on.
+     */
+    public static Supplier<BotIndex> prepareIndex(ProjectConfig config, ProjectState state) {
+        Map<Path, String> sources = new LinkedHashMap<>();
+        if (config != null) scan(config, state, sources::put);
+        Path root = state != null && state.getSourcePath() != null ? state.getSourcePath()
+                : config == null ? null : config.sourceRoot();
+        List<String> classpath = state == null ? List.of() : List.copyOf(state.getResolvedClasspath());
+        return () -> BotIndex.over(sources, classpath, root);
     }
 
     /**

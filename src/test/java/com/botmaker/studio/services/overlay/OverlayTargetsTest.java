@@ -2,7 +2,7 @@ package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.studio.services.BotSources;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -59,7 +59,7 @@ class OverlayTargetsTest {
     }
 
     private List<OverlayTargets.Target> find(String group) {
-        return OverlayTargets.find(BotIndex.of(config, null),
+        return OverlayTargets.find(BotSources.index(config, null),
                 List.of(new OverlayPart.TargetType(pkg + ".Body", group)));
     }
 
@@ -77,8 +77,8 @@ class OverlayTargetsTest {
 
     @Test
     void anUndeclaredTypeFindsNothing() {
-        assertEquals(List.of(), OverlayTargets.find(BotIndex.of(config, null),
+        assertEquals(List.of(), OverlayTargets.find(BotSources.index(config, null),
                 List.of(new OverlayPart.TargetType(pkg + ".Missing", "Activities"))));
-        assertEquals(List.of(), OverlayTargets.find(BotIndex.of(config, null), List.of()));
+        assertEquals(List.of(), OverlayTargets.find(BotSources.index(config, null), List.of()));
     }
 }

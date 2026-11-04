@@ -2,11 +2,11 @@ package com.botmaker.studio.services;
 
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;
-import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.VersionReader;
 import org.eclipse.jdt.core.dom.CompilationUnit;

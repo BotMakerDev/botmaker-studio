@@ -4,11 +4,11 @@ import com.botmaker.java.edit.factories.UnfilledSlot;
 
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.palette.BlockCatalog;
-import com.botmaker.studio.palette.BlockCategory;
-import com.botmaker.studio.palette.BlockType;
-import com.botmaker.studio.palette.BlockType.ControlFlow.Kind;
+import com.botmaker.java.edit.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType.ControlFlow.Kind;
 import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.palette.Initializer;
+import com.botmaker.java.edit.palette.Initializer;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;

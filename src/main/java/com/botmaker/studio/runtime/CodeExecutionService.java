@@ -10,8 +10,9 @@ import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.runtime.tryhost.TryHost;
+import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.services.trial.TrialCaller;
 import com.botmaker.studio.ui.app.reports.RunProblems;
 import com.botmaker.session.launch.BackgroundLauncher;
@@ -140,7 +141,7 @@ public class CodeExecutionService {
      * ({@link TrialCaller#holderBinaryNames}) as its arguments. Call it on the FX thread: the sources are read now.
      */
     public void runEntry(ProjectState.Snapshot snapshot, String title, String mainClass) {
-        Supplier<BotIndex> index = BotIndex.prepare(config, state);
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         launch(snapshot, null, null, () -> new Launch(title, mainClass, TrialCaller.holderBinaryNames(index.get())));
     }
 

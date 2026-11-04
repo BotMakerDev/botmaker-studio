@@ -1,6 +1,6 @@
 package com.botmaker.studio.blocks.func;
 
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.studio.parser.helpers.MethodSignatures;

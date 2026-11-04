@@ -493,7 +493,7 @@ public final class ManagedHolders {
 
     private static String withMember(String source, String className, ManagedValue<?> value,
                                      java.util.function.BiFunction<AST, TreeSet<String>, MethodDeclaration> written) {
-        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        CompilationUnit unit = com.botmaker.java.parse.BotParser.syntax(source);
         AST ast = unit.getAST();
         TypeDeclaration holder = null;
         for (Object each : unit.types()) {
@@ -541,7 +541,7 @@ public final class ManagedHolders {
      * @param byPlugin each plugin's coordinate and every value it declares
      */
     public static java.util.Map<Path, List<ManagedValue<?>>> valuesToKeep(
-            ProjectConfig config, com.botmaker.studio.project.source.BotIndex index,
+            ProjectConfig config, com.botmaker.java.index.BotIndex index,
             java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
         List<ManagedValue<?>> known = byPlugin.values().stream().flatMap(List::stream).toList();
         java.util.Map<String, Path> marked = new java.util.HashMap<>();
@@ -622,7 +622,7 @@ public final class ManagedHolders {
     /** The method of {@code source} carrying {@code value}'s mark, read against {@code known}. */
     private static Optional<MethodDeclaration> markedMethod(String source, ManagedValue<?> value,
                                                             List<ManagedValue<?>> known) {
-        CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
+        CompilationUnit unit = com.botmaker.java.parse.BotParser.syntax(source);
         MethodDeclaration[] found = {null};
         unit.accept(new org.eclipse.jdt.core.dom.ASTVisitor() {
             @Override

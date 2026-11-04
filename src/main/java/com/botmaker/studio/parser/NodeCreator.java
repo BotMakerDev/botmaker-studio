@@ -1,14 +1,15 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.java.edit.EditContext;
 
 import com.botmaker.java.grammar.SourceParser;
-import com.botmaker.studio.parser.factories.ExpressionFactory;
+import com.botmaker.java.edit.factories.ExpressionFactory;
 import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.parser.handlers.MethodHandler;
-import com.botmaker.studio.palette.BlockType;
-import com.botmaker.studio.palette.ExpressionType;
+import com.botmaker.java.edit.palette.BlockType;
+import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;

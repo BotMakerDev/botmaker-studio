@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.studio.palette.BlockCategory;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;

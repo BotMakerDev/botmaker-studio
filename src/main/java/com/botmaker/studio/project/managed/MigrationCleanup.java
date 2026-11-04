@@ -1,15 +1,15 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.ImportManager;
-import com.botmaker.studio.parser.guard.CompileGuard;
+import com.botmaker.java.edit.guard.CompileGuard;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.source.BotIndex;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.index.BotIndex;
+import com.botmaker.java.parse.BotParser;
 import com.botmaker.java.grammar.BotAnnotation;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;

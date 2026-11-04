@@ -14,7 +14,7 @@ import org.eclipse.jdt.core.dom.TypeLiteral;
 import org.eclipse.jdt.core.dom.VariableDeclarationExpression;
 
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.palette.ExpressionType;
+import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.SelectorComponents;
 import com.botmaker.java.types.ResolvedType;

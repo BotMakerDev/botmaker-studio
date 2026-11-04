@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.dnd;
 
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType;
 
 /**
  * A block dropped onto an <em>expression slot</em> — the {@code ⟨expression⟩} of a print, an {@code if}

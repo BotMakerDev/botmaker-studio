@@ -120,8 +120,8 @@ public class BodyCallBlock extends AbstractStatementBlock implements BlockWithCh
 
     /** A call like any other, with a mouth: FUNCTIONS, drawn as a C round its body (no frame of its own). */
     @Override
-    protected com.botmaker.studio.palette.BlockCategory category() {
-        return com.botmaker.studio.palette.BlockCategory.FUNCTIONS;
+    protected com.botmaker.java.edit.palette.BlockCategory category() {
+        return com.botmaker.java.edit.palette.BlockCategory.FUNCTIONS;
     }
 
     @Override

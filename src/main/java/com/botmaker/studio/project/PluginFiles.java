@@ -5,7 +5,7 @@ import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.project.managed.HolderFiles;
 import com.botmaker.studio.project.managed.ManagedHolders;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.io.IOException;

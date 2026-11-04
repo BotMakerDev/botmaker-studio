@@ -1,6 +1,6 @@
 package com.botmaker.studio.blocks.var;
 
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 import com.botmaker.studio.blocks.expr.ListBlock;
 import com.botmaker.studio.core.AbstractStatementBlock;

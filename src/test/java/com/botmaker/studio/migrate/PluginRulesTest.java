@@ -1,8 +1,8 @@
 package com.botmaker.studio.migrate;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.BotIndex;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

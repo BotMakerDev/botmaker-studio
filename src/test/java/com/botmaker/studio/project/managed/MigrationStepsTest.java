@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationSteps.Choice;
 import com.botmaker.studio.project.managed.MigrationSteps.Shape;
@@ -16,7 +16,7 @@ import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
 import com.botmaker.studio.project.managed.MigrationTypes.OldTint;
 import com.botmaker.studio.project.managed.MigrationTypes.Shot;
 import com.botmaker.studio.project.managed.MigrationTypes.Tint;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.AST;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

@@ -7,7 +7,7 @@ import com.botmaker.java.grammar.ValueContainer;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.source.ValueTypeResolver;
+import com.botmaker.java.index.ValueTypeResolver;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;

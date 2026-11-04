@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.project.params.Visibility;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.params.BotRecords;

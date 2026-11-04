@@ -6,7 +6,7 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
-import com.botmaker.studio.palette.BlockCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.handlers.TryHandler;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ResolvedType;

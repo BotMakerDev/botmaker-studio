@@ -1,5 +1,7 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.ExpressionChoice;
+import com.botmaker.java.edit.BodyChildren;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.edit.ImportManager;
@@ -8,11 +10,11 @@ import com.botmaker.java.edit.UseFix;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.ExpressionCatalog;
-import com.botmaker.studio.palette.ExpressionType;
+import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
@@ -30,10 +32,10 @@ import com.botmaker.java.edit.handlers.StatementSourceHandler;
 import com.botmaker.java.edit.handlers.SwitchNormalizer;
 import com.botmaker.java.edit.handlers.TryHandler;
 import com.botmaker.studio.parser.handlers.TypeHandler;
-import com.botmaker.studio.parser.guard.CompileGuard;
+import com.botmaker.java.edit.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.parser.guard.RefusedEdit;
-import com.botmaker.studio.parser.guard.UnusedImports;
+import com.botmaker.java.edit.guard.UnusedImports;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.edit.helpers.Precedence;
 import com.botmaker.java.grammar.SourceFormatter;
@@ -41,7 +43,7 @@ import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
-import com.botmaker.studio.parser.refactor.ReviewMarks;
+import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.LockResolver.EditKind;
@@ -50,7 +52,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.grammar.BotAnnotation;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.compiler.IProblem;
@@ -388,7 +390,9 @@ public class CodeEditor {
     private boolean wouldNotCompile(String newCode) {
         String before = getCurrentCode();
         if (before == null || newCode.equals(before) || state.getResolvedClasspath().isEmpty()) return false;
-        List<CompileGuard.Problem> introduced = CompileGuard.of(state).introduced(before, newCode);
+        ProjectFile active = state.getActiveFile();
+        List<CompileGuard.Problem> introduced = new CompileGuard(BotParser.of(state),
+                active == null ? null : active.getPath()).introduced(before, newCode);
         if (introduced.isEmpty()) return false;
         eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
                 "That would not compile here, so nothing was changed: " + introduced.getFirst().message()));
@@ -937,7 +941,7 @@ public class CodeEditor {
 
     /**
      * Inserts an element built from an expression-menu {@code selection} (an {@link ExpressionType} or an
-     * {@link com.botmaker.studio.parser.ExpressionChoice}) at {@code insertIndex}. Powers the type-aware list "+" menu.
+     * {@link ExpressionChoice}) at {@code insertIndex}. Powers the type-aware list "+" menu.
      * {@code elementType} is the list's inferred element type, used to build sensible default arguments.
      */
     public void insertIntoList(ASTNode listNode, int insertIndex, Object selection, ResolvedType elementType) {

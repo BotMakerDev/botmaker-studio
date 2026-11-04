@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

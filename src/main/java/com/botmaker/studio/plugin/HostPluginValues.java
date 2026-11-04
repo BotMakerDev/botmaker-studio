@@ -14,7 +14,7 @@ import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.nav.Refactor;
+import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ShortNames;
@@ -34,7 +34,7 @@ import com.botmaker.studio.project.managed.ManagedMigrations;
 import com.botmaker.studio.project.managed.ManagedSets;
 import com.botmaker.studio.project.params.JavaParameterEdits;
 import com.botmaker.studio.project.params.JavaParameters;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.BotSources;
@@ -821,7 +821,7 @@ public final class HostPluginValues implements PluginValues {
     }
 
     private BotIndex index() {
-        return BotIndex.of(config, state);
+        return BotSources.index(config, state);
     }
 
     /** A new class's file written; inside a batch, the next write reads the bot's types again (WriteSteps.Step#types). */

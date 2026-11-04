@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.render.menu;
 
-import com.botmaker.studio.palette.BlockCategory;
-import com.botmaker.studio.palette.ExpressionCategory;
+import com.botmaker.java.edit.palette.BlockCategory;
+import com.botmaker.java.edit.palette.ExpressionCategory;
 import javafx.geometry.Pos;
 import javafx.scene.control.CustomMenuItem;
 import javafx.scene.control.Label;

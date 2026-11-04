@@ -3,7 +3,7 @@ package com.botmaker.studio.events;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.palette.BlockType;
+import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.ui.dnd.DropInfo;
 import com.botmaker.studio.ui.dnd.ExpressionDropInfo;
 import com.botmaker.studio.ui.dnd.MoveBlockInfo;

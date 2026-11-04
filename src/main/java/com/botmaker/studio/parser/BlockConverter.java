@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.edit.BodyChildren;
 import com.botmaker.java.edit.BlockId;
 
 import com.botmaker.studio.blocks.ClassBlock;

@@ -4,8 +4,8 @@ import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.ParameterWrite;
 import com.botmaker.plugin.api.source.RunParameter;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
@@ -18,7 +18,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.studio.project.managed.ManagedHolders;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -120,7 +120,7 @@ public final class JavaParameters {
      */
     public static List<JavaParameter> scan(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return List.of();
-        return over(BotIndex.of(config, state), grammar);
+        return over(BotSources.index(config, state), grammar);
     }
 
     /**
@@ -259,7 +259,7 @@ public final class JavaParameters {
     static Outcome declare(ProjectConfig config, ProjectState state, JavaParameter parameter, ParameterRow wanted,
                            Type wantedForm, ValueGrammar grammar, boolean guarded) {
         if (parameter == null || wanted == null) return gone(parameter);
-        BotIndex was = BotIndex.of(config, state);
+        BotIndex was = BotSources.index(config, state);
         // A group's starting copy is outside the sources, so putBack does not hold it: kept here to put back too.
         Optional<Path> starting = parameter.group()
                 ? startingFile(config, parameter.file()).filter(Files::isRegularFile) : Optional.empty();
@@ -271,7 +271,7 @@ public final class JavaParameters {
             return outcome;
         }
         if (!guarded) return outcome;
-        Optional<String> broke = was.firstNewError(BotIndex.of(config, state));
+        Optional<String> broke = was.firstNewError(BotSources.index(config, state));
         if (broke.isEmpty()) return outcome;
         putBack(config, state, was.sources());
         putBackStarting(config, starting, startingWas);
@@ -435,7 +435,7 @@ public final class JavaParameters {
                     + ": it cannot be removed here yet. Remove it from both " + parameter.className()
                     + ".java files, in params/ and starting-params/.");
         }
-        BotIndex index = BotIndex.of(config, state);
+        BotIndex index = BotSources.index(config, state);
         int start = fieldStart(index, parameter);
         Optional<List<Usages.Usage>> uses = start < 0 ? Optional.empty()
                 : Refactor.uses(index, parameter.file(), start);
@@ -631,7 +631,7 @@ public final class JavaParameters {
     public static Optional<List<Usages.Usage>> uses(ProjectConfig config, ProjectState state,
                                                     JavaParameter parameter) {
         if (config == null || parameter == null) return Optional.empty();
-        BotIndex index = BotIndex.of(config, state);
+        BotIndex index = BotSources.index(config, state);
         int start = fieldStart(index, parameter);
         return start < 0 ? Optional.empty() : Refactor.uses(index, parameter.file(), start);
     }
@@ -1013,7 +1013,7 @@ public final class JavaParameters {
     /** The same for a declaration whose name {@code start} finds in the bot's parse, or -1. */
     private static Optional<String> renameAt(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                              String newName, Function<Map<Path, CompilationUnit>, Integer> start) {
-        BotIndex index = BotIndex.of(config, state);
+        BotIndex index = BotSources.index(config, state);
         int at = index.read(start);
         if (at < 0) {
             return Optional.of(parameter.qualified() + " could not be resolved, so the places that use it "

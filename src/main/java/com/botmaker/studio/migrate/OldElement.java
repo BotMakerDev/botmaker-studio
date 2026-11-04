@@ -23,7 +23,7 @@ import java.util.Optional;
  * @param instance whether it is reached through a receiver
  * @param type     what it gives: a method's return type, a field's type, a constructor's or type's owner
  * @param key      JDT's key for the declaration, which every use of it in the same parse shares: what
- *                 {@link com.botmaker.studio.nav.Usages#keyOf} answers for any of them
+ *                 {@link com.botmaker.java.index.nav.Usages#keyOf} answers for any of them
  */
 public record OldElement(Migrate.Kind kind, String owner, String name, List<String> params, boolean instance,
                          String type, String key) {

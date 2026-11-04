@@ -9,7 +9,7 @@ import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.project.params.TestValues;
-import com.botmaker.studio.project.source.BotParser;
+import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -245,7 +245,7 @@ class ManagedHoldersTest {
                 public class Sdk {
                 }
                 """.formatted(Param.class.getCanonicalName());
-        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+        com.botmaker.java.index.BotIndex index = com.botmaker.java.index.BotIndex.over(
                 java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
                 dir);
         java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = java.util.Map.of(SDK,
@@ -285,7 +285,7 @@ class ManagedHoldersTest {
                     }
                 }
                 """.formatted(TestValue.class.getCanonicalName());
-        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+        com.botmaker.java.index.BotIndex index = com.botmaker.java.index.BotIndex.over(
                 java.util.Map.of(moved, marked, own, "package com.bot;\npublic final class Pictures {}\n"),
                 Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)), dir);
 
@@ -386,7 +386,7 @@ class ManagedHoldersTest {
                     }
                 }
                 """.formatted(TestValue.class.getCanonicalName());
-        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+        com.botmaker.java.index.BotIndex index = com.botmaker.java.index.BotIndex.over(
                 java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
                 dir);
         ManagedValue<?> rest = DECLARED.get(1);
@@ -423,7 +423,7 @@ class ManagedHoldersTest {
                     public static String greeting = "hello";
                 }
                 """.formatted(TestValue.class.getCanonicalName());
-        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+        com.botmaker.java.index.BotIndex index = com.botmaker.java.index.BotIndex.over(
                 java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
                 dir);
 

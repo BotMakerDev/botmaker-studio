@@ -1,9 +1,9 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.TypeDelete;
-import com.botmaker.studio.nav.TypeRename;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.TypeDelete;
+import com.botmaker.java.index.nav.TypeRename;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.FileRole;
@@ -13,7 +13,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.managed.HolderMove;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 

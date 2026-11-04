@@ -1,14 +1,14 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.nav.Usages;
+import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.Usages;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
-import com.botmaker.studio.parser.refactor.MethodReferences;
+import com.botmaker.java.edit.refactor.MethodReferences;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.source.BotIndex;
+import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.scene.control.Alert;
 import javafx.stage.Window;
