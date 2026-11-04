@@ -6,7 +6,9 @@ import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.api.source.ParameterWrite;
 import com.botmaker.plugin.api.source.PluginValues;
+import com.botmaker.plugin.api.source.RunParameter;
 import com.botmaker.plugin.api.value.Ref;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
@@ -45,6 +47,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Studio's own side of {@link PluginValues} — a plugin's values, read out of the bot's Java and written back
@@ -880,6 +884,47 @@ public final class HostPluginValues implements PluginValues {
                             member.name(), expression), member.className(), member.name()));
         });
         redraw(java.util.Set.of(file));
+    }
+
+    // ── a during-a-run parameter ─────────────────────────────────────────────────────────────────────────
+
+    @Override
+    public List<RunParameter> runParameters() {
+        return JavaParameters.duringRun(config, state, PluginHost.grammar());
+    }
+
+    @Override
+    public Optional<String> addRunParameter(ParameterWrite write) {
+        return written(() -> JavaParameters.addDuringRun(config, state, write, this::classNamed, PluginHost.grammar()));
+    }
+
+    @Override
+    public Optional<String> forgetRunParameter(String group, String name) {
+        return written(() -> JavaParameters.forgetDuringRun(config, state, group, name, PluginHost.grammar()));
+    }
+
+    /** One undoable parameter write, its snapshot first, and whatever shows the file redrawn. */
+    private Optional<String> written(Supplier<Optional<String>> write) {
+        List<Optional<String>> refused = new ArrayList<>();
+        recorded(() -> {
+            snapshot();
+            refused.add(write.get());
+        });
+        ProjectFile active = state == null ? null : state.getActiveFile();
+        if (active != null && active.getPath() != null) redraw(Set.of(active.getPath().toAbsolutePath().normalize()));
+        return refused.getFirst();
+    }
+
+    /** The class of a constant of the plugin's set, as {@link JavaParameterEdits} writes it. */
+    private Optional<JavaParameterEdits.ClassName> classNamed(ParameterWrite.ClassOf classOf) {
+        ManagedClasses<?> set = classOf.classes();
+        Optional<NestedClasses.Nested> nested = NestedClasses.named(index(), set.id(), classOf.constant().name(),
+                PluginHost.grammar(), set.setup().getName());
+        if (nested.isEmpty()) return Optional.empty();
+        String holder = nested.get().holder();
+        return BotMethods.topLevelTypes(index()).stream()
+                .filter(type -> type.equals(holder) || type.endsWith("." + holder)).findFirst()
+                .map(top -> new JavaParameterEdits.ClassName(top, holder + "." + nested.get().className()));
     }
 
     /**

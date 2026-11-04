@@ -1,6 +1,14 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.source.ManagedClasses;
+import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.api.source.ParameterWrite;
+import com.botmaker.plugin.api.source.ParameterWrite.Mark;
+import com.botmaker.plugin.api.source.PluginValues;
+import com.botmaker.plugin.api.source.RunParameter;
 import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.studio.project.managed.TestScreen;
+import com.botmaker.studio.project.managed.TestValue;
 import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
@@ -9,9 +17,11 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -194,6 +204,137 @@ class JavaParametersTest {
             assertTrue(source.contains("public int tries()") && source.contains("return 5;"), source);
             assertTrue(source.contains("category = \"Limits\""), source);
         }
+    }
+
+    /** A plugin adds what a run keeps, with its own annotations on it, in both copies. */
+    @Test
+    void aPluginsRunParameterIsWrittenWithItsMarks(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        ParameterWrite gold = ParameterWrite.of("Progress", "gold", 0)
+                .groupMarked(Mark.of(Deprecated.class))
+                .marked(Mark.of(SuppressWarnings.class).with("value", "gold"));
+
+        assertTrue(JavaParameters.addDuringRun(config, null, gold, nothing -> Optional.empty(), TestValues.GRAMMAR)
+                .isEmpty());
+
+        for (Path file : List.of(groupOf(config, "bot", "Progress"), startingOf(config, "bot", "Progress"))) {
+            String source = Files.readString(file);
+            assertTrue(source.contains("@Deprecated") && source.contains("@SuppressWarnings(value = \"gold\")"), source);
+            assertTrue(source.contains("changes = Param.Changes.DURING_RUN") && source.contains("public int gold()")
+                    && source.contains("return 0;"), source);
+        }
+        assertTrue(JavaParameters.addDuringRun(config, null, gold, nothing -> Optional.empty(), TestValues.GRAMMAR)
+                .orElseThrow().contains("already has"), "a name is taken once");
+        assertEquals(1, Files.readString(groupOf(config, "bot", "Progress")).split("@Deprecated", -1).length - 1,
+                "a second parameter brings no second mark");
+        assertTrue(JavaParameters.addDuringRun(config, null, ParameterWrite.of("Progress", "class", 0),
+                nothing -> Optional.empty(), TestValues.GRAMMAR).isPresent(), "not a Java name");
+    }
+
+    @Test
+    void aClassAmongAMarksValuesIsImported() {
+        String source = group("bot", "Progress", "    public int gold() { return 0; }\n");
+        Function<ParameterWrite.ClassOf, Optional<JavaParameterEdits.ClassName>> screens = classOf -> Optional.of(
+                new JavaParameterEdits.ClassName("com.refbot.plugins.Screens", "Screens.Home"));
+        ManagedClasses<TestScreen> set = ManagedValue.openSet(TestValue.Id.SCREENS)
+                .ofClasses(TestScreen.class)
+                .fields(TestScreen.Field.class, TestScreen::field)
+                .setup(TestScreen::setup)
+                .referredToAs(TestScreen::named)
+                .in("Screens").because("Mine.");
+        Mark mark = Mark.of(ReadOff.class).withClassOf("screen", set, PluginValues.Member.of("HOME")).with("field", "gold");
+
+        String out = JavaParameterEdits.withMarks(source, "Progress", "gold", List.of(mark), List.of(), screens)
+                .orElseThrow();
+
+        assertTrue(out.contains("import com.refbot.plugins.Screens;"), out);
+        assertTrue(out.contains("import " + JavaParametersTest.class.getName() + ";"), out);
+        assertTrue(out.contains("@JavaParametersTest.ReadOff(field = \"gold\", screen = Screens.Home.class)"), out);
+        assertEquals(Optional.empty(), JavaParameterEdits.withMarks(source, "Progress", "gold", List.of(mark), List.of(),
+                classOf -> Optional.empty()), "a class that cannot be named writes nothing");
+    }
+
+    /** A parameter reaches both files with its marks, or neither. */
+    @Test
+    void aParameterThatCannotBeWholeIsNotWritten(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        writeGroup(config, "bot", "Progress", "    public int tries() { return 1; }\n");
+        Path file = groupOf(config, "bot", "Progress");
+        Path starting = JavaParameters.startingFile(config, file).orElseThrow();
+        String params = Files.readString(file);
+        ManagedClasses<TestScreen> set = ManagedValue.openSet(TestValue.Id.SCREENS)
+                .ofClasses(TestScreen.class)
+                .fields(TestScreen.Field.class, TestScreen::field)
+                .setup(TestScreen::setup)
+                .referredToAs(TestScreen::named)
+                .in("Screens").because("Mine.");
+        ParameterWrite unnamed = ParameterWrite.of("Progress", "gold", 0)
+                .marked(Mark.of(ReadOff.class).withClassOf("screen", set, PluginValues.Member.of("GONE")));
+
+        assertTrue(JavaParameters.addDuringRun(config, null, unnamed, nothing -> Optional.empty(), TestValues.GRAMMAR)
+                .isPresent(), "a class that cannot be named");
+        assertEquals(params, Files.readString(file));
+
+        Files.writeString(starting, Files.readString(starting).replace("public int tries() { return 1; }",
+                "public int tries() { return 1; } public int gold() { return 0; }"));
+        String startingBefore = Files.readString(starting);
+        assertTrue(JavaParameters.addDuringRun(config, null, ParameterWrite.of("Progress", "gold", 0),
+                nothing -> Optional.empty(), TestValues.GRAMMAR).isPresent(), "a starting copy that cannot take it");
+        assertEquals(params, Files.readString(file));
+        assertEquals(startingBefore, Files.readString(starting));
+    }
+
+    /** A value with nothing to go back to is not said to have gone back. */
+    @Test
+    void aValueTheStartingCopyLacksIsNotForgotten(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        writeGroup(config, "bot", "Progress", """
+                    @Param.Shown(changes = Param.Changes.DURING_RUN)
+                    public int gold() { return 7; }
+
+                    @Param.Shown(changes = Param.Changes.DURING_RUN)
+                    public String title() { return "x"; }
+                """);
+        Path file = groupOf(config, "bot", "Progress");
+        Path starting = JavaParameters.startingFile(config, file).orElseThrow();
+        Files.writeString(starting, Files.readString(starting).replace("public int gold() { return 7; }", ""));
+
+        assertTrue(JavaParameters.forgetDuringRun(config, null, "Progress", "gold", TestValues.GRAMMAR).isPresent());
+        assertEquals(List.of("int", "String"), JavaParameters.duringRun(config, null, TestValues.GRAMMAR).stream()
+                .map(RunParameter::type).toList(), "the names a condition's test is checked against");
+    }
+
+    @interface ReadOff {
+        Class<?> screen();
+
+        String field();
+    }
+
+    /** What a plugin reads is a run's values and their age, and nothing the person set. */
+    @Test
+    void onlyDuringARunParametersReachAPlugin(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        writeGroup(config, "bot", "Progress", """
+                    @Param.Shown(changes = Param.Changes.DURING_RUN)
+                    public int gold() { return 7; }
+
+                    public String password() { return "hunter2"; }
+                """);
+        Path file = groupOf(config, "bot", "Progress");
+        Files.writeString(file, Files.readString(file).replace("@Param.Shown(",
+                "@Param.Kept(at = \"2026-11-04T10:00:00Z\") @Param.Shown("));
+
+        RunParameter gold = JavaParameters.duringRun(config, null, TestValues.GRAMMAR).getFirst();
+
+        assertEquals(1, JavaParameters.duringRun(config, null, TestValues.GRAMMAR).size());
+        assertEquals("gold", gold.name());
+        assertEquals("7", gold.value());
+        assertEquals(Optional.of(Instant.parse("2026-11-04T10:00:00Z")), gold.keptAt());
+
+        assertTrue(JavaParameters.forgetDuringRun(config, null, "Progress", "password", TestValues.GRAMMAR).isPresent(),
+                "the person's value is not a plugin's to reset");
+        assertTrue(JavaParameters.forgetDuringRun(config, null, "Progress", "gold", TestValues.GRAMMAR).isEmpty());
+        assertFalse(Files.readString(file).contains("Kept"));
     }
 
     // ---- adding -----------------------------------------------------------------------------------------

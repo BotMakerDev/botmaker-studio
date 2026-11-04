@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.params.Param;
+import com.botmaker.plugin.api.source.ParameterWrite;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.plugin.host.grammar.SourceFormatter;
@@ -29,6 +30,7 @@ import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
+import org.eclipse.jdt.core.dom.TypeLiteral;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
@@ -38,7 +40,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.function.Function;
 
 /**
  * The rewrites the Parameters window performs on a bot's own Java — one source in, one source out.
@@ -133,6 +138,124 @@ public final class JavaParameterEdits {
         ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
         addImports(reparsed, importing, List.copyOf(imports));
         return AstRewriteHelper.applyRewrite(importing, declared);
+    }
+
+    /** A class as a file writes it: {@code Screens.Home}, and the top-level type to import for it. */
+    public record ClassName(String imported, String spelled) {}
+
+    /**
+     * {@code source} with {@code marks} on the parameter {@code name} of {@code group} and each of {@code groupMarks}
+     * on the group, unless the group carries it already (2026-11-04). Each annotation and each class among its values
+     * is imported. Empty when there is no such parameter, or a class in {@code classes} cannot be named: a parameter
+     * without its marks is not the one asked for.
+     */
+    public static Optional<String> withMarks(String source, String group, String name, List<ParameterWrite.Mark> marks,
+                                             List<ParameterWrite.Mark> groupMarks,
+                                             Function<ParameterWrite.ClassOf, Optional<ClassName>> classes) {
+        CompilationUnit unit = BotParser.syntax(source);
+        AST ast = unit.getAST();
+        TypeDeclaration type = typeDeclaration(unit, group);
+        MethodDeclaration method = type == null ? null : methodOf(type, name);
+        if (method == null) return Optional.empty();
+        Set<String> imports = new LinkedHashSet<>();
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        ListRewrite onMethod = rewrite.getListRewrite(method, MethodDeclaration.MODIFIERS2_PROPERTY);
+        ASTNode firstPlain = firstPlainModifier(method.modifiers());
+        for (ParameterWrite.Mark mark : marks) {
+            Optional<Annotation> written = annotation(ast, mark, classes, imports);
+            if (written.isEmpty()) return Optional.empty();
+            if (firstPlain != null) onMethod.insertBefore(written.get(), firstPlain, null);
+            else onMethod.insertLast(written.get(), null);
+        }
+        ListRewrite onGroup = rewrite.getListRewrite(type, TypeDeclaration.MODIFIERS2_PROPERTY);
+        ASTNode firstOfGroup = firstPlainModifier(type.modifiers());
+        for (ParameterWrite.Mark mark : groupMarks) {
+            if (carries(type.modifiers(), spelledAnnotation(mark))) continue;
+            Optional<Annotation> written = annotation(ast, mark, classes, imports);
+            if (written.isEmpty()) return Optional.empty();
+            if (firstOfGroup != null) onGroup.insertBefore(written.get(), firstOfGroup, null);
+            else onGroup.insertLast(written.get(), null);
+        }
+        addImports(unit, rewrite, List.copyOf(imports));
+        return Optional.of(AstRewriteHelper.applyRewrite(rewrite, source));
+    }
+
+    /** Whether {@code group} in {@code source} has a method {@code name}. */
+    static boolean hasMethod(String source, String group, String name) {
+        TypeDeclaration type = typeDeclaration(BotParser.syntax(source), group);
+        return type != null && methodOf(type, name) != null;
+    }
+
+    /** The first modifier that is no annotation: where a new annotation goes, after the ones there. */
+    private static ASTNode firstPlainModifier(List<?> modifiers) {
+        for (Object modifier : modifiers) {
+            if (modifier instanceof Modifier plain) return plain;
+        }
+        return null;
+    }
+
+    private static boolean carries(List<?> modifiers, String spelled) {
+        for (Object modifier : modifiers) {
+            if (modifier instanceof Annotation there) {
+                String name = there.getTypeName().getFullyQualifiedName();
+                if (name.equals(spelled) || name.endsWith("." + spelled)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** {@code Outer.Inner} for the binary name {@code com.example.Outer$Inner}. */
+    private static String spelledAnnotation(ParameterWrite.Mark mark) {
+        String binary = mark.annotation();
+        return binary.substring(binary.lastIndexOf('.') + 1).replace('$', '.');
+    }
+
+    private static Optional<Annotation> annotation(AST ast, ParameterWrite.Mark mark,
+                                                   Function<ParameterWrite.ClassOf, Optional<ClassName>> classes,
+                                                   Set<String> imports) {
+        String binary = mark.annotation();
+        int outer = binary.indexOf('$');
+        imports.add(outer < 0 ? binary : binary.substring(0, outer));
+        Name typeName = ast.newName(spelledAnnotation(mark));
+        if (mark.members().isEmpty()) {
+            MarkerAnnotation marker = ast.newMarkerAnnotation();
+            marker.setTypeName(typeName);
+            return Optional.of(marker);
+        }
+        NormalAnnotation normal = ast.newNormalAnnotation();
+        normal.setTypeName(typeName);
+        // A map of no order: a file reads the same whichever computer wrote it.
+        for (Map.Entry<String, Object> member : new TreeMap<>(mark.members()).entrySet()) {
+            Optional<Expression> value = memberValue(ast, member.getValue(), classes, imports);
+            if (value.isEmpty()) return Optional.empty();
+            MemberValuePair pair = ast.newMemberValuePair();
+            pair.setName(ast.newSimpleName(member.getKey()));
+            pair.setValue(value.get());
+            @SuppressWarnings("unchecked")
+            List<MemberValuePair> values = normal.values();
+            values.add(pair);
+        }
+        return Optional.of(normal);
+    }
+
+    private static Optional<Expression> memberValue(AST ast, Object value,
+                                                    Function<ParameterWrite.ClassOf, Optional<ClassName>> classes,
+                                                    Set<String> imports) {
+        return switch (value) {
+            case String text -> {
+                StringLiteral literal = ast.newStringLiteral();
+                literal.setLiteralValue(text);
+                yield Optional.of(literal);
+            }
+            case Integer number -> Optional.of(ast.newNumberLiteral(number.toString()));
+            case ParameterWrite.ClassOf classOf -> classes.apply(classOf).map(named -> {
+                imports.add(named.imported());
+                TypeLiteral literal = ast.newTypeLiteral();
+                literal.setType(ast.newSimpleType(ast.newName(named.spelled())));
+                return literal;
+            });
+            default -> Optional.empty();
+        };
     }
 
     /**

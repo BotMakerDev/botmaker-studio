@@ -2,11 +2,14 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.api.source.ParameterWrite;
+import com.botmaker.plugin.api.source.RunParameter;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ParamValues;
 import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
@@ -52,6 +55,7 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -61,6 +65,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
@@ -773,6 +778,83 @@ public final class JavaParameters {
         rewrite(config, state, parameter.file(),
                 source -> ParamsFitter.withValue(source, starting.get(), parameter.name()));
         return reread(config, state, parameter.className(), parameter.name(), grammar);
+    }
+
+    /**
+     * The bot's during-a-run parameters as a plugin sees them (2026-11-04): those of a group, with their age. A
+     * parameter changed outside a run is the person's, possibly a secret, and is never among them.
+     */
+    public static List<RunParameter> duringRun(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
+        if (config == null) return List.of();
+        List<RunParameter> out = new ArrayList<>();
+        for (JavaParameter parameter : scan(config, state, grammar)) {
+            if (!parameter.group() || !parameter.row().duringRun()) continue;
+            Optional<Instant> kept = currentSource(state, parameter.file()).flatMap(
+                    source -> ParamValues.keptAt(source, parameter.className(), parameter.name()));
+            out.add(new RunParameter(parameter.className(), parameter.name(), parameter.row().typeName(),
+                    parameter.row().value(), kept));
+        }
+        return List.copyOf(out);
+    }
+
+    /**
+     * Adds {@code write} as a during-a-run parameter of its group, in {@code params/} and the starting copy, the group
+     * made when the bot has none of that name. Answers the sentence to show when nothing was written.
+     */
+    public static Optional<String> addDuringRun(ProjectConfig config, ProjectState state, ParameterWrite write,
+                                                Function<ParameterWrite.ClassOf, Optional<JavaParameterEdits.ClassName>> classes,
+                                                ValueGrammar grammar) {
+        String group = write.group();
+        String name = write.name();
+        if (config == null) return Optional.of("No project is open.");
+        if (!SourceVersion.isName(name) || !SourceVersion.isName(group)) {
+            return Optional.of("“" + group + "." + name + "” is not a name Java accepts.");
+        }
+        if (find(config, state, group, name, grammar).isPresent()) {
+            return Optional.of(group + " already has a parameter " + name + ".");
+        }
+        if (classes(config, state).contains(group) && !ownClasses(config, state).contains(group)) {
+            return Optional.of(group + " is a plugin's file; it takes no parameter of the author's.");
+        }
+        Type form = switch (write.start()) {
+            case Integer ignored -> int.class;
+            case Boolean ignored -> boolean.class;
+            default -> String.class;
+        };
+        Optional<JavaValue> start = grammar.spellData(form, write.start());
+        if (start.isEmpty()) return Optional.of("The starting value of " + name + " cannot be written.");
+        Optional<Path> file = groupFile(config, state, group, grammar);
+        if (file.isEmpty() && !classes(config, state).contains(group)) file = createGroup(config, state, group);
+        if (file.isEmpty()) return Optional.of(group + " is no group of parameters in this bot.");
+        Optional<String> starting = startingFile(config, file.get()).flatMap(path -> currentSource(null, path));
+        if (starting.isEmpty()) {
+            return Optional.of(group + " has no starting copy, so a new parameter would not last.");
+        }
+        UnaryOperator<String> added = source -> {
+            String declared = JavaParameterEdits.addMethod(source, grammar, group, name, form, start.get(), "", "",
+                    Param.Changes.DURING_RUN);
+            return declared.equals(source) ? source : JavaParameterEdits.withMarks(declared, group, name,
+                    write.marks(), write.groupMarks(), classes).orElse(source);
+        };
+        // Asked of the starting copy first: the two files take the parameter together or not at all.
+        if (added.apply(starting.get()).equals(starting.get())
+                || !rewrite(config, state, file.get(), added)) {
+            return Optional.of(name + " could not be written in " + group + ".");
+        }
+        return rewriteStarting(config, file.get(), added) ? Optional.empty()
+                : Optional.of(name + " is in " + group + ", but its starting copy could not be written.");
+    }
+
+    /** {@link #forget} for a plugin, by name: answers the sentence to show when nothing was set back. */
+    public static Optional<String> forgetDuringRun(ProjectConfig config, ProjectState state, String group, String name,
+                                                   ValueGrammar grammar) {
+        Optional<JavaParameter> parameter = find(config, state, group, name, grammar)
+                .filter(found -> found.group() && found.row().duringRun());
+        if (parameter.isEmpty()) return Optional.of(group + " has no during-a-run parameter " + name + ".");
+        boolean inStarting = startingFile(config, parameter.get().file()).flatMap(path -> currentSource(null, path))
+                .filter(source -> JavaParameterEdits.hasMethod(source, group, name)).isPresent();
+        return inStarting && forget(config, state, parameter.get(), grammar).isPresent() ? Optional.empty()
+                : Optional.of(group + " has no starting copy to read " + name + " from.");
     }
 
     /** Whether {@code className} is a group: a {@code @Param} class in params/, by any parameter read from it. */

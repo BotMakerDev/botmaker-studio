@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (private values)
 
+- A plugin may add, list and forget a during-a-run parameter (`PluginValues.addRunParameter`, `runParameters`,
+  `forgetRunParameter`, 2026-11-04). Nothing else reaches it: a parameter changed outside a run, and so any secret,
+  is neither listed nor forgotten. A new parameter goes to `params/` and to `starting-params/`, with the plugin's marks.
 - *Make this the starting value* copies a value without the time a run wrote it (`@Param.Kept`), which stays private;
   Forget takes the time away with the value (2026-11-04).
 
