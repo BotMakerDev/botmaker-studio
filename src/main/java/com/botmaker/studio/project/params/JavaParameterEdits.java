@@ -5,6 +5,7 @@ import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.plugin.host.grammar.SourceFormatter;
 import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ParamValues;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.source.BotAnnotation;
@@ -85,17 +86,7 @@ public final class JavaParameterEdits {
      * {@code return}.
      */
     public static String setReturned(String source, String group, String methodName, JavaValue value) {
-        if (value == null) return source;
-        CompilationUnit unit = BotParser.syntax(source);
-        AST ast = unit.getAST();
-        ASTRewrite rewrite = ASTRewrite.create(ast);
-        TypeDeclaration type = typeDeclaration(unit, group);
-        MethodDeclaration method = type == null ? null : methodOf(type, methodName);
-        Expression returned = method == null ? null : JavaParameterSource.returned(method).orElse(null);
-        if (returned == null) return source;
-        rewrite.replace(returned, value.copyInto(ast), null);
-        addImports(unit, rewrite, value.imports());
-        return AstRewriteHelper.applyRewrite(rewrite, source);
+        return ParamValues.withReturned(source, group, methodName, value).orElse(source);
     }
 
     /**

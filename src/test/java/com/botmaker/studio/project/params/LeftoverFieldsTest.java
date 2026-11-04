@@ -70,7 +70,8 @@ class LeftoverFieldsTest {
     /** A plugin's parameter is a method of its group (2026-11-04): reset rewrites what it returns. */
     @Test
     void aParameterOfItsTypeTakesItsFirstValueAgain(@TempDir Path dir) {
-        ProjectConfig config = ProjectConfig.forDirectory(dir);
+        // A named folder: a value is written only into a source that parses, and junit-123 is no package.
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path group = config.parametersPackageDir().resolve("test").resolve("Sdk.java").toAbsolutePath().normalize();
         BotIndex index = index(config, Map.of(group, GROUP.formatted(config.mainPackage(),
                 com.botmaker.plugin.api.params.Param.class.getCanonicalName(), TestValue.class.getCanonicalName())));

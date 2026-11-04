@@ -14,6 +14,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (private values)
 
+- **What a run writes to a parameter survives the next compile** (2026-11-04): when a run ends, Studio takes each
+  during-a-run parameter's value from `params/` into its editor copy, and a value you edited in the window stays.
 - **A plugin's parameter is written in its group, in both copies** (2026-11-04): binding a plugin writes each
   parameter it declares as a marked method of `params/<plugin>/<Holder>.java` and of its starting copy under
   `starting-params/`, never as a field of its holder. Plugin windows, the Runner and the Parameters window open

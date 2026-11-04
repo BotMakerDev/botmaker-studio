@@ -1,5 +1,6 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.plugin.host.grammar.ParamValues;
 import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.project.ProjectConfig;
@@ -24,7 +25,9 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -185,6 +188,7 @@ public class CodeExecutionService {
 
         new Thread(() -> {
             boolean ran = false;
+            Map<Path, String> paramsAtStart = Map.of();
             try {
                 status("Compiling...");
                 Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputClearedEvent()));
@@ -246,6 +250,7 @@ public class CodeExecutionService {
                         .directory(config.projectPath().toFile());
 
                 startTelemetry(pb);
+                paramsAtStart = paramSources();
                 currentRunningProcess = pb.start();
                 ran = true;
                 // A stop that landed between the last check and the start found no process to kill.
@@ -276,6 +281,8 @@ public class CodeExecutionService {
                 trying = false;
                 // This run's folder, read while no next run can have made its own.
                 Path endedRun = ran ? RunProblems.latest(config.projectPath()).orElse(null) : null;
+                // While this still counts as running: a next run compiles the editor's copies, values merged.
+                if (ran) takeRunsValues(paramsAtStart);
                 isRunning.set(false);
                 currentRunningProcess = null;
                 closeConsole();
@@ -285,6 +292,35 @@ public class CodeExecutionService {
                 if (ran) eventBus.publish(new CoreApplicationEvents.BotRunEndedEvent(endedRun));
             }
         }, "CodeRunner").start();
+    }
+
+    /**
+     * Brings the during-a-run parameters the run wrote to disk into the editor's copies, whose text the next compile
+     * writes back ({@code ProjectState.Snapshot.writeSources}), so that compile keeps them. A value the run did not
+     * change stays as edited, in the window or the file's tab.
+     */
+    private void takeRunsValues(Map<Path, String> atStart) {
+        Map<Path, String> written = paramSources();
+        Platform.runLater(() -> written.forEach((file, text) -> state.getFile(file).ifPresent(open -> {
+            String merged = ParamValues.withRunsValues(open.getContent(), atStart.getOrDefault(file, ""), text);
+            if (!merged.equals(open.getContent())) open.setContent(merged);
+        })));
+    }
+
+    /** Every group file under {@code params/} as it is on disk now; empty when they cannot be read. */
+    private Map<Path, String> paramSources() {
+        Path params = config.parametersPackageDir().toAbsolutePath().normalize();
+        if (!Files.isDirectory(params)) return Map.of();
+        Map<Path, String> sources = new LinkedHashMap<>();
+        try (var walk = Files.walk(params)) {
+            for (Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+                sources.put(file, Files.readString(file));
+            }
+        } catch (IOException | UncheckedIOException e) {
+            warn("WARN what the run wrote to its parameters could not be read: " + e.getMessage());
+            return Map.of();
+        }
+        return sources;
     }
 
     /** The project's warm try JVM, made at the first try. */
