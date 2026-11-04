@@ -88,7 +88,7 @@ class TypeChooserTest extends FxHeadlessTest {
     /** A map's key is picked by clicking it in the header first: a pick used to reach only the value. */
     @Test
     void aClickedPartOfTheHeaderIsThePartAPickChanges() {
-        interact(() -> chooser.setType(com.botmaker.plugin.host.grammar.ValueTypes.mapOf(String.class,
+        interact(() -> chooser.setType(com.botmaker.java.grammar.ValueTypes.mapOf(String.class,
                 Integer.class)));
         ContextMenu menu = opened();
         Node header = ((CustomMenuItem) menu.getItems().getFirst()).getContent();
@@ -101,7 +101,7 @@ class TypeChooserTest extends FxHeadlessTest {
         interact(() -> entry(menu, "int").fire());
         interact(menu::hide);
 
-        assertEquals(com.botmaker.plugin.host.grammar.ValueTypes.mapOf(int.class, Integer.class), chooser.type());
+        assertEquals(com.botmaker.java.grammar.ValueTypes.mapOf(int.class, Integer.class), chooser.type());
     }
 
     /**
@@ -110,8 +110,8 @@ class TypeChooserTest extends FxHeadlessTest {
      */
     @Test
     void backRestoresATypeAPickReplaced() {
-        java.lang.reflect.Type nested = com.botmaker.plugin.host.grammar.ValueTypes.mapOf(
-                com.botmaker.plugin.host.grammar.ValueTypes.listOf(String.class), Integer.class);
+        java.lang.reflect.Type nested = com.botmaker.java.grammar.ValueTypes.mapOf(
+                com.botmaker.java.grammar.ValueTypes.listOf(String.class), Integer.class);
         interact(() -> chooser.setType(nested));
         ContextMenu menu = opened();
         Node header = ((CustomMenuItem) menu.getItems().getFirst()).getContent();

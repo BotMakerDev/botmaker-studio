@@ -1,8 +1,8 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
-import com.botmaker.plugin.host.grammar.SourceFormatter;
-import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.java.grammar.SourceFormatter;
+import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;

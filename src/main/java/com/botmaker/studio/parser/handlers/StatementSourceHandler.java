@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.handlers;
 
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.SwitchStatement;

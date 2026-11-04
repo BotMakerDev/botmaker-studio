@@ -37,6 +37,8 @@
         <!-- botmaker-plugin-host version: the loader Studio gets a project's plugins from. Same contract
              again. -->
         <botmaker.pluginhost.version>0.10.2-SNAPSHOT</botmaker.pluginhost.version>
+        <!-- botmaker-java version: the parser and the value grammar. Same contract again. -->
+        <botmaker.java.version>0.1.0-SNAPSHOT</botmaker.java.version>
         <!-- botmaker-cli version: its main jar, the silent library Studio's Publish runs. Same contract again. -->
         <botmaker.cli.version>0.10.2-SNAPSHOT</botmaker.cli.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
@@ -164,6 +166,13 @@
             <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-plugin-host</artifactId>
             <version>${botmaker.pluginhost.version}</version>
+        </dependency>
+
+        <!-- The parser and the value grammar, shared with the cli and a running bot. -->
+        <dependency>
+            <groupId>com.github.BotMakerDev</groupId>
+            <artifactId>botmaker-java</artifactId>
+            <version>${botmaker.java.version}</version>
         </dependency>
 
         <!-- The cli's main jar (2026-10-24), for com.botmaker.cli.publish: Studio's Publish runs the same steps and

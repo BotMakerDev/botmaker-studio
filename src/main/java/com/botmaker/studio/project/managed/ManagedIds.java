@@ -2,7 +2,7 @@ package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.managed.ManagedMarker;
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.plugin.host.grammar.SourceNames;
+import com.botmaker.java.grammar.SourceNames;
 import org.eclipse.jdt.core.dom.Annotation;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.Expression;

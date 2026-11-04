@@ -2,7 +2,7 @@ package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.nav.Uses;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.source.BotIndex;

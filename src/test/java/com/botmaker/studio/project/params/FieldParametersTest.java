@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.params.Param;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.source.BotIndex;
 import org.junit.jupiter.api.Test;

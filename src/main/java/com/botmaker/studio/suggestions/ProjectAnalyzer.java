@@ -1,6 +1,6 @@
 package com.botmaker.studio.suggestions;
 
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.helpers.FileTypeDetector;

@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.migrate.Broken;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.ReleasedPlugins;
-import com.botmaker.plugin.host.grammar.JavaNames;
+import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;

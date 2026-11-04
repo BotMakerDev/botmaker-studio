@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationSteps.Choice;
 import com.botmaker.studio.project.managed.MigrationSteps.Step;
 import com.botmaker.studio.project.managed.MigrationTypes.Area;

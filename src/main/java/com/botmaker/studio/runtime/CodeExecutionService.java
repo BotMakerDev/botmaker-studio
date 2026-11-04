@@ -1,7 +1,7 @@
 package com.botmaker.studio.runtime;
 
-import com.botmaker.plugin.host.grammar.ParamValues;
-import com.botmaker.plugin.host.grammar.ParamsFitter;
+import com.botmaker.java.grammar.ParamValues;
+import com.botmaker.java.grammar.ParamsFitter;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.events.CoreApplicationEvents;

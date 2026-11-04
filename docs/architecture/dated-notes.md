@@ -1,9 +1,10 @@
 # Dated notes — read these before the other files here
 
-> **The value grammar is plugin-host's since 2026-11-04** (umbrella plan `2026-11-04-private-values.md`, phase 1).
-> Every `plugin/grammar/` class, `parser/helpers/SourceParser` and `SourceFormatter` moved unchanged to
-> `botmaker-plugin-host` as `com.botmaker.plugin.host.grammar`, so the CLI and a running bot write values as Studio
-> does. Where a file here says `plugin/grammar/` or `parser/helpers/Source…`, read that package.
+> **The value grammar is `botmaker-java`'s since 2026-11-04** (umbrella plans `2026-11-04-private-values.md`, phase 1,
+> by way of plugin-host, then `2026-11-04-java-and-core.md`, phase 1). Every `plugin/grammar/` class,
+> `parser/helpers/SourceParser` and `SourceFormatter` is now in `com.botmaker.java.grammar`, so the CLI and a running
+> bot write values as Studio does. Where a file here says `plugin/grammar/` or `parser/helpers/Source…`, read that
+> package.
 
 > **The toolbar is Studio's row, then a tab per plugin, since 2026-10-28** (umbrella toolbar-tabs plan; spec
 > `../../../docs/superpowers/specs/2026-10-28-toolbar-tabs-design.md`). `ToolbarGroup` is gone from the contract: a

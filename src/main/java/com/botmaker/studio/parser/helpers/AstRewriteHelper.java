@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.helpers;
 
-import com.botmaker.plugin.host.grammar.SourceFormatter;
+import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.nav.Usages;
 import org.eclipse.jdt.core.dom.*;

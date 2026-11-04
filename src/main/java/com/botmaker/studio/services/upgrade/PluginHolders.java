@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.parser.EditContext;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.project.PluginFiles;
 import com.botmaker.studio.project.ProjectConfig;

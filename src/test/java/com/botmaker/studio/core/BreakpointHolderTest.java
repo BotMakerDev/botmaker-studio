@@ -1,7 +1,7 @@
 package com.botmaker.studio.core;
 
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.junit.jupiter.api.Test;

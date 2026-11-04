@@ -1,8 +1,8 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.slot.SlotRun;
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.SourceNode;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;

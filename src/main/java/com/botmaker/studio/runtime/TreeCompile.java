@@ -1,6 +1,6 @@
 package com.botmaker.studio.runtime;
 
-import com.botmaker.plugin.host.grammar.ParamsFitter;
+import com.botmaker.java.grammar.ParamsFitter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;

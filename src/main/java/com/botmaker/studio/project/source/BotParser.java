@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.source;
 
-import com.botmaker.plugin.host.grammar.BotAnnotation;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.BotAnnotation;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;

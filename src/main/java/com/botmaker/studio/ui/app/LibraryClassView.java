@@ -5,7 +5,7 @@ import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.nav.LibrarySource;
 import com.botmaker.studio.parser.BlockConverter;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;

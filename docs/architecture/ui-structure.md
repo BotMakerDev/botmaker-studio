@@ -68,8 +68,8 @@ The `ui/` package is split by concern:
   make answers the source unchanged and never throws), and **`JavaParameters`** is the half that knows
   about the project — `BotSources`, buffers before files, both written. The first two are pure, which is
   why they are tested over source text rather than over a project on disk.
-  **The grammar was Studio's from 2026-09-22 to 2026-11-04** (`plugin/grammar/`; now `botmaker-plugin-host`'s
-  `com.botmaker.plugin.host.grammar`): `ValueForm`, `ValueContainer`,
+  **The grammar was Studio's from 2026-09-22 to 2026-11-04** (`plugin/grammar/`; now `botmaker-java`'s
+  `com.botmaker.java.grammar`): `ValueForm`, `ValueContainer`,
   `HostContainers` and `SourceSplit` moved here from the contract, and **`ValueGrammar`** replaced
   `ValueCatalog`'s grammar half — built once per bind by `PluginHost.grammar()` from the bound plugins'
   `types()` and `componentTypes()`. A leaf is a JDK literal (`JdkLiterals`), an enum constant, a

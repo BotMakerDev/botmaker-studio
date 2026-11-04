@@ -2,10 +2,10 @@ package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
-import com.botmaker.plugin.host.grammar.SourceParser;
-import com.botmaker.plugin.host.grammar.JavaNames;
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.grammar.JavaNames;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;

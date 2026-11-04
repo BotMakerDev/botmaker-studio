@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser.factories;
 
 import com.botmaker.plugin.api.catalog.FacadeEntry;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;

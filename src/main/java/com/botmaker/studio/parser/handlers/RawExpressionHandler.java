@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.handlers;
 
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import org.eclipse.jdt.core.dom.AST;

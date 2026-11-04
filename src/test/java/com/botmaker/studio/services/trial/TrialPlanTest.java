@@ -1,6 +1,6 @@
 package com.botmaker.studio.services.trial;
 
-import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.CompilationUnit;

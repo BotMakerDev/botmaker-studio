@@ -1,6 +1,6 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

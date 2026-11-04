@@ -1,10 +1,10 @@
 package com.botmaker.studio.project.source;
 
-import com.botmaker.plugin.host.grammar.JavaNames;
-import com.botmaker.plugin.host.grammar.SourceNames;
-import com.botmaker.plugin.host.grammar.ValueContainer;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.JavaNames;
+import com.botmaker.java.grammar.SourceNames;
+import com.botmaker.java.grammar.ValueContainer;
+import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueTypes;
 import org.eclipse.jdt.core.dom.ITypeBinding;
 import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.ParameterizedType;

@@ -60,7 +60,7 @@ class AddFunctionEditTest {
         EventBus bus = new EventBus(false);
         bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
 
-        state.setCompilationUnit(com.botmaker.plugin.host.grammar.SourceParser.parse(SOURCE));
+        state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(SOURCE));
         editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
     }
 
@@ -117,8 +117,8 @@ class AddFunctionEditTest {
      */
     @Test
     void aChosenNestedTypeIsWrittenWithItsImports() {
-        java.lang.reflect.Type mapOfLists = com.botmaker.plugin.host.grammar.ValueTypes.mapOf(
-                String.class, com.botmaker.plugin.host.grammar.ValueTypes.listOf(int.class));
+        java.lang.reflect.Type mapOfLists = com.botmaker.java.grammar.ValueTypes.mapOf(
+                String.class, com.botmaker.java.grammar.ValueTypes.listOf(int.class));
         editor.addFunctionToClass(subject(), new FunctionDraft("table",
                 com.botmaker.studio.palette.SignatureTypes.of(void.class),
                 List.of(new FunctionDraft.Parameter("rows",

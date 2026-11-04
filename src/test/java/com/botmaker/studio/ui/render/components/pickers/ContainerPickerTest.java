@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
-import com.botmaker.plugin.host.grammar.ValueContainer;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.ValueContainer;
+import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Type;

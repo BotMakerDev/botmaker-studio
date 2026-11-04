@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;

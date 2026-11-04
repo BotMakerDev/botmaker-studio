@@ -1,8 +1,8 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.SourceNode;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.SourceNode;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import org.eclipse.jdt.core.dom.QualifiedName;
 

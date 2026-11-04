@@ -1,6 +1,6 @@
 package com.botmaker.studio.nav;
 
-import com.botmaker.plugin.host.grammar.BotAnnotation;
+import com.botmaker.java.grammar.BotAnnotation;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Assignment;

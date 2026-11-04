@@ -5,7 +5,7 @@ import com.botmaker.studio.events.CoreApplicationEvents.MigrateTypeRequestedEven
 import com.botmaker.studio.events.CoreApplicationEvents.SwitchUsesRequestedEvent;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import javafx.scene.control.MenuItem;

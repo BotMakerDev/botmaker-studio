@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

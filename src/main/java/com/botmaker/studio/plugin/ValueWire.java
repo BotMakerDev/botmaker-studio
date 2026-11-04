@@ -1,11 +1,11 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.SourceNode;
-import com.botmaker.plugin.host.grammar.ValueContainer;
-import com.botmaker.plugin.host.grammar.JavaNames;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.SourceNode;
+import com.botmaker.java.grammar.ValueContainer;
+import com.botmaker.java.grammar.JavaNames;
+import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.ResolvedType;
 

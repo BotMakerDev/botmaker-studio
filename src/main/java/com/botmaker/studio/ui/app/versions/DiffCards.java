@@ -249,7 +249,7 @@ final class DiffCards {
             text = onlyText(source, only);
         } else {
             int end = start;
-            var cu = com.botmaker.plugin.host.grammar.SourceParser.parse(source);
+            var cu = com.botmaker.java.grammar.SourceParser.parse(source);
             for (var m : BlockDiff.methods(cu).values()) {
                 if (m.getStartPosition() == start) end = start + m.getLength();
             }

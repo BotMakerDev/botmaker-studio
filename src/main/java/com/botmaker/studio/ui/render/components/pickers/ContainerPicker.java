@@ -1,11 +1,11 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.SourceNode;
-import com.botmaker.plugin.host.grammar.ValueContainer;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.SourceNode;
+import com.botmaker.java.grammar.ValueContainer;
+import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.services.CodeEditorService;

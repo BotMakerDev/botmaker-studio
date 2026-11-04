@@ -1,9 +1,9 @@
 package com.botmaker.studio.services.overlay;
 
-import com.botmaker.plugin.host.grammar.SourceFormatter;
-import com.botmaker.plugin.host.grammar.JavaNames;
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.SourceFormatter;
+import com.botmaker.java.grammar.JavaNames;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.Expression;

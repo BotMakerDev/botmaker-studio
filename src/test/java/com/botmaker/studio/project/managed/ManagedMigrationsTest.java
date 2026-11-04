@@ -1,9 +1,9 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationTypes.Frame;
 import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
 import com.botmaker.studio.project.managed.MigrationTypes.OldPaint;

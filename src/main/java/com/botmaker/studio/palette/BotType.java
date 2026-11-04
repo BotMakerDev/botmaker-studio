@@ -10,8 +10,8 @@ import com.botmaker.studio.palette.Initializer.Raw;
 import com.botmaker.studio.palette.Initializer.StaticCall;
 import com.botmaker.studio.palette.Initializer.StrLit;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.plugin.host.grammar.JavaNames;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.JavaNames;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.types.JdkType;
 import com.botmaker.studio.types.PrimitiveKind;
 

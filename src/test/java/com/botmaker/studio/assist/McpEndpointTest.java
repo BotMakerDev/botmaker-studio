@@ -10,7 +10,7 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.plugin.HostHistory;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.services.run.RunEntries;

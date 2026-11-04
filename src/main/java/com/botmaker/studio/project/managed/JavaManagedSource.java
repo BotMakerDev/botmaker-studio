@@ -1,13 +1,13 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.plugin.host.grammar.SourceNode;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.SourceNode;
+import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.plugin.host.grammar.BotAnnotation;
+import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;

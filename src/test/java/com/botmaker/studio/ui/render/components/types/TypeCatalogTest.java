@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.render.components.types;
 
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.plugin.TestPlugins;
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.TestValues;
 import org.junit.jupiter.api.Test;

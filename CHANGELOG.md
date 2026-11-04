@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (botmaker-java)
+
+- The parser and the value grammar come from `botmaker-java` (2026-11-04): `com.botmaker.plugin.host.grammar` is now
+  `com.botmaker.java.grammar`. Nothing changes in the window.
+
 ### Changed (one parser)
 
 - Every text-to-tree parse goes through plugin-host's `SourceParser` (2026-11-04): `JavaSnippets` is removed, and

@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.debug;
 
 import com.botmaker.studio.parser.BlockId;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.project.ProjectState.SourceFile;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;

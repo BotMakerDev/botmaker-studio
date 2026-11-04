@@ -4,7 +4,7 @@ import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.factories.InitializerFactory;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.MethodReferences.CallSite;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
 import com.botmaker.studio.parser.refactor.SignatureMigration.CallChange;

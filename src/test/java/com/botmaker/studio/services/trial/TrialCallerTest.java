@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.trial;
 
 import com.botmaker.plugin.api.assist.TrialEntry;
-import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.java.grammar.JavaValue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

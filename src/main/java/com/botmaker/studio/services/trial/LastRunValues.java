@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.trial;
 
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.services.debug.DebugSnapshot;
 
 import java.lang.reflect.Type;

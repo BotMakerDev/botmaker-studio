@@ -2,8 +2,8 @@ package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
-import com.botmaker.plugin.host.grammar.JavaValue;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.JavaValue;
+import com.botmaker.java.grammar.ValueGrammar;
 import org.junit.jupiter.api.Test;
 
 import java.time.temporal.ChronoUnit;

@@ -2,9 +2,9 @@ package com.botmaker.studio.ui.render.components.types;
 
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.plugin.host.grammar.JavaNames;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.JavaNames;
+import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.params.BotRecords;
 
 import java.lang.reflect.Type;

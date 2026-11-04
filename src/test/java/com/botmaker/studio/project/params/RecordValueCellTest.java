@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;

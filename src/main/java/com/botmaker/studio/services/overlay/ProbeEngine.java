@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.ProbeContext;
 import com.botmaker.plugin.api.overlay.ProbeResult;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 
 import java.awt.image.BufferedImage;
 import java.lang.reflect.Executable;

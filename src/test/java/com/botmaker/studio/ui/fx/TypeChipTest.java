@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.parser.EditorFixture;
-import com.botmaker.plugin.host.grammar.SourceParser;
+import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.ui.render.components.TypeChip;
 import com.botmaker.studio.ui.render.menu.TypePicker;
 import javafx.event.Event;

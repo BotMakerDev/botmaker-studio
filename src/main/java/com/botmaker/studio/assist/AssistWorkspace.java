@@ -3,7 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;

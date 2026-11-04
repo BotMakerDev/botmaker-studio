@@ -1,6 +1,6 @@
 package com.botmaker.studio.palette;
 
-import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.java.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
