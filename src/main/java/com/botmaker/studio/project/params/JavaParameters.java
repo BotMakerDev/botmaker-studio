@@ -731,9 +731,15 @@ public final class JavaParameters {
     private static Outcome applyToGroup(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                         ParameterRow wanted, Type wantedForm, ValueGrammar grammar) {
         ParameterRow before = parameter.row();
-        if (!wanted.name().equals(before.name()) || wantedForm != null && !wantedForm.equals(parameter.form())) {
+        if (wantedForm != null && !wantedForm.equals(parameter.form())) {
             return new Outcome.Refused(parameter.name() + " is a parameter of the group " + parameter.className()
-                    + ": its name and type cannot be changed here yet. Add a new one and stop using this one.");
+                    + ": its type cannot be changed here yet. Add a new one and stop using this one.");
+        }
+        if (!wanted.name().equals(before.name())) {
+            Optional<String> refused = renameInGroup(config, state, parameter, wanted.name());
+            if (refused.isPresent()) return new Outcome.Refused(refused.get());
+            JavaParameter held = find(config, state, parameter.className(), wanted.name(), grammar).orElse(null);
+            return held == null ? gone(parameter) : applyToGroup(config, state, held, wanted, wantedForm, grammar);
         }
         Map<String, String> members = new LinkedHashMap<>();
         if (!wanted.category().equals(before.category())) members.put("category", wanted.category());
@@ -759,6 +765,35 @@ public final class JavaParameters {
         }
         return reread(config, state, parameter.className(), parameter.name(), grammar)
                 .<Outcome>map(Outcome.Stored::new).orElseGet(() -> gone(parameter));
+    }
+
+    /**
+     * Renames a group's parameter (2026-11-04): the method and every use of it by binding ({@link Refactor#rename}),
+     * then the same name in the starting copy, which no binding reaches, and in both copies the rename rule that moves
+     * this computer's value on every other copy of the bot when it next fits ({@link JavaParameterEdits#renamedInGroup}).
+     *
+     * @return why nothing was renamed, or empty when it was
+     */
+    private static Optional<String> renameInGroup(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                                  String newName) {
+        String group = parameter.className();
+        String oldName = parameter.name();
+        Optional<String> starting = startingFile(config, parameter.file()).filter(Files::isRegularFile)
+                .flatMap(file -> currentSource(null, file));
+        if (starting.isPresent() && JavaParameterEdits.hasParameter(starting.get(), group, newName)) {
+            return Optional.of("The starting copy of " + group + " already has " + newName + ". Nothing was renamed.");
+        }
+        Path file = parameter.file().toAbsolutePath().normalize();
+        Optional<String> refused = renameAt(config, state, parameter, newName,
+                units -> JavaParameterEdits.parameterStart(units.get(file), group, oldName));
+        if (refused.isPresent()) return refused;
+        UnaryOperator<String> ruled = source -> JavaParameterEdits.renamedInGroup(source, group, oldName, newName);
+        // A refusal puts every file back (declare): a starting copy left at the old name would drop the value.
+        if (!rewrite(config, state, parameter.file(), ruled)
+                || starting.isPresent() && !rewriteStarting(config, parameter.file(), ruled)) {
+            return Optional.of("The rename rule for " + oldName + " could not be written, so nothing was renamed.");
+        }
+        return Optional.empty();
     }
 
     /**
@@ -863,7 +898,7 @@ public final class JavaParameters {
                 .filter(found -> found.group() && found.row().duringRun());
         if (parameter.isEmpty()) return Optional.of(group + " has no during-a-run parameter " + name + ".");
         boolean inStarting = startingFile(config, parameter.get().file()).flatMap(path -> currentSource(null, path))
-                .filter(source -> JavaParameterEdits.hasMethod(source, group, name)).isPresent();
+                .filter(source -> JavaParameterEdits.hasParameter(source, group, name)).isPresent();
         return inStarting && forget(config, state, parameter.get(), grammar).isPresent() ? Optional.empty()
                 : Optional.of(group + " has no starting copy to read " + name + " from.");
     }
@@ -970,13 +1005,21 @@ public final class JavaParameters {
      */
     private static Optional<String> rename(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                            String newName) {
+        Path file = parameter.file().toAbsolutePath().normalize();
+        return renameAt(config, state, parameter, newName,
+                units -> Usages.fieldStart(units.get(file), parameter.className(), parameter.name()));
+    }
+
+    /** The same for a declaration whose name {@code start} finds in the bot's parse, or -1. */
+    private static Optional<String> renameAt(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                             String newName, Function<Map<Path, CompilationUnit>, Integer> start) {
         BotIndex index = BotIndex.of(config, state);
-        int start = fieldStart(index, parameter);
-        if (start < 0) {
+        int at = index.read(start);
+        if (at < 0) {
             return Optional.of(parameter.qualified() + " could not be resolved, so the places that use it "
                     + "cannot be found. Nothing was renamed.");
         }
-        return switch (Refactor.rename(index, parameter.file(), start, newName)) {
+        return switch (Refactor.rename(index, parameter.file(), at, newName)) {
             case Refactor.Refused refused -> Optional.of(refused.reason());
             case Refactor.Planned plan -> {
                 write(config, state, plan);

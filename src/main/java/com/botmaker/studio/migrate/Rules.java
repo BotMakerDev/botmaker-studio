@@ -1,6 +1,7 @@
 package com.botmaker.studio.migrate;
 
 import com.botmaker.plugin.api.meta.Migrate;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.project.params.JavaParameterSource;
 import com.botmaker.studio.project.source.BotAnnotation;
@@ -93,7 +94,11 @@ final class Rules {
                     @Override
                     public boolean visit(MethodDeclaration method) {
                         Annotation mark = BotAnnotation.MIGRATE.on(method);
-                        if (mark != null) out.add(read(file, source, method, mark, plugin));
+                        // A parameter's rename rule is the fitter's (2026-11-04): it names the bot's own group, not
+                        // an old API, so it is no upgrade's rule and never listed as one that matches nothing.
+                        if (mark != null && ParamsFitter.renameTarget(method).isEmpty()) {
+                            out.add(read(file, source, method, mark, plugin));
+                        }
                         return false;
                     }
                 });

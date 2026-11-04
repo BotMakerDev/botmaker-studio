@@ -662,8 +662,8 @@ public final class ParametersDialog {
         // A plugin's parameter (2026-10-11): its name, type, category, note and audience are the plugin's, which
         // the bot's code reads by name; only its value is the user's.
         boolean mine = !entry.declaredByPlugin();
-        // A group's parameter (2026-11-04) keeps its name and type here; its value, filing, note and when it
-        // changes are edited, and the row menu sets its starting value.
+        // A group's parameter (2026-11-04) keeps its type here; its name (a rename rule keeps its value on every
+        // copy), value, filing, note and when it changes are edited, and the row menu sets its starting value.
         boolean declarable = mine && !entry.group();
         GridPane grid = new GridPane();
         grid.setHgap(8);
@@ -673,7 +673,7 @@ public final class ParametersDialog {
         // A plugin's row is shown as a label, not a disabled text field: a field you may not type in reads
         // as something broken, where a label reads as a fact about who owns the row.
         Node name;
-        if (declarable) {
+        if (mine) {
             TextField field = new TextField(v.name());
             field.focusedProperty().addListener((o, was, is) -> {
                 if (!is) commitRename(entry, field);
@@ -685,8 +685,7 @@ public final class ParametersDialog {
             name = field;
         } else {
             Label label = new Label(v.name());
-            label.setTooltip(new Tooltip(mine ? "Its name and type stay as they were added."
-                    : "Declared by a plugin — its name and type are the plugin's. " + entry.owner()));
+            label.setTooltip(new Tooltip("Declared by a plugin — its name and type are the plugin's. " + entry.owner()));
             name = label;
         }
 
@@ -1171,6 +1170,7 @@ public final class ParametersDialog {
                 .description(row.description())
                 .category(row.category())
                 .visibility(row.visibility())
+                .changes(row.changes())
                 .build();
     }
 

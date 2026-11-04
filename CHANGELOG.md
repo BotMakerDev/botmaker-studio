@@ -16,6 +16,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - A new parameter's value stays in `params/`: its starting copy gets the type's blank value, and only *Make this the
   starting value* publishes one. A type with no blank value is not added (2026-11-04).
+- A group's parameter can be renamed in the Parameters window (2026-11-04): its uses by binding, both copies, and a
+  `@Migrate` rename rule written into both, so every other copy of the bot keeps its value under the new name when it
+  next fits. Its type still cannot change there. The upgrade's rule list leaves these rules out.
 - A plugin may add, list and forget a during-a-run parameter (`PluginValues.addRunParameter`, `runParameters`,
   `forgetRunParameter`, 2026-11-04). Nothing else reaches it: a parameter changed outside a run, and so any secret,
   is neither listed nor forgotten. A new parameter goes to `params/` and to `starting-params/`, with the plugin's marks.

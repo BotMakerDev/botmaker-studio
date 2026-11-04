@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ParameterWrite;
 import com.botmaker.studio.parser.ImportManager;
@@ -7,6 +8,7 @@ import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.plugin.host.grammar.SourceFormatter;
 import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.plugin.host.grammar.ParamValues;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.source.BotAnnotation;
@@ -26,8 +28,11 @@ import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.MethodInvocation;
 import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.ReturnStatement;
+import org.eclipse.jdt.core.dom.SingleMemberAnnotation;
+import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.TypeLiteral;
@@ -107,7 +112,8 @@ public final class JavaParameterEdits {
         CompilationUnit unit = BotParser.syntax(source);
         AST ast = unit.getAST();
         TypeDeclaration type = typeDeclaration(unit, group);
-        if (type == null || methodOf(type, name) != null) return source;
+        // A rename rule may keep the name as a static method (renamedInGroup): that name is free for a parameter.
+        if (type == null || parameterOf(type, name) != null) return source;
         Set<String> imports = new LinkedHashSet<>(value.imports());
         org.eclipse.jdt.core.dom.Type returnType = ValueTypes.node(ast, form, imports).orElse(null);
         if (returnType == null) return source;
@@ -337,6 +343,105 @@ public final class JavaParameterEdits {
 
     // A rename is not here (2026-09-27): it is project-wide and found by binding, so it is
     // JavaParameters.rename over nav/Usages. The one that stood here matched names by how they were spelled.
+    // A group's starting copy is outside the sources, so no binding reaches it: renamedInGroup is its rename.
+
+    /**
+     * {@code source} with the parameter {@code from} of the group {@code group} called {@code to}, and the rename rule
+     * that keeps its value on every copy of the bot ({@link ParamsFitter#renameTarget}, 2026-11-04): the method renamed
+     * when it still has its old name, each rule of the group that renamed something to {@code from} pointed at
+     * {@code to}, a rule left naming its own target dropped, and the rule {@code from → to}, at the parameter's type,
+     * in place of any rule called {@code from}. Unchanged when the group has neither name as a parameter.
+     */
+    @SuppressWarnings("unchecked")
+    public static String renamedInGroup(String source, String group, String from, String to) {
+        CompilationUnit unit = BotParser.syntax(source);
+        AST ast = unit.getAST();
+        TypeDeclaration type = typeDeclaration(unit, group);
+        if (type == null) return source;
+        MethodDeclaration parameter = parameterOf(type, from);
+        if (parameter == null) parameter = parameterOf(type, to);
+        if (parameter == null) return source;
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        if (parameter.getName().getIdentifier().equals(from)) {
+            rewrite.set(parameter, MethodDeclaration.NAME_PROPERTY, ast.newSimpleName(to), null);
+        }
+        ListRewrite members = rewrite.getListRewrite(type, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
+        for (MethodDeclaration method : type.getMethods()) {
+            Optional<String> target = ParamsFitter.renameTarget(method);
+            if (target.isEmpty()) continue;
+            String name = method.getName().getIdentifier();
+            String now = target.get().equals(from) ? to : target.get();
+            if (name.equals(from) || name.equals(now)) {
+                members.remove(method, null);
+            } else if (!now.equals(target.get())) {
+                ReturnStatement returned = (ReturnStatement) method.getBody().statements().getFirst();
+                rewrite.set(returned.getExpression(), MethodInvocation.NAME_PROPERTY, ast.newSimpleName(now), null);
+            }
+        }
+        members.insertLast(renameRule(ast, group, from, to, parameter.getReturnType2()), null);
+        String renamed = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        CompilationUnit reparsed = BotParser.syntax(renamed);
+        ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
+        addImports(reparsed, importing, List.of(Migrate.class.getCanonicalName()));
+        return AstRewriteHelper.applyRewrite(importing, renamed);
+    }
+
+    /** {@code @Migrate(Group.class) static <type> from(@Migrate.Self Group self) { return self.to(); }} */
+    @SuppressWarnings("unchecked")
+    private static MethodDeclaration renameRule(AST ast, String group, String from, String to,
+                                                org.eclipse.jdt.core.dom.Type type) {
+        String migrate = Migrate.class.getSimpleName();
+        SingleMemberAnnotation mark = ast.newSingleMemberAnnotation();
+        mark.setTypeName(ast.newSimpleName(migrate));
+        TypeLiteral owner = ast.newTypeLiteral();
+        owner.setType(ast.newSimpleType(ast.newSimpleName(group)));
+        mark.setValue(owner);
+        MarkerAnnotation selfMark = ast.newMarkerAnnotation();
+        selfMark.setTypeName(ast.newName(migrate + "." + Migrate.Self.class.getSimpleName()));
+        SingleVariableDeclaration self = ast.newSingleVariableDeclaration();
+        self.modifiers().add(selfMark);
+        self.setType(ast.newSimpleType(ast.newSimpleName(group)));
+        self.setName(ast.newSimpleName("self"));
+        MethodInvocation call = ast.newMethodInvocation();
+        call.setExpression(ast.newSimpleName("self"));
+        call.setName(ast.newSimpleName(to));
+        ReturnStatement returned = ast.newReturnStatement();
+        returned.setExpression(call);
+        Block body = ast.newBlock();
+        body.statements().add(returned);
+        MethodDeclaration rule = ast.newMethodDeclaration();
+        rule.modifiers().add(mark);
+        rule.modifiers().add(ast.newModifier(Modifier.ModifierKeyword.STATIC_KEYWORD));
+        rule.setReturnType2((org.eclipse.jdt.core.dom.Type) ASTNode.copySubtree(ast, type));
+        rule.setName(ast.newSimpleName(from));
+        rule.parameters().add(self);
+        rule.setBody(body);
+        return rule;
+    }
+
+    /** Whether the group {@code group} in {@code source} has the parameter {@code name}; a rule of that name is none. */
+    static boolean hasParameter(String source, String group, String name) {
+        TypeDeclaration type = typeDeclaration(BotParser.syntax(source), group);
+        return type != null && parameterOf(type, name) != null;
+    }
+
+    /** Where the name of the parameter {@code name} of {@code group} starts in {@code unit}, or -1. */
+    static int parameterStart(CompilationUnit unit, String group, String name) {
+        TypeDeclaration type = unit == null ? null : typeDeclaration(unit, group);
+        MethodDeclaration parameter = type == null ? null : parameterOf(type, name);
+        return parameter == null ? -1 : parameter.getName().getStartPosition();
+    }
+
+    /** The parameter {@code name} of a group: its no-argument instance method of that name, or {@code null}. */
+    private static MethodDeclaration parameterOf(TypeDeclaration type, String name) {
+        for (MethodDeclaration method : type.getMethods()) {
+            if (method.getName().getIdentifier().equals(name) && method.parameters().isEmpty()
+                    && !Modifier.isStatic(method.getModifiers())) {
+                return method;
+            }
+        }
+        return null;
+    }
 
     /**
      * Changes the field's declared type, and resets its value to the new type's fresh one.

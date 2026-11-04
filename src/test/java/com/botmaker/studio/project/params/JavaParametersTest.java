@@ -218,6 +218,50 @@ class JavaParametersTest {
         assertEquals("5", only(config).row().value(), "a blank starting value takes nothing from this computer");
     }
 
+    /**
+     * A group's parameter renamed (2026-11-04): its uses by binding, both copies, and a rename rule in both, which moves
+     * the value of a copy still holding the old name when it next fits.
+     */
+    @Test
+    void aRenamedParameterKeepsItsValueOnEveryCopy(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        writeGroup(config, "bot", "RunChoices", "    public int tries() { return 0; }\n");
+        Path mine = groupOf(config, "bot", "RunChoices");
+        Files.writeString(mine, group("bot", "RunChoices", "    public int tries() { return 5; }\n"));
+        write(config, "Use.java", """
+                package com.refbot;
+
+                import com.refbot.params.bot.RunChoices;
+
+                class Use {
+                    int n = new RunChoices().tries();
+                }
+                """);
+        JavaParameter tries = only(config);
+
+        JavaParameters.Outcome outcome = JavaParameters.declare(config, null, tries, renamed(tries.row(), "attempts"),
+                tries.form(), TestValues.GRAMMAR);
+
+        assertEquals("5", outcome.stored().orElseThrow().value(), outcome.toString());
+        Path starting = startingOf(config, "bot", "RunChoices");
+        for (Path file : List.of(mine, starting)) {
+            String source = Files.readString(file).replaceAll("\\s+", " ");
+            assertTrue(source.contains("public int attempts()") && !source.contains("public int tries()"), source);
+            assertTrue(source.contains("import com.botmaker.plugin.api.meta.Migrate;"), source);
+            assertTrue(source.contains("@Migrate(RunChoices.class) static int tries(@Migrate.Self RunChoices self)"),
+                    source);
+            assertTrue(source.contains("return self.attempts();"), source);
+        }
+        assertTrue(Files.readString(config.mainPackageDir().resolve("Use.java")).contains(".attempts()"));
+
+        // Another copy of the bot, still at the old name, fits to the committed starting copy.
+        Files.writeString(mine, group("bot", "RunChoices", "    public int tries() { return 7; }\n"));
+        ParamsFitter.onDisk(config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
+                config.projectPath().resolve(".botmaker/values-removed"));
+        assertTrue(Files.readString(mine).replaceAll("\\s+", " ").contains("public int attempts() { return 7; }"),
+                Files.readString(mine));
+    }
+
     /** A name the starting copy already holds would be reset by the fit, so the add is refused and params/ untouched. */
     @Test
     void aNameTheStartingCopyHoldsIsRefused(@TempDir Path root) throws IOException {
