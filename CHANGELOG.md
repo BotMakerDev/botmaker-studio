@@ -14,6 +14,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added (private values)
 
+- **A values class never stops a build** (2026-11-04): before each compile, Studio prunes this computer's values
+  classes to their schemas (`ValuesPruner`) and says each change in the Run tab; one javac still refuses is removed
+  with a `WARN` line and the bot compiled again. An update's compile check leaves `values/` out, so it never refuses
+  an update.
+- **A parameter the author adds never lands in a plugin's file** (2026-11-04): the Parameters window's add row
+  offers only the bot's own field classes (`JavaParameters.ownClasses`), so a bot whose only `@Param` class was
+  `plugins/sdk/Sdk.java` gets a `Parameters.java` instead.
+
 - **A `@Param` schema's methods are rows of the Parameters window** (2026-11-04): each `default` method of an
   interface marked `@Param`, filed and shown by `@Param.Shown` or the interface's own members. Setting an `EDITOR`
   one rewrites its `default` body (the author's value, committed); setting a `PUBLIC` one writes this computer's

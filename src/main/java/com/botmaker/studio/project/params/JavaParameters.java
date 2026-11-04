@@ -45,6 +45,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -141,6 +142,21 @@ public final class JavaParameters {
     public static List<String> classes(ProjectConfig config, ProjectState state) {
         Set<String> names = new LinkedHashSet<>();
         for (JavaParameter parameter : scan(config, state)) names.add(parameter.className());
+        return List.copyOf(names);
+    }
+
+    /**
+     * The classes a new parameter may go into: those declaring one that is the bot's own (2026-11-04). A plugin's
+     * file — {@code plugins/sdk/Sdk.java} — is the plugin's, so a parameter the bot's author adds never lands there.
+     */
+    public static List<String> ownClasses(ProjectConfig config, ProjectState state) {
+        Set<String> names = new LinkedHashSet<>();
+        Set<String> plugins = new HashSet<>();
+        for (JavaParameter parameter : scan(config, state)) {
+            if (parameter.declaredByPlugin()) plugins.add(parameter.className());
+            else if (!parameter.schema()) names.add(parameter.className());
+        }
+        names.removeAll(plugins);
         return List.copyOf(names);
     }
 
@@ -332,6 +348,10 @@ public final class JavaParameters {
                                              String category, String description, ValueGrammar grammar) {
         if (config == null || className == null || className.isBlank()) return Optional.empty();
         if (find(config, state, className, name, grammar).isPresent()) return Optional.empty();
+        // A plugin's file and a schema interface take no field of the author's (2026-11-04).
+        if (classes(config, state).contains(className) && !ownClasses(config, state).contains(className)) {
+            return Optional.empty();
+        }
         if (!classes(config, state).contains(className)) {
             Optional<Path> holder = createClass(config, className);
             if (holder.isEmpty()) return Optional.empty();

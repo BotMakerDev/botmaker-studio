@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.host.grammar.ValuesPruner;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -30,10 +31,10 @@ public record ValuesClasses(Map<String, Held> bySchema) {
     public static final ValuesClasses NONE = new ValuesClasses(Map.of());
 
     /** The package segment a values class sits in. */
-    public static final String PACKAGE = "values";
+    public static final String PACKAGE = ValuesPruner.PACKAGE;
 
     /** The suffix of a values class's name: {@code RunChoices} → {@code RunChoicesValues}. */
-    public static final String SUFFIX = "Values";
+    public static final String SUFFIX = ValuesPruner.SUFFIX;
 
     public ValuesClasses {
         bySchema = Map.copyOf(bySchema);

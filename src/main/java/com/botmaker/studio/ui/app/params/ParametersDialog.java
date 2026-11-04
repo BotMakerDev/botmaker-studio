@@ -328,7 +328,7 @@ public final class ParametersDialog {
                 selectedSection = tag.section();
                 selectedTag = tag.tag();
                 // A new parameter goes where the user is looking: the section picked on the rail.
-                if (selectedSection != null) {
+                if (selectedSection != null && JavaParameters.ownClasses(config, state).contains(selectedSection)) {
                     selectedClass = selectedSection;
                     if (intoPicker != null && intoPicker.getItems().contains(selectedSection)) {
                         intoPicker.setValue(selectedSection);
@@ -937,7 +937,8 @@ public final class ParametersDialog {
         });
 
         HBox row = new HBox(6, new Label("New"), name, type, shown, add);
-        List<String> classes = JavaParameters.classes(config, state);
+        // The bot's own classes only: a new parameter never lands in a plugin's file such as Sdk.java (2026-11-04).
+        List<String> classes = JavaParameters.ownClasses(config, state);
         intoPicker = null;
         if (classes.size() > 1) {
             ComboBox<String> into = new ComboBox<>();

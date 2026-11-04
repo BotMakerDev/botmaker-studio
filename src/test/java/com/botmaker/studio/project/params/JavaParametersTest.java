@@ -93,6 +93,23 @@ class JavaParametersTest {
 
     // ---- a schema (2026-11-04) ----------------------------------------------------------------------------
 
+    /** A new parameter goes into one of the bot's own field classes: never a schema, never a plugin's file. */
+    @Test
+    void aNewParameterGoesIntoTheBotsOwnClassOnly(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        write(config, "Parameters.java", parameters("""
+                    @Param
+                    public static int tries = 10;
+                """));
+        write(config, "RunChoices.java", schema("""
+                    default int rounds() { return 2; }
+                """));
+
+        assertEquals(List.of("Parameters"), JavaParameters.ownClasses(config, null));
+        assertTrue(JavaParameters.add(config, null, "RunChoices", "speed", TestValues.WHOLE_NUMBER, java("1"), "", "",
+                TestValues.GRAMMAR).isEmpty(), "a schema takes no field");
+    }
+
     /** An EDITOR method of a schema is the author's: its value is the default body, committed with the bot. */
     @Test
     void anEditorParameterIsTheDefault(@TempDir Path root) throws IOException {

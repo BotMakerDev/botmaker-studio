@@ -1,5 +1,6 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.plugin.host.grammar.ValuesPruner;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -22,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -415,15 +417,59 @@ public class CodeExecutionService {
         // changed one. Nothing generates a project's Java any more, so a project file has no locked parts:
         // every one of them is the user's, and what they typed is what gets written.
         snapshot.writeSources();
+        // A values class never stops a build (2026-11-04): pruned to its schema first, removed when javac still refuses it.
+        Path backups = config.projectPath().resolve(VALUES_BACKUPS);
+        List<ValuesPruner.Pruned> pruned = ValuesPruner.onDisk(config.sourceRoot(), backups);
+        pruned.forEach(each -> warn(each.sentence() + " A copy is in " + VALUES_BACKUPS + "."));
+        matchEditor(pruned);
 
         Files.createDirectories(compiledOutputPath);
-        boolean compiled = compileSources(snapshot, compiledOutputPath);
+        StringBuilder output = new StringBuilder();
+        boolean compiled = compileSources(snapshot, compiledOutputPath, output);
+        List<Path> refused = compiled ? List.of() : refusedValues(output.toString());
+        if (!refused.isEmpty()) {
+            for (Path file : refused) {
+                ValuesPruner.backUp(file, backups);
+                Files.deleteIfExists(file);
+                warn("WARN " + config.projectPath().relativize(file) + " did not compile and was removed; the bot"
+                        + " runs on its schema's defaults. A copy is in " + VALUES_BACKUPS + ".");
+            }
+            matchEditor(refused.stream().map(file -> new ValuesPruner.Pruned(file, Optional.empty(), List.of())).toList());
+            compiled = compileSources(snapshot, compiledOutputPath, new StringBuilder());
+        }
         // Only if the disk still holds what javac read: a write since would make a state nobody compiled the good one.
         if (compiled && snapshot.onDisk()) Checkpoints.recordCompiled(config.projectPath());
         return compiled;
     }
 
-    private boolean compileSources(ProjectState.Snapshot snapshot, Path compiledOutputPath)
+    /** Where a values class is copied before Studio prunes or removes it: in no version, beside the plugins' state. */
+    private static final String VALUES_BACKUPS = ".botmaker/values-removed";
+
+    /** Makes the editor's copy of each pruned or removed values class match the disk. */
+    private void matchEditor(List<ValuesPruner.Pruned> pruned) {
+        if (pruned.isEmpty()) return;
+        Platform.runLater(() -> pruned.forEach(each -> each.source().ifPresentOrElse(
+                text -> state.getFile(each.file()).ifPresent(file -> file.setContent(text)),
+                () -> state.removeFile(each.file()))));
+    }
+
+    /**
+     * The values classes to remove when javac's {@code output} names errors in values classes alone. An error
+     * anywhere else (a schema mid-edit, a dependency that did not resolve) may be what the values class trips on, so
+     * then none is removed.
+     */
+    private List<Path> refusedValues(String output) {
+        List<Path> files = TreeCompile.errorFiles(output);
+        if (files.isEmpty() || !files.stream().allMatch(ValuesPruner::isValuesFile)) return List.of();
+        return files.stream().map(file -> file.isAbsolute() ? file : config.projectPath().resolve(file))
+                .distinct().toList();
+    }
+
+    private void warn(String line) {
+        Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(line + "\n")));
+    }
+
+    private boolean compileSources(ProjectState.Snapshot snapshot, Path compiledOutputPath, StringBuilder output)
             throws IOException, InterruptedException {
 
         List<String> sourceFiles = ClassPathManager.findJavaFiles(config.sourceRoot());
@@ -445,7 +491,12 @@ public class CodeExecutionService {
 
         Process process = pb.start();
 
-        try (ConsoleBatcher console = console()) {
+        try (ConsoleBatcher console = new ConsoleBatcher(text -> {
+            synchronized (output) {
+                output.append(text);
+            }
+            eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(text));
+        })) {
             console.pump(process.getInputStream(), "javac-output");
             int exitCode = process.waitFor();
             console.finish();

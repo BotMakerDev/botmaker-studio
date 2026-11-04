@@ -1,5 +1,6 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.plugin.host.grammar.ValuesPruner;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;
@@ -40,22 +41,12 @@ public final class TreeCompile {
      * relative to the project; empty when it compiles. A dependency that would not resolve is one more line.
      */
     public static List<String> errors(ProjectConfig config) throws IOException, InterruptedException {
-        List<String> sources = ClassPathManager.findJavaFiles(config.sourceRoot());
-        if (sources.isEmpty()) return List.of();
+        if (sources(config).isEmpty()) return List.of();
         MavenService.Resolution resolved = MavenService.resolve(config.projectPath(), ProgressReporter.NONE);
         Path out = Files.createTempDirectory("botmaker-update-check");
         try {
-            List<String> command = new ArrayList<>(List.of(config.javacExecutable(),
-                    "-cp", String.join(File.pathSeparator, classpath(config, resolved.jars())),
-                    "-d", out.toString(), "-encoding", "UTF-8", "-nowarn",
-                    // a check, not a build: no annotation processor an update's new dependency brings runs here
-                    "-proc:none"));
-            command.addAll(JavacRelease.args(config.projectPath()));
-            command.addAll(sources);
-            Process javac = new ProcessBuilder(command).directory(config.projectPath().toFile())
-                    .redirectErrorStream(true).start();
-            String output = new String(javac.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            if (javac.waitFor() == 0) return List.of();
+            String output = javac(config, resolved, out);
+            if (output == null) return List.of();
             List<String> errors = new ArrayList<>(errorLines(output, config.projectPath()));
             resolved.problems().forEach(p -> errors.add(UNRESOLVED + p));
             if (errors.isEmpty()) errors.add(output.isBlank() ? "javac failed and said nothing." : output.strip());
@@ -63,6 +54,41 @@ public final class TreeCompile {
         } finally {
             deleteTree(out);
         }
+    }
+
+    /** javac's output over the project's sources into {@code out}, or null when it compiled. */
+    private static String javac(ProjectConfig config, MavenService.Resolution resolved, Path out)
+            throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(List.of(config.javacExecutable(),
+                "-cp", String.join(File.pathSeparator, classpath(config, resolved.jars())),
+                "-d", out.toString(), "-encoding", "UTF-8", "-nowarn",
+                // a check, not a build: no annotation processor an update's new dependency brings runs here
+                "-proc:none"));
+        command.addAll(JavacRelease.args(config.projectPath()));
+        command.addAll(sources(config));
+        Process javac = new ProcessBuilder(command).directory(config.projectPath().toFile())
+                .redirectErrorStream(true).start();
+        String output = new String(javac.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        return javac.waitFor() == 0 ? null : output;
+    }
+
+    /**
+     * The bot's sources but this machine's values classes (2026-11-04): the bot compiles against its schemas alone,
+     * and a values class an update no longer fits is pruned at the next build, never a reason to refuse the update.
+     */
+    private static List<String> sources(ProjectConfig config) {
+        return ClassPathManager.findJavaFiles(config.sourceRoot()).stream()
+                .filter(file -> !ValuesPruner.isValuesFile(Path.of(file))).toList();
+    }
+
+    /** Each file javac's {@code output} names an error in, as javac wrote its path. */
+    public static List<Path> errorFiles(String output) {
+        List<Path> out = new ArrayList<>();
+        for (String line : output.split("\\R")) {
+            Matcher m = ERROR.matcher(line);
+            if (m.matches()) out.add(Path.of(m.group(1).strip()));
+        }
+        return out;
     }
 
     private static List<String> classpath(ProjectConfig config, List<String> jars) {
