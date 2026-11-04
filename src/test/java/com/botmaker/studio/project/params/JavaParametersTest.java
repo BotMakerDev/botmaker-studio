@@ -189,21 +189,61 @@ class JavaParametersTest {
         assertEquals("1", JavaParameters.forget(config, null, level, TestValues.GRAMMAR).orElseThrow().value());
     }
 
-    /** A new parameter of a group the bot has none of yet is a method, written in params/ and its starting copy. */
+    /**
+     * A new parameter of a group the bot has none of yet is a method in params/ and in its starting copy. Only the
+     * declaration passes: the committed copy holds the type's blank value, and the fit keeps this computer's.
+     */
     @Test
-    void aNewGroupParameterIsWrittenToBothCopies(@TempDir Path root) throws IOException {
+    void aNewParametersValueStaysOutOfTheStartingCopy(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
 
         assertEquals("5", JavaParameters.add(config, null, "RunChoices", "tries", TestValues.WHOLE_NUMBER,
                 java("5"), "Limits", "", TestValues.GRAMMAR).orElseThrow().value());
 
-        for (Path file : List.of(groupOf(config, "bot", "RunChoices"), startingOf(config, "bot", "RunChoices"))) {
+        Path mine = groupOf(config, "bot", "RunChoices");
+        Path starting = startingOf(config, "bot", "RunChoices");
+        for (Path file : List.of(mine, starting)) {
             String source = Files.readString(file);
             assertTrue(source.startsWith("package com.refbot.params.bot;"), source);
             assertTrue(source.contains("@Param\npublic class RunChoices"), source);
-            assertTrue(source.contains("public int tries()") && source.contains("return 5;"), source);
+            assertTrue(source.contains("public int tries()"), source);
             assertTrue(source.contains("category = \"Limits\""), source);
         }
+        assertTrue(Files.readString(mine).contains("return 5;"), Files.readString(mine));
+        assertTrue(Files.readString(starting).contains("return 0;"), Files.readString(starting));
+        assertFalse(Files.readString(starting).contains("return 5;"), Files.readString(starting));
+
+        ParamsFitter.onDisk(config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
+                config.projectPath().resolve(".botmaker/values-removed"));
+        assertEquals("5", only(config).row().value(), "a blank starting value takes nothing from this computer");
+    }
+
+    /** A name the starting copy already holds would be reset by the fit, so the add is refused and params/ untouched. */
+    @Test
+    void aNameTheStartingCopyHoldsIsRefused(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        writeGroup(config, "bot", "RunChoices", "    public int rounds() { return 1; }\n");
+        Path starting = startingOf(config, "bot", "RunChoices");
+        Files.writeString(starting, group("bot", "RunChoices", """
+                    public int rounds() { return 1; }
+                    public String tries() { return ""; }
+                """));
+
+        assertTrue(JavaParameters.add(config, null, "RunChoices", "tries", TestValues.WHOLE_NUMBER, java("5"), "", "",
+                TestValues.GRAMMAR).isEmpty());
+        assertFalse(Files.readString(groupOf(config, "bot", "RunChoices")).contains("tries"));
+    }
+
+    /** A type with no blank value has nothing the committed copy may hold, so nothing is written, not even a group. */
+    @Test
+    void aTypeWithNoBlankValueIsNotAdded(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+
+        assertTrue(JavaParameters.add(config, null, "RunChoices", "worker", Thread.class, java("null"), "", "",
+                TestValues.GRAMMAR).isEmpty());
+
+        assertFalse(Files.exists(groupOf(config, "bot", "RunChoices")));
+        assertFalse(Files.exists(startingOf(config, "bot", "RunChoices")));
     }
 
     /** A plugin adds what a run keeps, with its own annotations on it, in both copies. */

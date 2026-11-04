@@ -14,6 +14,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (private values)
 
+- A new parameter's value stays in `params/`: its starting copy gets the type's blank value, and only *Make this the
+  starting value* publishes one. A type with no blank value is not added (2026-11-04).
 - A plugin may add, list and forget a during-a-run parameter (`PluginValues.addRunParameter`, `runParameters`,
   `forgetRunParameter`, 2026-11-04). Nothing else reaches it: a parameter changed outside a run, and so any secret,
   is neither listed nor forgotten. A new parameter goes to `params/` and to `starting-params/`, with the plugin's marks.

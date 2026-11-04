@@ -1023,6 +1023,11 @@ public final class ParametersDialog {
                         || ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
                 Type form = type.type();
+                if (PluginHost.grammar().freshSpelling(form).isEmpty()) {
+                    error("“" + candidate + "” was not written: its type has no blank value to put in the starting"
+                            + " copy, which is published.");
+                    return;
+                }
                 Optional<ParameterRow> stored = JavaParameters.add(config, state, selectedClass, candidate,
                         form, PluginHost.grammar().freshSpelling(form).orElse(null), tag, "");
                 if (stored.isEmpty()) {

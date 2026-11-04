@@ -352,10 +352,14 @@ public final class JavaParameters {
     }
 
     /**
-     * Declares a new field in {@code className}, creating that class when the project has none.
+     * Declares a new parameter in {@code className}: a method of the bot's group, created when the project has no
+     * class of that name, or a field of an older field class.
      *
-     * <p>Answers the row as it reads back, or empty when nothing was written — a name already taken, a type
-     * whose default cannot be spelled as Java, or a class that could not be created.
+     * <p>A group's parameter is written to {@code params/} with {@code value} (its type's blank value when null), and
+     * to its starting copy with the blank value only (2026-11-04): what the author typed stays on this computer.
+     *
+     * <p>Answers the row as it reads back, or empty when nothing was written — a name already taken in either copy, a
+     * type with no blank value, or a class that could not be created.
      */
     public static Optional<ParameterRow> add(ProjectConfig config, ProjectState state, String className,
                                              String name, Type form, JavaValue value,
@@ -374,16 +378,23 @@ public final class JavaParameters {
         if (classes(config, state).contains(className) && !ownClasses(config, state).contains(className)) {
             return Optional.empty();
         }
-        // A group, or a class the bot has none of yet (2026-11-04): a method, written in params/ and its starting
-        // copy alike, so the fitter keeps it.
+        // A group, or a class the bot has none of yet (2026-11-04): a method in params/ and in its starting copy, so
+        // the fitter keeps it. Only the declaration passes to the committed copy: it holds the type's blank value, and
+        // this computer's stays private until Make this the starting value (the user, 2026-11-04).
         Optional<Path> group = groupFile(config, state, className, grammar);
-        if (group.isEmpty() && !classes(config, state).contains(className)) group = createGroup(config, state, className);
+        boolean asGroup = group.isPresent() || !classes(config, state).contains(className);
+        Optional<JavaValue> blank = asGroup ? grammar.freshSpelling(form) : Optional.empty();
+        if (asGroup && blank.isEmpty()) return Optional.empty();
+        if (asGroup && group.isEmpty()) group = createGroup(config, state, className);
         if (group.isPresent()) {
-            JavaValue start = value != null ? value : grammar.freshSpelling(form).orElse(null);
-            UnaryOperator<String> added = source -> JavaParameterEdits.addMethod(source, grammar, className, name,
-                    form, start, category, description, Param.Changes.OUTSIDE_RUN);
-            if (!rewrite(config, state, group.get(), added)) return Optional.empty();
-            rewriteStarting(config, group.get(), added);
+            Function<JavaValue, UnaryOperator<String>> adding = start -> source -> JavaParameterEdits.addMethod(
+                    source, grammar, className, name, form, start, category, description, Param.Changes.OUTSIDE_RUN);
+            // The starting copy first: a parameter it lacks, or already holds under that name, the fit would drop or
+            // reset, so the private copy is written only once the starting one took the declaration.
+            if (!rewriteStarting(config, group.get(), adding.apply(blank.get()))) return Optional.empty();
+            if (!rewrite(config, state, group.get(), adding.apply(value != null ? value : blank.get()))) {
+                return Optional.empty();
+            }
             return reread(config, state, className, name, grammar);
         }
         if (!classes(config, state).contains(className)) {
