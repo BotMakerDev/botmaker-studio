@@ -449,7 +449,7 @@ public final class JavaParameterEdits {
     }
 
     /** Each import into {@code unit}'s rewrite, skipping one already there — {@code ImportManager}'s rule. */
-    private static void addImports(CompilationUnit unit, ASTRewrite rewrite, List<String> imports) {
+    static void addImports(CompilationUnit unit, ASTRewrite rewrite, List<String> imports) {
         if (imports == null) return;
         for (String name : imports) ImportManager.addImport(unit, rewrite, name);
     }

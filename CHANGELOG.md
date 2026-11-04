@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (private values)
 
+- **An upgrade moves a bot's own `@Param` fields to `params/`** (2026-11-04): a `Param.PUBLIC` field becomes one
+  method of `params/bot/<Class>.java` and its `starting-params/` copy at the field's current value, every read a call
+  of it, and a holder left empty is deleted. A field that names no visibility, or `Param.EDITOR`, only its author sets,
+  so it stays where it is, a plain constant. One the bot's code assigns, or whose value needs its holder, stays a field
+  and is said back. The whole move is compiled first; if it would not compile, nothing moves. *Migrate first* moves none.
 - **What a run writes to a parameter survives the next compile** (2026-11-04): when a run ends, Studio takes each
   during-a-run parameter's value from `params/` into its editor copy, and a value you edited in the window stays.
 - **A plugin's parameter is written in its group, in both copies** (2026-11-04): binding a plugin writes each

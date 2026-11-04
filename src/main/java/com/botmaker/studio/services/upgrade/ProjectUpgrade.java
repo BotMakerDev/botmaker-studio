@@ -167,6 +167,13 @@ public final class ProjectUpgrade {
                     List<String> repaired = new ArrayList<>(stripped);
                     List<Path> deleted = new ArrayList<>();
                     int files = code.files() + stripped.size();
+                    // Before the values: a plugin's parameter is that plugin's, and these are the bot's own. Not in
+                    // moveOnly, which leaves the bot's code as it is; a field still reads there.
+                    PluginUpgradeService.Values fields = moving.getFirst().upgrades().repairFieldParameters(versions);
+                    repaired.addAll(fields.repaired());
+                    left.addAll(fields.left());
+                    deleted.addAll(fields.deleted());
+                    files += fields.files();
                     for (Row row : moving) {
                         PluginUpgradeService.Values values = row.upgrades().repairValues(row.targetVersion());
                         repaired.addAll(values.repaired());

@@ -515,17 +515,26 @@ public final class JavaParameters {
             }
             if (n instanceof Statement || n instanceof BodyDeclaration) break;
         }
-        ASTNode read = used.getParent() instanceof QualifiedName qualified && qualified.getName() == used ? qualified
+        ASTNode read = wholeUse(used);
+        if (writes(read)) return false;
+        rewriter.replace(read, ASTNode.copySubtree(read.getAST(), value), null);
+        return true;
+    }
+
+    /** The whole expression a field's name is the end of: {@code j}, {@code Parameters.j}, {@code this.j}. */
+    static ASTNode wholeUse(SimpleName used) {
+        return used.getParent() instanceof QualifiedName qualified && qualified.getName() == used ? qualified
                 : used.getParent() instanceof FieldAccess access && access.getName() == used ? access : used;
-        ASTNode parent = read.getParent();
-        boolean written = parent instanceof Assignment assignment && assignment.getLeftHandSide() == read
+    }
+
+    /** Whether {@code use}, a {@link #wholeUse}, assigns the field rather than reading it. */
+    static boolean writes(ASTNode use) {
+        ASTNode parent = use.getParent();
+        return parent instanceof Assignment assignment && assignment.getLeftHandSide() == use
                 || parent instanceof PostfixExpression
                 || parent instanceof PrefixExpression prefix
                 && (prefix.getOperator() == PrefixExpression.Operator.INCREMENT
                 || prefix.getOperator() == PrefixExpression.Operator.DECREMENT);
-        if (written) return false;
-        rewriter.replace(read, ASTNode.copySubtree(read.getAST(), value), null);
-        return true;
     }
 
     private static String initializerOf(BotIndex index, Path file, int start) {
@@ -758,18 +767,13 @@ public final class JavaParameters {
     }
 
     /** Where the bot's own group {@code className} is: {@code params/bot/<Class>.java}. */
-    private static Path ownGroupFile(ProjectConfig config, String className) {
+    static Path ownGroupFile(ProjectConfig config, String className) {
         return config.parametersPackageDir().resolve(JavaParameterSource.BOT).resolve(className + ".java");
     }
 
-    /**
-     * Creates the bot's own group {@code className}, an empty {@code @Param} class, in params/ and in its starting
-     * copy, the params one known to the editor at once; answers its params file, or empty when it could not be
-     * written. An existing file is kept.
-     */
-    private static Optional<Path> createGroup(ProjectConfig config, ProjectState state, String className) {
-        Path file = ownGroupFile(config, className);
-        String source = """
+    /** The source of the bot's own group {@code className} with no parameter yet. */
+    static String emptyGroup(ProjectConfig config, String className) {
+        return """
                 package %s.%s;
 
                 import %s;
@@ -783,6 +787,16 @@ public final class JavaParameters {
                 }
                 """.formatted(config.parametersPackage(), JavaParameterSource.BOT, Param.class.getCanonicalName(),
                 className);
+    }
+
+    /**
+     * Creates the bot's own group {@code className}, an empty {@code @Param} class, in params/ and in its starting
+     * copy, the params one known to the editor at once; answers its params file, or empty when it could not be
+     * written. An existing file is kept.
+     */
+    private static Optional<Path> createGroup(ProjectConfig config, ProjectState state, String className) {
+        Path file = ownGroupFile(config, className);
+        String source = emptyGroup(config, className);
         Optional<Path> starting = startingFile(config, file);
         if (starting.isEmpty() || !ProjectWrites.create(config, file, source, "Create " + className)) {
             return Optional.empty();

@@ -15,6 +15,7 @@ import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.UserLibrary;
 import com.botmaker.studio.project.managed.ManagedRepairs;
 import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.studio.project.params.FieldParameters;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.vcs.ProjectVcs;
@@ -372,6 +373,36 @@ public final class PluginUpgradeService {
     /** {@link JavaParameters#stripRemovedMembers} over this project: one sentence per file it changed. */
     public List<String> stripRemovedParamMembers() {
         return JavaParameters.stripRemovedMembers(config, state);
+    }
+
+    /**
+     * The bot's own {@code @Param} fields moved to {@code params/}, checked against the classpath it moves to, the
+     * first with a contract that takes {@code @Param} on a class (2026-11-04). Written like {@link #repairCode}: never
+     * refuses, and what it cannot do stays as written and is said back.
+     */
+    public Values repairFieldParameters(Map<String, String> versions) {
+        Optional<List<String>> target = movedTo(versions);
+        if (target.isEmpty()) return Values.NOTHING;
+        FieldParameters.Plan plan;
+        try {
+            plan = FieldParameters.plan(config, BotIndex.of(config, state).against(target.get()), PluginHost.grammar());
+        } catch (RuntimeException e) {
+            return new Values(0, List.of(), List.of("This bot's @Param fields were left as written: " + e + "."),
+                    List.of());
+        }
+        if (plan.isEmpty()) return new Values(0, plan.repaired(), plan.left(), List.of());
+        // The starting copies first: a failure here leaves the bot's code as it was.
+        try {
+            for (Map.Entry<Path, String> copy : plan.starting().entrySet()) {
+                Files.createDirectories(copy.getKey().getParent());
+                Files.writeString(copy.getKey(), copy.getValue());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("The starting values could not be written: " + e.getMessage(), e);
+        }
+        write(plan.rewrites(), plan.deleted());
+        return new Values(plan.rewrites().size() + plan.deleted().size(), plan.repaired(), plan.left(),
+                List.copyOf(plan.deleted()));
     }
 
     /** The same for this plugin's departure, its {@code editorDependencies} going with it. */

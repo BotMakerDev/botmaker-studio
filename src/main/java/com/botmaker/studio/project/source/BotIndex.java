@@ -161,6 +161,10 @@ public final class BotIndex {
             String now = rewrites.getOrDefault(file, text);
             changed.put(moves.getOrDefault(file, file), now);
         });
+        // A file the bot lacks is one the plan creates: what it declares is what the plan's rewrites may read.
+        rewrites.forEach((file, text) -> {
+            if (!sources.containsKey(file)) changed.put(file, text);
+        });
         return build(changed, classpath, root);
     }
 
