@@ -2,7 +2,7 @@ package com.botmaker.studio.migrate;
 
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.studio.parser.guard.CompileGuard.Problem;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;

@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser.factories;
 
 import com.botmaker.plugin.api.catalog.FacadeEntry;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;
@@ -597,29 +598,11 @@ public class StatementFactory {
             // the text comes from a plugin, and the contract's SourceSeed promises the host falls back rather
             // than writing something uncompilable.
             case Initializer.Raw r -> {
-                Expression parsed = parseExpression(ast, r.source());
+                // Strict: "not java" or a damaged expression gives null, never garbage in a user's file.
+                Expression parsed = SourceParser.expression(ast, r.source());
                 yield parsed != null ? parsed : ast.newNullLiteral();
             }
         };
-    }
-
-    /**
-     * One Java expression, parsed out of text and moved into {@code ast}, or null when it will not parse.
-     *
-     * <p>{@code ASTParser.K_EXPRESSION} reports a malformed expression by flagging the node rather than by
-     * throwing, which is why the flag is checked: without it {@code "not java"} yields a {@code SimpleName}
-     * and writes garbage into a user's file. The copy across is required — a node belongs to the AST that
-     * created it, and adding a foreign one throws.
-     */
-    private static Expression parseExpression(AST ast, String source) {
-        if (source == null || source.isBlank()) return null;
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_EXPRESSION);
-        parser.setSource(source.toCharArray());
-        ASTNode node = parser.createAST(null);
-        if (!(node instanceof Expression expr)) return null;
-        if ((expr.getFlags() & ASTNode.MALFORMED) != 0) return null;
-        return (Expression) ASTNode.copySubtree(ast, expr);
     }
 
     /**

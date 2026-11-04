@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.render.menu;
 
-import com.botmaker.studio.parser.helpers.JavaSnippets;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
@@ -224,7 +224,7 @@ public final class TypePicker {
             menu.getItems().add(MenuRows.resultCount(matches.size()));
             for (ResolvedType type : matches) menu.getItems().add(item(type, dims, options, onPick));
             boolean exact = matches.stream().anyMatch(t -> t.simpleName().equals(q) || t.qualifiedName().equals(q));
-            if (!exact && JavaSnippets.type(q) != null) {
+            if (!exact && SourceParser.type(q) != null) {
                 MenuItem typed = new MenuItem("Use “" + q + "”");
                 typed.getStyleClass().add("type-picker-typed");
                 typed.setOnAction(e -> onPick.accept(new Choice(ResolvedType.named(q), q)));

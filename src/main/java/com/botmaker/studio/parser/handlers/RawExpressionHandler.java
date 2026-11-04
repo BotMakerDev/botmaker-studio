@@ -1,10 +1,9 @@
 package com.botmaker.studio.parser.handlers;
 
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import org.eclipse.jdt.core.dom.AST;
-import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
@@ -44,15 +43,10 @@ public final class RawExpressionHandler {
     public static String replaceWithExpression(CompilationUnit cu, String originalCode, Expression toReplace,
                                                String exprCode, java.util.List<String> importFqns) {
         if (exprCode == null || exprCode.isBlank()) return originalCode;
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_EXPRESSION);
-        parser.setSource(exprCode.toCharArray());
-        ASTNode parsed = parser.createAST(null);
-        if (!(parsed instanceof Expression parsedExpr)) return originalCode;
-
         AST ast = cu.getAST();
+        Expression copied = SourceParser.expression(ast, exprCode);
+        if (copied == null) return originalCode;
         ASTRewrite rewriter = ASTRewrite.create(ast);
-        Expression copied = (Expression) ASTNode.copySubtree(ast, parsedExpr);
         rewriter.replace(toReplace, copied, null);
         for (String importFqn : importFqns) {
             if (importFqn != null && !importFqn.isBlank()) ImportManager.addImport(cu, rewriter, importFqn);

@@ -2,7 +2,7 @@ package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.studio.parser.EditContext;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;

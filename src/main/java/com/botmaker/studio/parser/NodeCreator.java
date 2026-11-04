@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.parser.factories.ExpressionFactory;
 import com.botmaker.studio.parser.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
@@ -62,11 +63,8 @@ public class NodeCreator {
                 }
                 // A ready-made snippet (e.g. a capture-source helper call): parse and copy into this AST.
                 case ExpressionChoice.RawExpression rx -> {
-                  ASTParser p = org.eclipse.jdt.core.dom.ASTParser.newParser(AST.getJLSLatest());
-                    p.setKind(org.eclipse.jdt.core.dom.ASTParser.K_EXPRESSION);
-                    p.setSource(rx.code().toCharArray());
-                  ASTNode parsed = p.createAST(null);
-                    yield (parsed instanceof Expression pe) ? (Expression) ASTNode.copySubtree(ast, pe) : ast.newNullLiteral();
+                    Expression parsed = SourceParser.expression(ast, rx.code());
+                    yield parsed != null ? parsed : ast.newNullLiteral();
                 }
             };
         }

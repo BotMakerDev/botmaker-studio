@@ -9,7 +9,7 @@ import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.CompileGuard.Problem;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
-import com.botmaker.plugin.host.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
@@ -272,7 +272,7 @@ public final class Rewrite {
                         methodStart);
             }
             case CASE -> {
-                Expression body = JavaExpressions.parse(rule.body());
+                Expression body = SourceParser.expression(rule.body());
                 if (!(body instanceof Name constant)) {
                     return left(site, rule, node, "a case label takes a constant, and " + name
                             + " returns something else", methodStart);
@@ -355,7 +355,7 @@ public final class Rewrite {
         }
         String text = filled.get();
         if (!rule.statement() && !Template.bare(node)) {
-            Expression result = JavaExpressions.parse(text);
+            Expression result = SourceParser.expression(text);
             if (result == null || !Template.primary(result)) text = "(" + text + ")";
         }
         return new Candidate(site, rule, start, end, text, null, methodStart);

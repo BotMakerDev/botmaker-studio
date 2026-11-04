@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (one parser)
+
+- Every text-to-tree parse goes through plugin-host's `SourceParser` (2026-11-04): `JavaSnippets` is removed, and
+  `BotParser.syntax`, `ProjectAnalyzer`'s bound parser, the API docs reader, the paste import scan, migration
+  templates and raw expressions call it. A raw expression or pasted snippet that does not parse whole is now refused
+  instead of written as JDT's guess. `BotAnnotation` moved to plugin-host.
+
 ### Changed (holders by enum)
 
 - The tests' managed values name their holders by `TestValue.Holder` constants (2026-11-04), as the contract

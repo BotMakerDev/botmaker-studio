@@ -3,7 +3,7 @@ package com.botmaker.studio.blocks.misc;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.managed.ManagedIds;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.css.PseudoClass;
 import javafx.geometry.Pos;

@@ -7,6 +7,7 @@ import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.helpers.DefaultValueHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.plugin.host.grammar.ShortNames;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -339,12 +340,7 @@ public class InitializerFactory {
 
     /** Parses a Java expression snippet into an AST node owned by {@code ast}, or {@code null} on failure. */
     private static Expression parseExpr(AST ast, String code) {
-        if (code == null || code.isBlank()) return null;
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_EXPRESSION);
-        parser.setSource(code.toCharArray());
-        ASTNode parsed = parser.createAST(null);
-        return parsed instanceof Expression expr ? (Expression) ASTNode.copySubtree(ast, expr) : null;
+        return SourceParser.expression(ast, code);
     }
 
     public static Expression createArrayInitializer(AST ast, ResolvedType type, List<Expression> valuesToPreserve, CompilationUnit cu, ProjectState state) {

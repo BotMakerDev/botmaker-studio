@@ -1,5 +1,6 @@
 package com.botmaker.studio.suggestions;
 
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.helpers.FileTypeDetector;
@@ -10,7 +11,6 @@ import com.botmaker.studio.types.PrimitiveKind;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.util.MethodSignature;
 import com.botmaker.studio.util.VariableScopeVisitor;
-import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.*;
 
 import java.nio.file.Path;
@@ -190,27 +190,8 @@ public class ProjectAnalyzer {
 
     /** The parser every bound parse here shares: latest Java, bindings with recovery, the given environment. */
     private static ASTParser bindingParser(List<String> classPaths, Path sourcePath) {
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_COMPILATION_UNIT);
-        parser.setResolveBindings(true);
-        parser.setBindingsRecovery(true);
-        parser.setStatementsRecovery(true);
-        parser.setIgnoreMethodBodies(false);
-
-        String[] cpArray = classPaths.toArray(new String[0]);
-        // No source root is legal: bindings then come from the classpath and the unit itself.
-        String[] sourcesArray = sourcePath == null ? new String[0] : new String[] { sourcePath.toAbsolutePath().toString() };
-        String[] encodingsArray = sourcePath == null ? new String[0] : new String[] { "UTF-8" };
-        parser.setEnvironment(cpArray, sourcesArray, encodingsArray, true);
-
-        Map<String, String> options = JavaCore.getOptions();
-        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
-        options.put(JavaCore.COMPILER_CODEGEN_TARGET_PLATFORM, JavaCore.latestSupportedJavaVersion());
-        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
-        // Read by UnusedImports on every canvas edit; stated rather than left to JDT's default.
-        options.put(JavaCore.COMPILER_PB_UNUSED_IMPORT, JavaCore.WARNING);
-        parser.setCompilerOptions(options);
-        return parser;
+        // Unused imports are warnings there: UnusedImports reads them on every canvas edit.
+        return SourceParser.bound(classPaths, sourcePath);
     }
 
     /** Best-effort unit name from the source's first top-level type, so JDT can resolve bindings. */

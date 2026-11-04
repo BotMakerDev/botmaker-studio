@@ -11,14 +11,14 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.plugin.host.grammar.SourceFormatter;
-import com.botmaker.plugin.host.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.plugin.host.grammar.JavaNames;
 import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.plugin.host.grammar.SourceNode;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.project.source.ValueTypeResolver;
@@ -420,7 +420,7 @@ public final class ManagedMigrations {
     static Optional<Expression> substituted(String body, Map<String, Expression> bound) {
         Map<String, Template.Part> parts = new LinkedHashMap<>();
         bound.forEach((name, part) -> parts.put(name, Template.Part.of(part, part.toString())));
-        return Template.filled(body, false, parts).map(JavaExpressions::parse);
+        return Template.filled(body, false, parts).map(SourceParser::expression);
     }
 
     // --- writing -----------------------------------------------------------------------------------------

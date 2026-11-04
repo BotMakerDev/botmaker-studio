@@ -11,7 +11,7 @@ import com.botmaker.plugin.host.grammar.ParamValues;
 import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;

@@ -1,10 +1,7 @@
 package com.botmaker.studio.migrate;
 
-import com.botmaker.plugin.host.grammar.JavaExpressions;
-import org.eclipse.jdt.core.JavaCore;
-import org.eclipse.jdt.core.dom.AST;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.ArrayAccess;
 import org.eclipse.jdt.core.dom.ArrayCreation;
@@ -41,7 +38,6 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,7 +70,7 @@ public final class Template {
      * @param statement whether {@code body} is a statement rather than an expression
      */
     public static Optional<String> filled(String body, boolean statement, Map<String, Part> parts) {
-        ASTNode root = statement ? statement(body) : JavaExpressions.parse(body);
+        ASTNode root = statement ? statement(body) : SourceParser.expression(body);
         if (root == null) return Optional.empty();
         int base = root.getStartPosition();
         List<SimpleName> uses = new ArrayList<>();
@@ -110,13 +106,8 @@ public final class Template {
 
     /** {@code source} as one statement, or {@code null} when it is not exactly one. */
     private static Statement statement(String source) {
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_STATEMENTS);
-        parser.setSource(source.toCharArray());
-        Map<String, String> options = new HashMap<>(JavaCore.getOptions());
-        JavaCore.setComplianceOptions(JavaCore.latestSupportedJavaVersion(), options);
-        parser.setCompilerOptions(options);
-        if (!(parser.createAST(null) instanceof Block block) || block.statements().size() != 1) return null;
+        Block block = SourceParser.statements(source);
+        if (block == null || block.statements().size() != 1) return null;
         return (Statement) block.statements().getFirst();
     }
 

@@ -2,14 +2,14 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.plugin.host.grammar.BotNames;
-import com.botmaker.plugin.host.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.ParamValues;
 import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.plugin.host.grammar.SourceNode;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.managed.ManagedIds;
-import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -20,10 +20,8 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
-import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
-import org.eclipse.jdt.core.dom.NormalAnnotation;
 import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
@@ -52,17 +50,6 @@ import java.util.Optional;
 public final class JavaParameterSource {
 
     private JavaParameterSource() {}
-
-    /**
-     * One expression parsed on its own, or {@code null} when the text is not one.
-     *
-     * <p>A real parser rather than a bracket-matching split, because reading a value means reading Java this
-     * host did not necessarily write: {@code new Point(x + 1, f(2, 3))} is two arguments, and a comma count
-     * says three. The one parser configuration for an expression, as {@link BotParser#syntax} is for a unit.
-     */
-    public static Expression expression(String source) {
-        return JavaExpressions.parse(source);
-    }
 
     /**
      * Every {@code @Param} field in {@code source}, in the order they are written.
@@ -118,7 +105,7 @@ public final class JavaParameterSource {
                 String owner = pluginFolder(file).map(folder -> "A parameter of the " + folder + " plugin, in its"
                         + " folder of params/: only its value is yours to change.").orElse("");
                 for (MethodDeclaration method : type.getMethods()) {
-                    if (!isParameter(method)) continue;
+                    if (!ParamsFitter.isParameter(method)) continue;
                     // A plugin's own parameter carries its mark, which names its declaration (2026-11-04).
                     String id = ManagedIds.idOf(ManagedIds.on(method, known), known);
                     String whose = !owner.isEmpty() || id.isEmpty() ? owner
@@ -188,7 +175,7 @@ public final class JavaParameterSource {
         Annotation shownOn = BotAnnotation.PARAM_SHOWN.on(method);
         Map<String, Object> shown = shownOn == null ? Map.of() : BotAnnotation.PARAM_SHOWN.members(shownOn);
         String name = method.getName().getIdentifier();
-        Param.Changes changes = changesOf(shownOn);
+        Param.Changes changes = ParamValues.changesOf(method);
 
         Expression value = returned(method).orElse(null);
         String initializer = value == null ? "" : text(source, value);
@@ -214,25 +201,6 @@ public final class JavaParameterSource {
     public static final String DURING_RUN_NOTE = "the bot writes it during a run; Forget sets it back to its starting"
             + " value";
 
-    /** Whether {@code method} is one parameter of its group: a no-argument, non-void instance method with a body. */
-    static boolean isParameter(MethodDeclaration method) {
-        int modifiers = method.getModifiers();
-        return !method.isConstructor() && method.parameters().isEmpty() && method.getBody() != null
-                && method.getReturnType2() != null && !method.getReturnType2().toString().equals("void")
-                && !Modifier.isStatic(modifiers) && !Modifier.isPrivate(modifiers);
-    }
-
-    /** {@code @Param.Shown(changes = …)} as written, by its constant's last name; outside a run without one. */
-    private static Param.Changes changesOf(Annotation shown) {
-        if (!(shown instanceof NormalAnnotation normal)) return Param.Changes.OUTSIDE_RUN;
-        for (Object each : normal.values()) {
-            MemberValuePair pair = (MemberValuePair) each;
-            if (!pair.getName().getIdentifier().equals("changes")) continue;
-            String written = pair.getValue().toString();
-            return Param.Changes.fromId(written.substring(written.lastIndexOf('.') + 1));
-        }
-        return Param.Changes.OUTSIDE_RUN;
-    }
 
     /**
      * The plugin whose folder of {@code params/} holds {@code file} ({@code params/sdk/Sdk.java} is the

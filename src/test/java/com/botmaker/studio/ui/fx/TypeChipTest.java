@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.parser.EditorFixture;
-import com.botmaker.studio.parser.helpers.JavaSnippets;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.ui.render.components.TypeChip;
 import com.botmaker.studio.ui.render.menu.TypePicker;
 import javafx.event.Event;
@@ -69,7 +69,7 @@ class TypeChipTest extends FxHeadlessTest {
 
     @Test
     void aClickReportsThePartAndWhetherItIsATypeArgument() {
-        Type map = JavaSnippets.type("Map<String, int[]>");
+        Type map = SourceParser.type("Map<String, int[]>");
         List<TypeChip.Part> clicked = new ArrayList<>();
         AtomicReference<Node> chip = new AtomicReference<>();
         interact(() -> chip.set(TypeChip.of(map, clicked::add)));
@@ -94,7 +94,7 @@ class TypeChipTest extends FxHeadlessTest {
 
     @Test
     void replacingOnePartRespellsTheWholeType() {
-        Type map = JavaSnippets.type("Map<String, List<int[]>>");
+        Type map = SourceParser.type("Map<String, List<int[]>>");
         ParameterizedType generic = (ParameterizedType) map;
         Type list = (Type) generic.typeArguments().get(1);
         assertEquals("Map<String,Set<Point>>", TypeChip.replace(map, list, "Set<Point>").replace(" ", ""));
@@ -105,13 +105,13 @@ class TypeChipTest extends FxHeadlessTest {
     /** {@code Map} → {@code HashMap} keeps what the map held; another arity, or typed arguments, do not. */
     @Test
     void aGenericOfTheSameArityKeepsTheArguments() {
-        Type map = JavaSnippets.type("Map<List<String>, Integer>");
+        Type map = SourceParser.type("Map<List<String>, Integer>");
         assertEquals("HashMap<List<String>, Integer>", TypeChip.keepingArguments(map, "HashMap<Object, Object>"));
         assertEquals("List<Object>", TypeChip.keepingArguments(map, "List<Object>"));
         assertEquals("HashMap<String, String>", TypeChip.keepingArguments(map, "HashMap<String, String>"));
         assertEquals("char", TypeChip.keepingArguments(map, "char"));
         assertEquals("ArrayList<String>[]",
-                TypeChip.keepingArguments(JavaSnippets.type("List<String>[]"), "ArrayList<Object>[]"));
+                TypeChip.keepingArguments(SourceParser.type("List<String>[]"), "ArrayList<Object>[]"));
     }
 
     private ContextMenu picker(TypePicker.Options options, List<TypePicker.Choice> picked) {

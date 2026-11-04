@@ -45,7 +45,7 @@ import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
@@ -2004,10 +2004,9 @@ public class CodeEditor {
     private static java.util.Set<String> referencedTypeNames(String snippet) {
         java.util.Set<String> names = new java.util.LinkedHashSet<>();
         try {
-            ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-            parser.setKind(ASTParser.K_STATEMENTS);
-            parser.setSource(snippet.toCharArray());
-            parser.createAST(null).accept(new ASTVisitor() {
+            Block parsed = SourceParser.statements(snippet);
+            if (parsed == null) return java.util.Set.of();
+            parsed.accept(new ASTVisitor() {
                 @Override
                 public boolean visit(SimpleType node) {
                     names.add(node.getName().getFullyQualifiedName());

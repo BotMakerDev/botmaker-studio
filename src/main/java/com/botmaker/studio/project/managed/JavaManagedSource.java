@@ -7,7 +7,7 @@ import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;

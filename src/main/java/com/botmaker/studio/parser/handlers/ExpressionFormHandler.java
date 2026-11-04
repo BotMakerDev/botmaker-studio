@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser.handlers;
 
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.parser.EditContext;
-import com.botmaker.studio.parser.helpers.JavaSnippets;
 import com.botmaker.studio.parser.helpers.Precedence;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -43,7 +43,7 @@ public final class ExpressionFormHandler {
      * element type of an array creation. Each simple name in it is imported when the project knows it.
      */
     public static String setType(EditContext ctx, String originalCode, ASTNode owner, String typeText) {
-        Type parsed = JavaSnippets.type(typeText);
+        Type parsed = SourceParser.type(typeText);
         if (parsed == null) return null;
         AST ast = ctx.ast();
         Type type = (Type) ASTNode.copySubtree(ast, parsed);
@@ -147,7 +147,7 @@ public final class ExpressionFormHandler {
      * around it.
      */
     public static String setNumberToken(EditContext ctx, String originalCode, NumberLiteral literal, String token) {
-        if (!(JavaSnippets.expression(token) instanceof NumberLiteral parsed)) return null;
+        if (!(SourceParser.expression(token) instanceof NumberLiteral parsed)) return null;
         ctx.rewriter().set(literal, NumberLiteral.TOKEN_PROPERTY, parsed.getToken(), null);
         return ctx.applyTo(originalCode);
     }
@@ -158,7 +158,7 @@ public final class ExpressionFormHandler {
      * when the text is not one well-formed expression.
      */
     public static String replaceWithSource(String originalCode, Expression target, String text) {
-        Expression parsed = JavaSnippets.expression(text);
+        Expression parsed = SourceParser.expression(text);
         if (target == null || parsed == null) return null;
         String written = text.strip();
         if (Precedence.needsParentheses(parsed, target)) written = "(" + written + ")";

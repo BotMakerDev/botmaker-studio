@@ -3,6 +3,7 @@ package com.botmaker.studio.project.managed;
 import com.botmaker.plugin.api.PluginState;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.host.PluginCoordinate;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.plugin.api.source.ManagedMethod;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
@@ -640,9 +641,9 @@ public final class ManagedHolders {
      * author's, never the plugin's.
      */
     private static java.util.Map<String, String> drift(MethodDeclaration method, ManagedParam<?> value) {
-        Annotation annotation = com.botmaker.studio.project.source.BotAnnotation.PARAM_SHOWN.on(method);
+        Annotation annotation = BotAnnotation.PARAM_SHOWN.on(method);
         java.util.Map<String, Object> members = annotation == null ? java.util.Map.of()
-                : com.botmaker.studio.project.source.BotAnnotation.PARAM_SHOWN.members(annotation);
+                : BotAnnotation.PARAM_SHOWN.members(annotation);
         java.util.Map<String, String> drift = new java.util.LinkedHashMap<>();
         if (!value.category().equals(String.valueOf(members.getOrDefault("category", "")))) {
             drift.put("category", value.category());

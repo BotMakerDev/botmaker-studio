@@ -2,7 +2,7 @@ package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
-import com.botmaker.plugin.host.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.plugin.host.grammar.JavaNames;
 import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
@@ -92,7 +92,7 @@ class ManagedConstantsTest {
     }
 
     private static QualifiedName name(String source) {
-        return (QualifiedName) JavaExpressions.parse(source);
+        return (QualifiedName) SourceParser.expression(source);
     }
 
     private static QualifiedName fieldValue(String source) {

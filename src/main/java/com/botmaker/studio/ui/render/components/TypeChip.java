@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.render.components;
 
-import com.botmaker.studio.parser.helpers.JavaSnippets;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
@@ -53,7 +53,7 @@ public final class TypeChip {
 
     /** {@code text} parsed as a type, read-only; a text Java cannot read as one is shown as written. */
     public static Node of(String text) {
-        Type parsed = JavaSnippets.type(text);
+        Type parsed = SourceParser.type(text);
         if (parsed != null) return of(parsed);
         HBox chip = frame();
         chip.getChildren().add(part(text == null || text.isBlank() ? "?" : text, "type-chip-class", null));
@@ -178,7 +178,7 @@ public final class TypeChip {
      */
     public static String keepingArguments(Type part, String replacement) {
         // An array's element is reported as the array, and the pick keeps its brackets: compare the elements.
-        Type parsed = JavaSnippets.type(replacement);
+        Type parsed = SourceParser.type(replacement);
         int dims = parsed instanceof ArrayType array ? array.getDimensions() : 0;
         Type partElement = part instanceof ArrayType array ? array.getElementType() : part;
         Type pickElement = parsed instanceof ArrayType array ? array.getElementType() : parsed;
@@ -203,8 +203,8 @@ public final class TypeChip {
      */
     public static String replace(Type root, Type part, String replacement) {
         if (root == null || part == null) return null;
-        if (part == root) return JavaSnippets.type(replacement) == null ? null : replacement.strip();
-        Type parsed = JavaSnippets.type(replacement);
+        if (part == root) return SourceParser.type(replacement) == null ? null : replacement.strip();
+        Type parsed = SourceParser.type(replacement);
         if (parsed == null) return null;
 
         // The way down from root to part, as (property, list index or -1) steps.

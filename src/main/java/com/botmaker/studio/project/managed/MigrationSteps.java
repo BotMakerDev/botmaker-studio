@@ -10,14 +10,14 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.ImportManager;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.plugin.host.grammar.SourceFormatter;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.plugin.host.grammar.Factory;
-import com.botmaker.plugin.host.grammar.JavaExpressions;
 import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.plugin.host.grammar.SourceNode;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.params.JavaParameterSource;
-import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
@@ -594,7 +594,7 @@ public final class MigrationSteps {
     private static Optional<Step> readCalls(ValueGrammar grammar, ManagedMigrations.Method method, Shape.Parts shape,
                                             Class<?> from, Class<?> to) {
         if (method.params().size() != shape.from().size()) return Optional.empty();
-        Expression body = JavaExpressions.parse(method.body());
+        Expression body = SourceParser.expression(method.body());
         Optional<List<Expression>> arguments = arguments(grammar, to, body);
         if (arguments.isEmpty() || arguments.get().size() != shape.to().size()) return Optional.empty();
         List<String> names = method.params().stream().map(ManagedMigrations.Param::name).toList();

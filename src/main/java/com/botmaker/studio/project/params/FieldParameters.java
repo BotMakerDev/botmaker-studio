@@ -8,7 +8,7 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.source.BotAnnotation;
+import com.botmaker.plugin.host.grammar.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;

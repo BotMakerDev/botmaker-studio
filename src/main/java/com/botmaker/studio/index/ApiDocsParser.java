@@ -1,9 +1,7 @@
 package com.botmaker.studio.index;
 
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.palette.ApiDocs;
-import org.eclipse.jdt.core.JavaCore;
-import org.eclipse.jdt.core.dom.AST;
-import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Javadoc;
@@ -66,16 +64,8 @@ public final class ApiDocsParser {
     }
 
     private static void parseSource(String source, Map<String, Map<String, List<ApiDocs.Overload>>> docs) {
-        ASTParser parser = ASTParser.newParser(AST.getJLSLatest());
-        parser.setKind(ASTParser.K_COMPILATION_UNIT);
-        parser.setSource(source.toCharArray());
-        Map<String, String> options = JavaCore.getOptions();
-        options.put(JavaCore.COMPILER_DOC_COMMENT_SUPPORT, JavaCore.ENABLED);
-        options.put(JavaCore.COMPILER_COMPLIANCE, JavaCore.latestSupportedJavaVersion());
-        options.put(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion());
-        parser.setCompilerOptions(options);
-
-        CompilationUnit cu = (CompilationUnit) parser.createAST(null);
+        // Doc comments are read: SourceParser's options enable them.
+        CompilationUnit cu = SourceParser.parse(source);
         cu.accept(new ASTVisitor() {
             @Override
             public boolean visit(MethodDeclaration node) {
