@@ -1,9 +1,9 @@
 package com.botmaker.studio.project.source;
 
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.CompileGuard.Problem;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.services.BotSources;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -93,12 +93,10 @@ public final class BotIndex {
      * The index of the files the editor holds — the open project's, for a caller that has its state and no
      * config. Cached like {@link #of}.
      */
-    public static BotIndex of(ProjectState state) {
+    public static BotIndex of(SourceSet set) {
         Map<Path, String> sources = new LinkedHashMap<>();
-        for (ProjectFile file : state.getAllFiles()) {
-            if (file.getPath() != null && file.getContent() != null) sources.put(file.getPath(), file.getContent());
-        }
-        return over(sources, state.getResolvedClasspath(), state.getSourcePath());
+        set.files().forEach(file -> set.text(file).ifPresent(text -> sources.put(file, text)));
+        return over(sources, set.classpath(), set.sourceRoot());
     }
 
     /**

@@ -51,7 +51,7 @@ class InsertCompileGuardTest {
     @Test
     void anErrorTheFileAlreadyHadNeverBlocksAnInsert() {
         EditorFixture f = new EditorFixture(source("int v = missing;"));
-        f.editor.addStatement(f.body("run"), BlockCatalog.byId("PRINT").orElseThrow(), 1);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.byId("PRINT").orElseThrow(), 1);
 
         assertNotNull(f.lastCode, f.statusMessages.toString());
     }
@@ -67,7 +67,7 @@ class InsertCompileGuardTest {
     @Test
     void anEnumIsInsertedUnderTheNameAndValuesTheUserGave() {
         EditorFixture f = new EditorFixture(source("int v = 0;"));
-        f.editor.addEnumStatement(f.body("run"), 1, new EnumDraft("Direction", List.of("UP", "DOWN")));
+        f.editor.addEnumStatement(f.body("run").getId(),1, new EnumDraft("Direction", List.of("UP", "DOWN")));
 
         assertNotNull(f.lastCode, f.statusMessages.toString());
         assertTrue(f.lastCode.contains("enum Direction"), f.lastCode);
@@ -77,7 +77,7 @@ class InsertCompileGuardTest {
     @Test
     void aSecondEnumOfOneNameIsRefusedByTheGuardToo() {
         EditorFixture f = new EditorFixture(source("enum Direction { UP }"));
-        f.editor.addEnumStatement(f.body("run"), 1, new EnumDraft("Direction", List.of("DOWN")));
+        f.editor.addEnumStatement(f.body("run").getId(),1, new EnumDraft("Direction", List.of("DOWN")));
 
         assertNull(f.lastCode);
     }

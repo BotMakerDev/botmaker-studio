@@ -3,8 +3,8 @@ package com.botmaker.studio.parser.refactor;
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.ContractDependency;
@@ -51,8 +51,8 @@ public final class ReviewMarker {
      * Whether the bot compiles {@code @Refactor} — its resolved classpath carries the class. False means the
      * caller does its change and records nothing.
      */
-    public static boolean available(ProjectState state) {
-        return state != null && ContractDependency.onClasspath(state.getResolvedClasspath(), Refactor.class);
+    public static boolean available(SourceSet sources) {
+        return sources != null && ContractDependency.onClasspath(sources.classpath(), Refactor.class);
     }
 
     /**
@@ -73,7 +73,7 @@ public final class ReviewMarker {
      * mark. A review row that disappears on its own is worse than no row. Nothing regenerates a project's
      * Java any more, so no mark can be erased behind the user's back and the question has one answer.
      */
-    public static boolean marksSurvive(ProjectConfig config, ProjectState state, Path file) {
+    public static boolean marksSurvive(ProjectConfig config, Path file) {
         return config != null && file != null;
     }
 

@@ -166,7 +166,7 @@ public final class AssistTurn {
             Optional<BlockType> type = BlockCatalog.byId(blockId).filter(BlockType::isStatement);
             if (type.isEmpty()) return Outcome.Refused.because("The palette has no statement " + paletteId + ".");
             return apply(stage, "inserted " + type.get().displayName(),
-                    editor -> editor.addStatement(body.get(), type.get(), at));
+                    editor -> editor.addStatement(body.get().getId(), type.get(), at));
         }
         String callKey = PaletteEntry.Kind.CALL.restOf(paletteId);
         if (callKey != null) {
@@ -184,10 +184,10 @@ public final class AssistTurn {
                         call.methodName(), BlockCategory.INPUT, found.get().facade().type(), call.methodName(),
                         List.of());
                 return apply(stage, "inserted " + call.scope() + "." + call.methodName(),
-                        editor -> editor.addStatement(body.get(), entry, at));
+                        editor -> editor.addStatement(body.get().getId(), entry, at));
             }
             return apply(stage, "inserted " + call.scope() + "." + call.methodName(),
-                    editor -> editor.addMethodCallStatement(body.get(), call, at));
+                    editor -> editor.addMethodCallStatement(body.get().getId(), call, at));
         }
         return Outcome.Refused.because(paletteId + " is not a palette id. Ids start with block: or call:.");
     }
@@ -547,7 +547,7 @@ public final class AssistTurn {
         BodyBlock source = from;
         int at = Math.max(0, Math.min(index, target.get().getStatements().size()));
         return apply(stage, "moved " + oneLine(statement.get(), this.source),
-                editor -> editor.moveStatement(block, source, target.get(), at));
+                editor -> editor.moveStatement(block.getId(), source.getId(), target.get().getId(), at));
     }
 
     /**

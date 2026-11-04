@@ -25,6 +25,11 @@ public record MoveBlockInfo(String blockId, BodyBlock targetBody, ClassBlock tar
         this(blockId, targetBody, targetClass, insertionIndex, false);
     }
 
+    /** The id of the body the block lands in, which is how an edit addresses it. */
+    public String bodyId() {
+        return targetBody == null ? null : targetBody.getId();
+    }
+
     /** A value lifted out of an expression slot, landing in {@code targetBody} as {@code value;}. */
     public static MoveBlockInfo expression(String blockId, BodyBlock targetBody, int insertionIndex) {
         return new MoveBlockInfo(blockId, targetBody, null, insertionIndex, true);

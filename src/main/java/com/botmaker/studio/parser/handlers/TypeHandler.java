@@ -88,7 +88,7 @@ public class TypeHandler {
 
         if (newType.isArray()) {
             return InitializerFactory.createRecursiveListInitializer(
-                    ast, newType.qualifiedName(), ctx.cu(), valuesToPreserve, ctx.state());
+                    ast, newType.qualifiedName(), ctx.cu(), valuesToPreserve, ctx.sources());
         } else {
             return !valuesToPreserve.isEmpty() ?
                     (Expression) ASTNode.copySubtree(ast, valuesToPreserve.getFirst()) :

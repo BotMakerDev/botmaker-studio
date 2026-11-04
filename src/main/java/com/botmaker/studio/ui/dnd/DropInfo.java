@@ -14,4 +14,9 @@ public record DropInfo(
     public DropInfo(BlockType type, BodyBlock targetBody, int insertionIndex) {
         this(type, targetBody, insertionIndex, null);
     }
+
+    /** The id of the body a statement drop lands in, which is how an edit addresses it. */
+    public String bodyId() {
+        return targetBody == null ? null : targetBody.getId();
+    }
 }

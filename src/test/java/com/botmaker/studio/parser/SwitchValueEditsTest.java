@@ -106,7 +106,7 @@ class SwitchValueEditsTest {
         assertFalse(StatementPlacement.allows(BlockCatalog.BREAK, caseBlock), "break cannot leave a switch value");
 
         BodyBlock body = (BodyBlock) f.state.getNodeToBlockMap().get(caseBlock);
-        f.editor.addStatement(body, BlockCatalog.YIELD, 1);
+        f.editor.addStatement(body.getId(), BlockCatalog.YIELD, 1);
         assertNotNull(f.lastCode, f.statusMessages.toString());
         assertTrue(f.lastCode.contains("yield 0;"), f.lastCode);
     }

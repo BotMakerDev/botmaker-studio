@@ -50,7 +50,7 @@ class CommentAnchoredInsertTest {
     @Test
     void pasteAfterAStatementIsUnaffected() {
         EditorFixture f = new EditorFixture(source("        int a = 1;\n        // marker\n        int b = 2;\n"));
-        f.editor.pasteCode(f.body("run"), 1, PASTED); // after child 0, "int a = 1;"
+        f.editor.pasteCode(f.body("run").getId(), 1, PASTED); // after child 0, "int a = 1;"
         assertOrder(f.lastCode, "int a = 1;", PASTED, "// marker", "int b = 2;");
     }
 
@@ -65,7 +65,7 @@ class CommentAnchoredInsertTest {
             }
         }
         assertTrue(at >= 0, "fixture should contain a comment child");
-        f.editor.pasteCode(body, at + 1, PASTED);
+        f.editor.pasteCode(body.getId(), at + 1, PASTED);
     }
 
     /** Asserts the snippets appear in the given order in {@code code}. */

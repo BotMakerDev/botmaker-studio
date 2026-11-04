@@ -28,7 +28,7 @@ class DeclareLocalTest {
     @Test
     void aChosenTypeIsDeclaredWithItsImportsAndAFreshValue() {
         EditorFixture fixture = new EditorFixture(SOURCE);
-        fixture.editor.declareLocal(fixture.body("run"), 0, "table",
+        fixture.editor.declareLocal(fixture.body("run").getId(),0, "table",
                 ValueTypes.mapOf(String.class, ValueTypes.listOf(int.class)));
 
         assertNotNull(fixture.lastCode, () -> "the edit was refused: " + fixture.statusMessages);
@@ -40,7 +40,7 @@ class DeclareLocalTest {
     @Test
     void aPrimitiveIsDeclaredWithItsDefault() {
         EditorFixture fixture = new EditorFixture(SOURCE);
-        fixture.editor.declareLocal(fixture.body("run"), 0, "count", int.class);
+        fixture.editor.declareLocal(fixture.body("run").getId(),0, "count", int.class);
 
         assertNotNull(fixture.lastCode, () -> "the edit was refused: " + fixture.statusMessages);
         assertTrue(fixture.lastCode.contains("int count = 0;"), fixture.lastCode);

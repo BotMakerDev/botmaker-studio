@@ -9,7 +9,6 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.palette.BlockCatalog;
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
@@ -229,7 +228,7 @@ class CodeEditorLockTest {
     @Test
     void anActivitysRunBodyAcceptsEdits() {
         Fixture f = activity();
-        f.editor.addStatement(f.body("run"), BlockCatalog.PRINT, 0);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.PRINT, 0);
         assertNotNull(f.lastCode, "this is what the user came to write");
         assertTrue(f.lastCode.contains("System.out.println("), "the print should be in run():\n" + f.lastCode);
     }
@@ -241,7 +240,7 @@ class CodeEditorLockTest {
         // an empty list threw IndexOutOfBounds. This is why stub run() bodies with a comment placeholder
         // refused every statement.
         Fixture f = new Fixture(CONFIG.activitiesPackageDir().resolve("Mining.java"), ACTIVITY_WITH_COMMENT);
-        f.editor.addStatement(f.body("run"), BlockCatalog.PRINT, 1);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.PRINT, 1);
 
         assertNotNull(f.lastCode, "adding a statement below a comment must not crash");
         assertTrue(f.lastCode.contains("System.out.println("), "the print should land in run():\n" + f.lastCode);
@@ -270,7 +269,7 @@ class CodeEditorLockTest {
     @Test
     void aFileBotMakerUsedToGenerateAcceptsEveryEdit() {
         Fixture body = flowDriver();
-        body.editor.addStatement(body.body("run"), BlockCatalog.PRINT, 0);
+        body.editor.addStatement(body.body("run").getId(),BlockCatalog.PRINT, 0);
         assertNotNull(body.lastCode, "the body is the user's now");
 
         Fixture rename = flowDriver();
@@ -295,14 +294,14 @@ class CodeEditorLockTest {
     @Test
     void aLibraryFileRejectsEveryEdit() {
         Fixture f = library();
-        f.editor.addStatement(f.body("run"), BlockCatalog.PRINT, 0);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.PRINT, 0);
         f.assertRefused("editing bundled library code");
     }
 
     @Test
     void aBotOpenedForReadingRejectsEveryEdit() {
         Fixture f = reading();
-        f.editor.addStatement(f.body("run"), BlockCatalog.PRINT, 0);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.PRINT, 0);
         f.assertRefused("editing someone else's installed bot");
     }
 
@@ -323,8 +322,8 @@ class CodeEditorLockTest {
     void aStatementCannotBeDraggedOutOfALockedBody() {
         // Checking only the destination would let a drag empty out a body nothing may change.
         Fixture f = reading();
-        f.editor.moveStatement(f.body("helper").getStatements().getFirst(),
-                f.body("helper"), f.body("run"), 0);
+        f.editor.moveStatement(f.body("helper").getStatements().getFirst().getId(),
+                f.body("helper").getId(), f.body("run").getId(), 0);
         f.assertRefused("dragging a statement out of a bot open for reading");
     }
 
@@ -375,7 +374,7 @@ class CodeEditorLockTest {
     @Test
     void theEntryPointsMainBodyIsTheUsers() {
         Fixture f = new Fixture(CONFIG.mainSourceFile(), ENTRY_POINT);
-        f.editor.addStatement(f.body("main"), BlockCatalog.PRINT, 0);
+        f.editor.addStatement(f.body("main").getId(),BlockCatalog.PRINT, 0);
         assertNotNull(f.lastCode, "main()'s body is where the bot is assembled:\n" + f.lastCode);
         assertTrue(f.lastCode.contains("System.out.println("), "the print should land in main():\n" + f.lastCode);
     }
@@ -384,7 +383,7 @@ class CodeEditorLockTest {
     @Test
     void everythingElseInTheEntryPointFileIsTheUsers() {
         Fixture f = new Fixture(CONFIG.mainSourceFile(), ENTRY_POINT);
-        f.editor.addStatement(f.body("goHome"), BlockCatalog.PRINT, 0);
+        f.editor.addStatement(f.body("goHome").getId(),BlockCatalog.PRINT, 0);
         assertNotNull(f.lastCode, "goHome is the user's to fill in:\n" + f.lastCode);
 
         Fixture g = new Fixture(CONFIG.mainSourceFile(), ENTRY_POINT);

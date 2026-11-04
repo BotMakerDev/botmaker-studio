@@ -1,11 +1,13 @@
 package com.botmaker.studio.parser;
 
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.StructuralPropertyDescriptor;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Generates a block id from its backing AST node: the node's <b>structural path</b> from the compilation
@@ -56,6 +58,45 @@ public final class BlockId {
         }
 
         return segments.isEmpty() ? positional(node) : String.join("/", segments);
+    }
+
+    /**
+     * The node {@code id} names in {@code unit}, which is how an edit addresses what it edits: the block's id
+     * read against the tree the edit runs on. Empty for an id with no place in that tree, such as a comment's
+     * positional one or a path the tree no longer has.
+     */
+    public static Optional<ASTNode> find(CompilationUnit unit, String id) {
+        if (unit == null || id == null || id.isEmpty()) return Optional.empty();
+        ASTNode current = unit;
+        for (String segment : id.split("/")) {
+            int bracket = segment.indexOf('[');
+            String property = bracket < 0 ? segment : segment.substring(0, bracket);
+            Object value = childProperty(current, property);
+            if (bracket >= 0) {
+                int index;
+                try {
+                    index = Integer.parseInt(segment, bracket + 1, segment.length() - 1, 10);
+                } catch (NumberFormatException notAPath) {
+                    return Optional.empty();
+                }
+                if (!(value instanceof List<?> siblings) || index < 0 || index >= siblings.size()) {
+                    return Optional.empty();
+                }
+                value = siblings.get(index);
+            }
+            if (!(value instanceof ASTNode next)) return Optional.empty();
+            current = next;
+        }
+        return Optional.of(current);
+    }
+
+    /** The value of {@code node}'s structural property with this id, or {@code null} when it has none. */
+    private static Object childProperty(ASTNode node, String id) {
+        for (Object descriptor : node.structuralPropertiesForType()) {
+            StructuralPropertyDescriptor property = (StructuralPropertyDescriptor) descriptor;
+            if (property.getId().equals(id)) return node.getStructuralProperty(property);
+        }
+        return null;
     }
 
     /** The pre-2026-09-13 encoding, kept for the nodes that have no place in the tree to describe. */

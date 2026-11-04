@@ -197,7 +197,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             com.botmaker.studio.ui.app.vars.DeclareVariableDialog.declareInto(context, owner, body, index);
             return;
         }
-        Runnable insert = () -> context.getCodeEditor().addStatement(body, type, index);
+        Runnable insert = () -> context.getCodeEditor().addStatement(body.getId(), type, index);
         if (!com.botmaker.studio.ui.app.vars.NamingPreference.ask()) {
             insert.run();
             return;
@@ -207,7 +207,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             ASTNode at = body.getAstNode();
             com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
                             StatementFactory.uniqueTypeName(at, "MyEnum"), StatementFactory.declaredTypeNames(at))
-                    .ifPresent(draft -> context.getCodeEditor().addEnumStatement(body, index, draft));
+                    .ifPresent(draft -> context.getCodeEditor().addEnumStatement(body.getId(), index, draft));
             return;
         }
         // The insert is handed over rather than done here: identifying the new variable means reading the file

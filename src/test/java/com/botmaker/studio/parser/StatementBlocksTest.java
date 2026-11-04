@@ -264,7 +264,7 @@ class StatementBlocksTest {
                 BlockCatalog.ASSERT, AssertBlock.class);
         assertAll(expected.entrySet().stream().map(e -> (org.junit.jupiter.api.function.Executable) () -> {
             EditorFixture f = new EditorFixture(source(""));
-            f.editor.addStatement(f.body("run"), e.getKey(), 0);
+            f.editor.addStatement(f.body("run").getId(),e.getKey(), 0);
             assertNotNull(f.lastCode, e.getKey().id() + " inserted nothing");
             assertParses(f.lastCode);
             assertInstanceOf(e.getValue(), only(new EditorFixture(f.lastCode)), f.lastCode);
@@ -274,7 +274,7 @@ class StatementBlocksTest {
     @Test
     void theCountingLoopIndexIsUniqueAtTheDropSite() {
         EditorFixture f = new EditorFixture(source("int i = 5;"));
-        f.editor.addStatement(f.body("run"), BlockCatalog.FOR_CLASSIC, 1);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.FOR_CLASSIC, 1);
         assertNotNull(f.lastCode);
         assertTrue(f.lastCode.contains("for (int i2 = 0; i2 < 10; i2++)"), f.lastCode);
     }
@@ -288,7 +288,7 @@ class StatementBlocksTest {
                     }
                 }
                 """);
-        f.editor.addStatement(f.body("run"), BlockCatalog.SYNCHRONIZED, 0);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.SYNCHRONIZED, 0);
         assertNotNull(f.lastCode);
         assertTrue(f.lastCode.contains("synchronized (Subject.class)"), f.lastCode);
     }
@@ -296,7 +296,7 @@ class StatementBlocksTest {
     @Test
     void anInstanceMethodLocksOnThis() {
         EditorFixture f = new EditorFixture(source(""));
-        f.editor.addStatement(f.body("run"), BlockCatalog.SYNCHRONIZED, 0);
+        f.editor.addStatement(f.body("run").getId(),BlockCatalog.SYNCHRONIZED, 0);
         assertNotNull(f.lastCode, f.statusMessages.toString());
         assertTrue(f.lastCode.contains("synchronized (this)"), f.lastCode);
     }

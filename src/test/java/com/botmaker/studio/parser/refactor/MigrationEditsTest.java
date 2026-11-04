@@ -7,7 +7,6 @@ import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
 import com.botmaker.studio.parser.refactor.SignatureMigration.CallChange;
 import com.botmaker.studio.parser.refactor.SignatureMigration.Plan;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ReturnFate;
-import com.botmaker.studio.project.ProjectFile;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
@@ -141,11 +140,11 @@ class MigrationEditsTest {
      * {@code unit -> change}; {@code CallSite} needs the file the rewrite will be applied to, and it must hold
      * the <em>original</em> text, since that is what the recorded edits have offsets into.
      */
-    private static ProjectFile current;
+    private static String currentSource;
 
     /** Applies one change to {@code source}, returning the new text — or null when the edit was refused. */
     private static String rewrite(String source, java.util.function.Function<CompilationUnit, CallChange> of) {
-        current = new ProjectFile(Path.of("Bot.java"), source);
+        currentSource = source;
         CompilationUnit unit = SourceParser.parse(source);
         Plan plan = new Plan(List.of(of.apply(unit)), List.of(), List.of(), ReturnFate.UNCHANGED);
         List<CallMigrator.Rewritten> rewritten = CallMigrator.rewriteOthers(plan, null, null, null);
@@ -185,7 +184,7 @@ class MigrationEditsTest {
 
     private static CallSite siteOf(CompilationUnit unit, Expression node) {
         assertNotNull(node, "the fixture does not contain the node this test is about");
-        return new CallSite(current, unit, node);
+        return new CallSite(Path.of("Bot.java"), currentSource, unit, node);
     }
 
     private static boolean withinImport(org.eclipse.jdt.core.dom.ASTNode node) {

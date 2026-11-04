@@ -2,6 +2,7 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.parser.BlockConverter.ParseContext;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ChildListPropertyDescriptor;
 import org.eclipse.jdt.core.dom.ChildPropertyDescriptor;

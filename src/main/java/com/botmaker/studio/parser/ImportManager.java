@@ -1,8 +1,7 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
@@ -11,6 +10,7 @@ import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -68,13 +68,13 @@ public class ImportManager {
      * Uses the resolved FQN for {@link ResolvedType.Bound}/{@link ResolvedType.FromIndex},
      * otherwise attempts to resolve the simple name.
      */
-    public static void addImport(CompilationUnit cu, ASTRewrite rewriter, ResolvedType type, ProjectState state) {
+    public static void addImport(CompilationUnit cu, ASTRewrite rewriter, ResolvedType type, SourceSet sources) {
         if (cu == null || type == null || type.isPrimitive() || type.isVoid()) return;
 
         String qualifiedName = importable(switch (type) {
             case ResolvedType.Bound b     -> b.qualifiedName();
             case ResolvedType.FromIndex f -> f.qualifiedName();
-            default                       -> resolveQualifiedName(type.simpleName(), state);
+            default                       -> resolveQualifiedName(type.simpleName(), sources);
         });
 
         if (qualifiedName == null || shouldSkipImport(cu, qualifiedName)) {
@@ -101,15 +101,15 @@ public class ImportManager {
      * you already hold is how an import ends up silently missing.
      */
     public static void addImportForSimpleName(CompilationUnit cu, ASTRewrite rewriter, String typeName,
-                                              ProjectAnalyzer analyzer, ProjectState state) {
+                                              ProjectAnalyzer analyzer, SourceSet sources) {
         if (cu == null || typeName == null || typeName.isBlank()) return;
         String name = typeName.trim();
         ResolvedType resolved = analyzer != null ? analyzer.findTypeByName(name) : null;
         if (resolved != null && !resolved.isUnknown()) {
-            addImport(cu, rewriter, resolved, state);
+            addImport(cu, rewriter, resolved, sources);
             return;
         }
-        addImport(cu, rewriter, ResolvedType.named(name), state);
+        addImport(cu, rewriter, ResolvedType.named(name), sources);
     }
 
     /**
@@ -122,15 +122,15 @@ public class ImportManager {
      * insert and overload-switch paths both build default arguments for.
      */
     public static void addImportForType(CompilationUnit cu, ASTRewrite rewriter, ResolvedType type,
-                                        ProjectAnalyzer analyzer, ProjectState state) {
+                                        ProjectAnalyzer analyzer, SourceSet sources) {
         if (cu == null || type == null) return;
         ResolvedType leaf = type.leafType();
         if (leaf.isPrimitive() || leaf.isVoid() || leaf.isUnknown()) return;
         if (leaf instanceof ResolvedType.Bound || leaf instanceof ResolvedType.FromIndex) {
-            addImport(cu, rewriter, leaf, state);
+            addImport(cu, rewriter, leaf, sources);
             return;
         }
-        addImportForSimpleName(cu, rewriter, leaf.simpleName(), analyzer, state);
+        addImportForSimpleName(cu, rewriter, leaf.simpleName(), analyzer, sources);
     }
 
     /**
@@ -202,23 +202,23 @@ public class ImportManager {
      * available" and skip. Guessing wrong here writes an import that does not compile, so a miss is the
      * safer answer than a plausible one.
      */
-    private static String resolveQualifiedName(String className, ProjectState state) {
+    private static String resolveQualifiedName(String className, SourceSet sources) {
         // If already qualified, return as-is
         if (className.contains(".")) {
             return className;
         }
 
         // Tier 1: the project's own sources.
-        if (state != null) {
-            for (ProjectFile file : state.getAllFiles()) {
-                if (file.getClassName().equals(className)) {
-                    CompilationUnit cu = file.getAst();
+        if (sources != null) {
+            for (Path file : sources.files().toList()) {
+                if (SourceSet.className(file).equals(className)) {
+                    CompilationUnit cu = sources.unit(file).orElse(null);
                     if (cu != null && cu.getPackage() != null) {
                         return cu.getPackage().getName().getFullyQualifiedName() + "." + className;
                     }
                     // A file never drawn has no tree yet; its package line says the same. Parameters.java is
                     // one (2026-10-13): in its own package, a block naming it needs this import.
-                    String text = file.getContent() == null ? "" : file.getContent();
+                    String text = sources.text(file).orElse("");
                     Matcher declared = PACKAGE_LINE.matcher(text.replaceAll("(?s)/\\*.*?\\*/|//[^\\n]*", ""));
                     if (declared.find()) return declared.group(1) + "." + className;
                 }

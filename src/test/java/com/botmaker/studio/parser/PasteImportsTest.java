@@ -28,7 +28,7 @@ class PasteImportsTest {
     @Test
     void pastingATypeAddsItsImport() {
         EditorFixture f = new EditorFixture(SUBJECT);
-        f.editor.pasteCode(f.body("run"), 1, "ArrayList<String> names = new ArrayList<>();");
+        f.editor.pasteCode(f.body("run").getId(),1, "ArrayList<String> names = new ArrayList<>();");
 
         assertNotNull(f.lastCode, "the paste should have produced new code");
         assertTrue(f.lastCode.contains("import java.util.ArrayList;"),
@@ -38,11 +38,11 @@ class PasteImportsTest {
     @Test
     void pastingTheSameTypeTwiceImportsItOnce() {
         EditorFixture f = new EditorFixture(SUBJECT);
-        f.editor.pasteCode(f.body("run"), 1, "ArrayList<String> a = new ArrayList<>();");
+        f.editor.pasteCode(f.body("run").getId(),1, "ArrayList<String> a = new ArrayList<>();");
         String afterFirst = f.lastCode;
 
         EditorFixture second = new EditorFixture(afterFirst);
-        second.editor.pasteCode(second.body("run"), 1, "ArrayList<String> b = new ArrayList<>();");
+        second.editor.pasteCode(second.body("run").getId(),1, "ArrayList<String> b = new ArrayList<>();");
 
         assertNotNull(second.lastCode);
         assertEquals(1, countOf(second.lastCode, "import java.util.ArrayList;"),
@@ -53,7 +53,7 @@ class PasteImportsTest {
     void pastingUnresolvableTextStillPastes() {
         // Clipboard text can be anything. An unknown type must not block the paste or invent an import.
         EditorFixture f = new EditorFixture(SUBJECT);
-        f.editor.pasteCode(f.body("run"), 1, "Whatever thing = new Whatever();");
+        f.editor.pasteCode(f.body("run").getId(),1, "Whatever thing = new Whatever();");
 
         assertNotNull(f.lastCode, "the paste itself must still land");
         assertTrue(f.lastCode.contains("Whatever thing"), () -> "pasted code missing from:\n" + f.lastCode);
@@ -69,7 +69,7 @@ class PasteImportsTest {
     void pastingAnSdkTypeResolvesToTheSdkNotToAwt() {
         com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         EditorFixture f = new EditorFixture(SUBJECT);
-        f.editor.pasteCode(f.body("run"), 1, "Point where = Mouse.position();");
+        f.editor.pasteCode(f.body("run").getId(),1, "Point where = Mouse.position();");
 
         assertNotNull(f.lastCode);
         assertTrue(f.lastCode.contains("import com.botmaker.sdk.api.geometry.Point;"),
@@ -83,7 +83,7 @@ class PasteImportsTest {
     void pastingASubPackagedSdkFacadeResolvesToItsRealPackage() {
         com.botmaker.studio.TestSupport.assumeSdkPluginBound();
         EditorFixture f = new EditorFixture(SUBJECT);
-        f.editor.pasteCode(f.body("run"), 1, "ImageFinder.find(new ImageTemplate(\"gold.png\"));");
+        f.editor.pasteCode(f.body("run").getId(),1, "ImageFinder.find(new ImageTemplate(\"gold.png\"));");
 
         assertNotNull(f.lastCode);
         assertTrue(f.lastCode.contains("import com.botmaker.sdk.api.vision.ImageFinder;"),
@@ -99,7 +99,7 @@ class PasteImportsTest {
     @Test
     void pastingJdkTypesTheOldMapNeverListedNowResolves() {
         EditorFixture f = new EditorFixture(SUBJECT);
-        f.editor.pasteCode(f.body("run"), 1, """
+        f.editor.pasteCode(f.body("run").getId(),1, """
                 Optional<Instant> when = Optional.of(Instant.now());
                 Pattern p = Pattern.compile("x");
                 BigDecimal d = BigDecimal.ONE;""");
@@ -116,7 +116,7 @@ class PasteImportsTest {
     @Test
     void listResolvesToJavaUtilNotJavaAwt() {
         EditorFixture f = new EditorFixture(SUBJECT);
-        f.editor.pasteCode(f.body("run"), 1, "List<String> names = new ArrayList<>();");
+        f.editor.pasteCode(f.body("run").getId(),1, "List<String> names = new ArrayList<>();");
 
         assertNotNull(f.lastCode);
         assertTrue(f.lastCode.contains("import java.util.List;"), () -> "expected java.util.List in:\n" + f.lastCode);

@@ -67,7 +67,7 @@ class ExpressionDragOutTest {
                 """);
         Expression condition = ((IfStatement) statements("run").getFirst()).getExpression();
 
-        fx.editor.moveExpressionToStatement(condition, fx.body("run"), 0);
+        fx.editor.moveExpressionToStatement(condition, fx.body("run").getId(),0);
 
         assertNotNull(fx.lastCode, "the drag-out should have produced a code update");
         assertTrue(fx.lastCode.contains("ready();"),
@@ -93,7 +93,7 @@ class ExpressionDragOutTest {
                 """);
         MethodInvocation print = (MethodInvocation) ((ExpressionStatement) statements("run").getFirst()).getExpression();
 
-        fx.editor.moveExpressionToStatement((Expression) print.arguments().getFirst(), fx.body("run"), 1);
+        fx.editor.moveExpressionToStatement((Expression) print.arguments().getFirst(), fx.body("run").getId(),1);
 
         assertNotNull(fx.lastCode, "the drag-out should have produced a code update");
         assertTrue(fx.lastCode.contains("System.out.println();"),
@@ -172,7 +172,7 @@ class ExpressionDragOutTest {
                 """);
         Expression condition = ((IfStatement) statements("run").getFirst()).getExpression();
 
-        fx.editor.moveExpressionToStatement(condition, fx.body("run"), 0);
+        fx.editor.moveExpressionToStatement(condition, fx.body("run").getId(),0);
 
         assertFalse(fx.lastCode != null && fx.lastCode.contains("1 < 2;"),
                 "a comparison is a value and nothing else:\n" + fx.lastCode);

@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.plugin.PluginHost;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -7,6 +8,7 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * Mutable state for the currently open project.
@@ -18,7 +20,7 @@ import java.util.*;
  * the two failures the alternative produced — a {@code ConcurrentModificationException} on the debug thread,
  * and the quiet one, a reader compiling the code from one revision against the classpath from the next.
  */
-public class ProjectState {
+public class ProjectState implements SourceSet {
 
     // --- File State ---
     private final Map<Path, ProjectFile> openFiles = new LinkedHashMap<>();
@@ -159,6 +161,35 @@ public class ProjectState {
     }
 
     // =========================================================================
+    // THE READ-ONLY VIEW botmaker-java ASKS OF A PROJECT
+    // =========================================================================
+
+    @Override
+    public Stream<Path> files() {
+        return openFiles.keySet().stream();
+    }
+
+    @Override
+    public Optional<CompilationUnit> unit(Path file) {
+        return getFile(file).map(ProjectFile::getAst);
+    }
+
+    @Override
+    public Optional<String> text(Path file) {
+        return getFile(file).map(ProjectFile::getContent);
+    }
+
+    @Override
+    public List<String> classpath() {
+        return getResolvedClasspath();
+    }
+
+    @Override
+    public Path sourceRoot() {
+        return getSourcePath();
+    }
+
+    // =========================================================================
     // CODE ACCESSORS (delegates to active file)
     // =========================================================================
 
@@ -262,6 +293,11 @@ public class ProjectState {
 
     public Optional<CodeBlock> getBlockForNode(ASTNode node) {
         return Optional.ofNullable(nodeToBlockMap.get(node));
+    }
+
+    /** The simple class name of the block drawn for {@code node}, for a record of what an edit was on. */
+    public Optional<String> blockClassOf(ASTNode node) {
+        return getBlockForNode(node).map(block -> block.getClass().getSimpleName());
     }
 
     // =========================================================================

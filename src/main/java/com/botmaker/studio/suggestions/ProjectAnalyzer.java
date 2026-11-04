@@ -1,6 +1,7 @@
 package com.botmaker.studio.suggestions;
 
 import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.index.LibraryType;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.helpers.FileTypeDetector;
@@ -348,12 +349,12 @@ public class ProjectAnalyzer {
         return FUNDAMENTAL_TYPES;
     }
 
-    /** Static fallback for callers that hold ProjectState but not a ProjectAnalyzer instance. */
-    public static ResolvedType findTypeInProject(ProjectState state, String typeName) {
-        if (state == null || typeName == null) return ResolvedType.UNKNOWN;
+    /** Static fallback for callers that hold the sources but not a ProjectAnalyzer instance. */
+    public static ResolvedType findTypeInProject(SourceSet sources, String typeName) {
+        if (sources == null || typeName == null) return ResolvedType.UNKNOWN;
         if (FUNDAMENTAL_TYPES.contains(typeName)) return ResolvedType.named(typeName);
-        for (ProjectFile file : state.getAllFiles()) {
-            CompilationUnit cu = file.getAst();
+        for (Path file : sources.files().toList()) {
+            CompilationUnit cu = sources.unit(file).orElse(null);
             if (cu == null) continue;
             for (Object t : cu.types()) {
                 if (t instanceof AbstractTypeDeclaration atd

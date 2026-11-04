@@ -105,7 +105,7 @@ public final class EditorHistory {
      * become a step of its own.
      *
      * <p>The other files are written to disk here because that is where the change put them:
-     * {@code CallMigrator.commit} and a plugin's value writes wrote them immediately rather than leaving them for
+     * {@code CodeEditor.commit} and a plugin's value writes wrote them immediately rather than leaving them for
      * a save. Their cached AST goes with the text, or every suggestion in Studio keeps reading the version that
      * was just taken back.
      */

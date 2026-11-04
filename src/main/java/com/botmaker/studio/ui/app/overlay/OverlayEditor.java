@@ -874,7 +874,7 @@ public final class OverlayEditor {
     private void insertBlock(BlockType type) {
         InsertionCursor c = insertionPoint();
         if (type == null || c == null) return;
-        context.getCodeEditor().addStatement(c.body(), type, armBelow(c, Landed.ADDED));
+        context.getCodeEditor().addStatement(c.body().getId(), type, armBelow(c, Landed.ADDED));
     }
 
     /**
@@ -894,7 +894,7 @@ public final class OverlayEditor {
         }
         String before = activeText();
         lastMessage = null;
-        context.getCodeEditor().insertStatement(c.body(), armBelow(c, Landed.PLACED), statement.node(),
+        context.getCodeEditor().insertStatement(c.body().getId(), armBelow(c, Landed.PLACED), statement.node(),
                 statement.imports());
         if (java.util.Objects.equals(before, activeText())) {
             pendingInsert = null;
@@ -988,7 +988,7 @@ public final class OverlayEditor {
             return;
         }
         pendingInsert = new PendingFocus(new BlockTree.Position(index().ordinalOf(body), destination), Landed.MOVED);
-        context.getCodeEditor().moveStatement(stmt, body, body, delta < 0 ? destination : destination + 1);
+        context.getCodeEditor().moveStatement(stmt.getId(), body.getId(), body.getId(), delta < 0 ? destination : destination + 1);
     }
 
     /** ▸/▾: hides or re-shows a control-flow block's branches. See {@link #collapsed}. */

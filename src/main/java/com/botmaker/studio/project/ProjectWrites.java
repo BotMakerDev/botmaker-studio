@@ -13,7 +13,7 @@ import java.nio.file.Path;
  * <p><b>Why a snapshot.</b> The editor keeps every change in memory and writes on run
  * ({@code CodeExecutionService}), so a file the host creates or rewrites outside that loop appears on disk
  * without the user having typed anything. Project History is what makes that undoable, and
- * {@link ReviewMarker#snapshot} is the existing way to take one — {@code CallMigrator.commit} already does
+ * {@link ReviewMarker#snapshot} is the existing way to take one — {@code CodeEditor.commit} already does
  * this before a refactor touches files the user is not looking at. Doing it here rather than at each call
  * site is the point: there are exactly three places that create a source file, and the one that forgot is
  * the one that would lose somebody's work.

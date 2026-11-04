@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (the parser leaves the view)
+
+- `parser/` reads a project through `SourceSet` and addresses an edit by `BlockId` (2026-11-04): no class under it but
+  `BlockConverter` and `BlockReuse` imports the view (`ParserHeadlessTest`). `ParseContext` is nested in
+  `BlockConverter`, and the drag-and-drop translation stays in `ui/dnd`. Nothing changes in the window.
+
 ### Changed (botmaker-java)
 
 - The parser and the value grammar come from `botmaker-java` (2026-11-04): `com.botmaker.plugin.host.grammar` is now

@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser.guard;
 
 import com.botmaker.studio.config.AppVersion;
-import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.parser.BlockId;
 import com.botmaker.studio.project.LockResolver.EditKind;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
@@ -83,9 +83,8 @@ public record RefusedEdit(
      */
     public static RefusedEdit of(IProblem problem, String refusedBy, EditKind kind, ASTNode target,
                                  String previousCode, ProjectConfig config, ProjectState state) {
-        CodeBlock block = target != null && state != null ? state.getBlockForNode(target).orElse(null) : null;
+        String blockClass = target != null && state != null ? state.blockClassOf(target).orElse(null) : null;
         String nodeType = target != null ? target.getClass().getSimpleName() : null;
-        String blockClass = block != null ? block.getClass().getSimpleName() : null;
         return new RefusedEdit(
                 SCHEMA,
                 Instant.now().toString(),
@@ -103,7 +102,7 @@ public record RefusedEdit(
                 nodeLine(target, state),
                 snippet(target, previousCode),
                 blockClass,
-                block != null ? block.getId() : null,
+                blockClass != null ? BlockId.of(target) : null,
                 problem.getID(),
                 problem.getMessage(),
                 problem.getSourceLineNumber(),

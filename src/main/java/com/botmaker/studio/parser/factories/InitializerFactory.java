@@ -8,11 +8,11 @@ import com.botmaker.studio.parser.helpers.DefaultValueHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.ShortNames;
 import com.botmaker.java.grammar.SourceParser;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.util.MethodSignature;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -53,9 +53,9 @@ public class InitializerFactory {
      * in the file (2026-10-14).
      */
     public static Expression createDefaultInitializer(EditContext ctx, ResolvedType type) {
-        Expression seeded = createDefaultInitializer(ctx.ast(), type, ctx.cu(), ctx.state(), ctx.analyzer());
+        Expression seeded = createDefaultInitializer(ctx.ast(), type, ctx.cu(), ctx.sources(), ctx.analyzer());
         if (ctx.rewriter() == null || ctx.cu() == null) return seeded;
-        Map<String, String> taken = takenNames(ctx.cu(), ctx.state());
+        Map<String, String> taken = takenNames(ctx.cu(), ctx.sources());
         return ShortNames.shortened(seeded, canonical -> claim(taken, canonical),
                 canonical -> ImportManager.addImport(ctx.cu(), ctx.rewriter(), canonical));
     }
@@ -64,7 +64,7 @@ public class InitializerFactory {
      * Each simple name {@code cu} already gives a class, to its full name: its single-type imports, its own
      * types, and the bot's classes in its package ({@code ?} for a file whose package is not read yet).
      */
-    private static Map<String, String> takenNames(CompilationUnit cu, ProjectState state) {
+    private static Map<String, String> takenNames(CompilationUnit cu, SourceSet sources) {
         Map<String, String> taken = new HashMap<>();
         String pkg = cu.getPackage() == null ? "" : cu.getPackage().getName().getFullyQualifiedName();
         for (Object each : cu.imports()) {
@@ -84,10 +84,10 @@ public class InitializerFactory {
                 }
             }
         });
-        if (state == null) return taken;
-        for (ProjectFile file : state.getAllFiles()) {
-            String name = file.getClassName();
-            CompilationUnit unit = file.getAst();
+        if (sources == null) return taken;
+        for (Path file : sources.files().toList()) {
+            String name = SourceSet.className(file);
+            CompilationUnit unit = sources.unit(file).orElse(null);
             String filePkg = unit == null ? null : unit.getPackage() == null ? ""
                     : unit.getPackage().getName().getFullyQualifiedName();
             if (name == null || filePkg != null && !filePkg.equals(pkg)) continue;
@@ -114,18 +114,18 @@ public class InitializerFactory {
         return taken.putIfAbsent(simple, canonical) == null || taken.get(simple).equals(canonical);
     }
 
-    public static Expression createDefaultInitializer(AST ast, ResolvedType type, CompilationUnit cu, ProjectState state) {
-        return createDefaultInitializer(ast, type, cu, state, null);
+    public static Expression createDefaultInitializer(AST ast, ResolvedType type, CompilationUnit cu, SourceSet sources) {
+        return createDefaultInitializer(ast, type, cu, sources, null);
     }
 
     public static Expression createDefaultInitializer(AST ast, ResolvedType type, CompilationUnit cu,
-                                                      ProjectState state, ProjectAnalyzer analyzer) {
+                                                      SourceSet sources, ProjectAnalyzer analyzer) {
         if (type == null) return ast.newNullLiteral();
 
         // ENRICHMENT: If the type isn't binding-backed, try to find the rich type in the project
         ResolvedType richType = type;
-        if (!(type instanceof ResolvedType.Bound) && !type.isPrimitive() && state != null) {
-            ResolvedType found = ProjectAnalyzer.findTypeInProject(state, type.leafType().simpleName());
+        if (!(type instanceof ResolvedType.Bound) && !type.isPrimitive() && sources != null) {
+            ResolvedType found = ProjectAnalyzer.findTypeInProject(sources,type.leafType().simpleName());
             // If found, re-apply array dimensions
             if (!found.isUnknown()) {
                 richType = found.asArray(type.arrayDimensions());
@@ -133,7 +133,7 @@ public class InitializerFactory {
         }
 
         if (richType.isArray()) {
-            return createArrayInitializer(ast, richType, java.util.Collections.emptyList(), cu, state);
+            return createArrayInitializer(ast, richType, java.util.Collections.emptyList(), cu, sources);
         }
 
         // Functional interface (Consumer/Runnable/…): an empty block-bodied lambda, so the call round-trips into an
@@ -343,26 +343,26 @@ public class InitializerFactory {
         return SourceParser.expression(ast, code);
     }
 
-    public static Expression createArrayInitializer(AST ast, ResolvedType type, List<Expression> valuesToPreserve, CompilationUnit cu, ProjectState state) {
+    public static Expression createArrayInitializer(AST ast, ResolvedType type, List<Expression> valuesToPreserve, CompilationUnit cu, SourceSet sources) {
         int dimensions = type.arrayDimensions();
         ResolvedType leafType = type.leafType();
 
         if (dimensions == 0) {
-            return createDefaultInitializer(ast, leafType, cu,state);
+            return createDefaultInitializer(ast, leafType, cu, sources);
         }
 
         ArrayCreation arrayCreation = ast.newArrayCreation();
         Type elementType = ProjectAnalyzer.createTypeNode(ast, type);
         arrayCreation.setType((ArrayType) elementType);
 
-        ArrayInitializer initializer = createNestedArrayInitializer(ast, leafType, dimensions, valuesToPreserve, cu, state);
+        ArrayInitializer initializer = createNestedArrayInitializer(ast, leafType, dimensions, valuesToPreserve, cu, sources);
         arrayCreation.setInitializer(initializer);
 
         return arrayCreation;
     }
 
     private static ArrayInitializer createNestedArrayInitializer(AST ast, ResolvedType leafType, int dimensions,
-                                                          List<Expression> valuesToPreserve, CompilationUnit cu, ProjectState state) {
+                                                          List<Expression> valuesToPreserve, CompilationUnit cu, SourceSet sources) {
         ArrayInitializer initializer = ast.newArrayInitializer();
 
         if (dimensions == 1) {
@@ -371,11 +371,11 @@ public class InitializerFactory {
                     initializer.expressions().add(ASTNode.copySubtree(ast, value));
                 }
             } else {
-                Expression defaultValue = createDefaultInitializer(ast, leafType, cu,state);
+                Expression defaultValue = createDefaultInitializer(ast, leafType, cu, sources);
                 initializer.expressions().add(defaultValue);
             }
         } else {
-            ArrayInitializer subArray = createNestedArrayInitializer(ast, leafType, dimensions - 1, valuesToPreserve, cu,state);
+            ArrayInitializer subArray = createNestedArrayInitializer(ast, leafType, dimensions - 1, valuesToPreserve, cu, sources);
             initializer.expressions().add(subArray);
         }
 
@@ -383,7 +383,7 @@ public class InitializerFactory {
     }
 
     public static Expression createRecursiveListInitializer(AST ast, String typeName, CompilationUnit cu,
-                                                            List<Expression> leavesToPreserve, ProjectState state) {
-        return createArrayInitializer(ast, ResolvedType.named(typeName), leavesToPreserve, cu, state);
+                                                            List<Expression> leavesToPreserve, SourceSet sources) {
+        return createArrayInitializer(ast, ResolvedType.named(typeName), leavesToPreserve, cu, sources);
     }
 }

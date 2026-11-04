@@ -86,7 +86,7 @@ public class BlockDragDropEditTest {
     void dropFromPalette_addsStatementToMethodBody() {
         BodyBlock body = firstBodyWithStatements();
         // Mirrors CodeEditorService.handleBlockDrop: targetBody present -> addStatement.
-        editor.addStatement(body, BlockCatalog.PRINT, body.getStatements().size());
+        editor.addStatement(body.getId(), BlockCatalog.PRINT, body.getStatements().size());
 
         assertNotNull(lastCode, "Drop should have produced a code update");
         assertTrue(lastCode.contains("System.out.println("),
@@ -100,7 +100,7 @@ public class BlockDragDropEditTest {
         // (READ_INT, asserting `BotMaker.readInt()`) went on 2026-09-01 with the variant itself.
         BodyBlock body = firstBodyWithStatements();
 
-        editor.addStatement(body, BlockCatalog.declareBlockFor(BotType.COLOR), body.getStatements().size());
+        editor.addStatement(body.getId(), BlockCatalog.declareBlockFor(BotType.COLOR), body.getStatements().size());
         assertNotNull(lastCode, "Drop should have produced a code update");
         assertTrue(lastCode.contains("new java.awt.Color(255, 255, 255)"),
                 "a declare block should build its type's own default:\n" + lastCode);
@@ -174,7 +174,7 @@ public class BlockDragDropEditTest {
         assertTrue(resolved instanceof StatementBlock, "Block id should resolve back to the dragged statement");
 
         // Move "int x = 1;" to the end (after "int y = 2;").
-        editor.moveStatement((StatementBlock) resolved, body, body, 2);
+        editor.moveStatement(resolved.getId(), body.getId(), body.getId(), 2);
 
         assertNotNull(lastCode, "Move should have produced a code update");
         int xPos = lastCode.indexOf("int x");
@@ -219,7 +219,7 @@ public class BlockDragDropEditTest {
         StatementBlock callStmt = body.getStatements().get(0); // System.out.println("a");
 
         // Move the call statement to the end — this previously threw before producing any code update.
-        ed.moveStatement(callStmt, body, body, 2);
+        ed.moveStatement(callStmt.getId(), body.getId(), body.getId(), 2);
 
         assertNotNull(captured[0], "Moving an expression-statement block should produce a code update");
         int callPos = captured[0].indexOf("println");

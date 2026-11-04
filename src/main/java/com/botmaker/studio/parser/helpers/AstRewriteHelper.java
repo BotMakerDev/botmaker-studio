@@ -1,7 +1,6 @@
 package com.botmaker.studio.parser.helpers;
 
 import com.botmaker.java.grammar.SourceFormatter;
-import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.nav.Usages;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
@@ -139,8 +138,7 @@ public class AstRewriteHelper {
      * Returns the statement {@link ListRewrite} for a body block, whether it is backed by a
      * {@link Block} or a {@link SwitchCase}.
      */
-    public static ListRewrite getListRewriteForBody(ASTRewrite rewriter, BodyBlock body) {
-        ASTNode node = body.getAstNode();
+    public static ListRewrite getListRewriteForBody(ASTRewrite rewriter, ASTNode node) {
         if (node instanceof Block) {
             return rewriter.getListRewrite(node, Block.STATEMENTS_PROPERTY);
         } else if (node instanceof SwitchCase) {

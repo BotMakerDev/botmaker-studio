@@ -222,7 +222,7 @@ public class CodeEditorService {
                 rejectJumpPlacement(jump);
                 return;
             }
-            codeEditor.addStatement(info.targetBody(), type, info.insertionIndex());
+            codeEditor.addStatement(info.bodyId(), type, info.insertionIndex());
         } else if (info.targetClass() != null && type.isClassMember()) {
             TypeDeclaration typeDecl = (TypeDeclaration) info.targetClass().getAstNode();
             switch (type) {
@@ -268,7 +268,7 @@ public class CodeEditorService {
                 }
                 BodyBlock sourceBody = findParentBody(stmt, state.getNodeToBlockMap());
                 if (sourceBody != null) {
-                    codeEditor.moveStatement(stmt, sourceBody, info.targetBody(), info.insertionIndex());
+                    codeEditor.moveStatement(stmt.getId(), sourceBody.getId(), info.bodyId(), info.insertionIndex());
                 }
             }
         } else if (info.targetClass() != null) {
@@ -292,7 +292,7 @@ public class CodeEditorService {
             refuseDrop(SlotFit.NOT_A_STATEMENT);
             return;
         }
-        codeEditor.moveExpressionToStatement(source, info.targetBody(), info.insertionIndex());
+        codeEditor.moveExpressionToStatement(source, info.bodyId(), info.insertionIndex());
     }
 
     /**
@@ -878,7 +878,7 @@ public class CodeEditorService {
                 if (parentBody != null) {
                     int index = parentBody.getStatements().indexOf(stmtBlock);
                     // Paste AFTER the selected block
-                    codeEditor.pasteCode(parentBody, index + 1, codeToPaste);
+                    codeEditor.pasteCode(parentBody.getId(), index + 1, codeToPaste);
                 }
             }
         }, () -> {

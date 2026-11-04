@@ -97,7 +97,7 @@ class SwitchCaseInsertTest {
     void theColonFormStillAppendsToTheCase() {
         EditorFixture fixture = new EditorFixture(source(COLON_SWITCH));
 
-        fixture.editor.addStatement(firstCaseBody(fixture), BlockCatalog.PRINT, 0);
+        fixture.editor.addStatement(firstCaseBody(fixture).getId(),BlockCatalog.PRINT, 0);
 
         assertNotNull(fixture.lastCode, "nothing was inserted");
         assertParses(fixture.lastCode);
@@ -114,7 +114,7 @@ class SwitchCaseInsertTest {
     private static void assertLandsInBranch(String switchBody) {
         EditorFixture fixture = new EditorFixture(source(switchBody));
 
-        fixture.editor.addStatement(firstCaseBody(fixture), BlockCatalog.PRINT, 0);
+        fixture.editor.addStatement(firstCaseBody(fixture).getId(),BlockCatalog.PRINT, 0);
 
         assertNotNull(fixture.lastCode, "nothing was inserted — the edit was refused or dropped");
         assertParses(fixture.lastCode);
@@ -149,7 +149,7 @@ class SwitchCaseInsertTest {
             int branch = i;
             checks.add(() -> {
                 EditorFixture fixture = new EditorFixture(packed);
-                fixture.editor.addStatement(caseBodies(fixture).get(branch), BlockCatalog.PRINT, 0);
+                fixture.editor.addStatement(caseBodies(fixture).get(branch).getId(),BlockCatalog.PRINT, 0);
 
                 assertNotNull(fixture.lastCode,
                         () -> "branch " + branch + " was refused: " + fixture.statusMessages);

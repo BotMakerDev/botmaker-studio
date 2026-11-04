@@ -3,8 +3,7 @@ package com.botmaker.studio.parser.refactor;
 import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.nav.Uses;
 import com.botmaker.java.grammar.SourceParser;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -28,6 +27,7 @@ import org.eclipse.jdt.core.dom.SuperMethodInvocation;
 import org.eclipse.jdt.core.dom.SuperMethodReference;
 import org.eclipse.jdt.core.dom.TypeMethodReference;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -80,7 +80,7 @@ public final class MethodReferences {
      * constant or a {@code case} label. A constant is API too, so an SDK migration has to be able to rename or
      * move one. A field simply answers "no arguments" to the argument questions, which is true.
      */
-    public record CallSite(ProjectFile file, CompilationUnit unit, Expression node) {
+    public record CallSite(Path file, String source, CompilationUnit unit, Expression node) {
 
         /** The arguments as written, in order — empty for a field or a method reference. */
         public List<?> arguments() {
@@ -128,7 +128,7 @@ public final class MethodReferences {
 
         /** The file's class name — {@code Bot}, {@code GoHome} — which is how the preview names it. */
         public String className() {
-            return file.getClassName();
+            return SourceSet.className(file);
         }
 
         /** True when the call stands as a line of its own, so nothing consumes what it gives back. */
@@ -148,10 +148,9 @@ public final class MethodReferences {
         public Usages.Usage usage() {
             int start = node.getStartPosition();
             int line = unit.getLineNumber(start);
-            String source = file.getContent() == null ? "" : file.getContent();
             String[] lines = source.split("\n", -1);
             String text = line >= 1 && line <= lines.length ? lines[line - 1].trim() : "";
-            return new Usages.Usage(file.getPath(), start, line, enclosingMethodName(node), text, false);
+            return new Usages.Usage(file, start, line, enclosingMethodName(node), text, false);
         }
     }
 
@@ -200,11 +199,11 @@ public final class MethodReferences {
      * and two parses of one file are two sets of nodes that only look alike. Every other file is the
      * {@link BotIndex}'s unit for it.
      */
-    public static Result find(ProjectState state, MethodDeclaration declaration) {
+    public static Result find(SourceSet sources, MethodDeclaration declaration) {
         List<CallSite> calls = new ArrayList<>();
         List<String> unreadable = new ArrayList<>();
         List<String> uncertain = new ArrayList<>();
-        if (state == null || declaration == null) return new Result(calls, unreadable, uncertain);
+        if (sources == null || declaration == null) return new Result(calls, unreadable, uncertain);
         String owner = declaringClassOf(declaration);
         if (owner == null) return new Result(calls, unreadable, uncertain);
         IMethodBinding binding = declaration.resolveBinding();
@@ -215,24 +214,24 @@ public final class MethodReferences {
         }
 
         CompilationUnit live = (CompilationUnit) declaration.getRoot();
-        BotIndex index = BotIndex.of(state);
+        BotIndex index = BotIndex.of(sources);
         Shape shape = new Shape(key, Usages.keyOf(binding.getDeclaringClass()), declaration.getName().getIdentifier(),
                 declaration.parameters().size(), declaration.isConstructor());
         index.read(units -> {
-            for (ProjectFile file : state.getAllFiles()) {
+            for (Path file : sources.files().toList()) {
                 CompilationUnit unit;
-                if (file == state.getActiveFile()) {
+                if (sources.unit(file).orElse(null) == live) {
                     unit = live;
                 } else {
-                    if (file.getContent() == null || file.getPath() == null) continue;
-                    unit = units.get(file.getPath().toAbsolutePath().normalize());
+                    if (sources.text(file).isEmpty()) continue;
+                    unit = units.get(file.toAbsolutePath().normalize());
                     if (unit == null) continue;
                     if (SourceParser.doesNotParse(unit)) {
-                        unreadable.add(file.getClassName());
+                        unreadable.add(SourceSet.className(file));
                         continue;
                     }
                 }
-                scan(file, unit, shape, calls, uncertain);
+                scan(file, sources.text(file).orElse(""), unit, shape, calls, uncertain);
             }
             return null;
         });
@@ -268,13 +267,13 @@ public final class MethodReferences {
         }
     }
 
-    private static void scan(ProjectFile file, CompilationUnit unit, Shape shape, List<CallSite> calls,
+    private static void scan(Path file, String source, CompilationUnit unit, Shape shape, List<CallSite> calls,
                              List<String> uncertain) {
         // What javac bound to this method is found where every use is (Uses); a this(…) or super(…) call of a
         // constructor is one a change of shape cannot follow, so it is "cannot tell".
         for (Uses.Found found : Uses.in(unit, Set.of(shape.key()), false)) {
             switch (found.shape()) {
-                case CALL, STATEMENT, CREATION, REFERENCE -> calls.add(new CallSite(file, unit,
+                case CALL, STATEMENT, CREATION, REFERENCE -> calls.add(new CallSite(file, source, unit,
                         (Expression) found.node()));
                 case DELEGATION -> unsure(file, uncertain);
                 default -> { }
@@ -336,8 +335,9 @@ public final class MethodReferences {
         });
     }
 
-    private static void unsure(ProjectFile file, List<String> uncertain) {
-        if (!uncertain.contains(file.getClassName())) uncertain.add(file.getClassName());
+    private static void unsure(Path file, List<String> uncertain) {
+        String name = SourceSet.className(file);
+        if (!uncertain.contains(name)) uncertain.add(name);
     }
 
     /** The name of the class {@code declaration} belongs to. */

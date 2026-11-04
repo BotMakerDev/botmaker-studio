@@ -48,7 +48,7 @@ class CommentIndexInsertTest {
     void insertJustAfterACommentLandsWhereItWasDropped() {
         EditorFixture f = withComment();
         BodyBlock run = f.body("run");
-        f.editor.pasteCode(run, afterComment(run), PASTED);
+        f.editor.pasteCode(run.getId(), afterComment(run), PASTED);
 
         assertNotNull(f.lastCode, "an insert after a comment must be allowed");
         int pasted = f.lastCode.indexOf(PASTED);
@@ -61,7 +61,7 @@ class CommentIndexInsertTest {
     void insertAtTheEndOfACommentedBodyLandsLast() {
         EditorFixture f = withComment();
         BodyBlock run = f.body("run");
-        f.editor.pasteCode(run, run.getStatements().size(), PASTED);
+        f.editor.pasteCode(run.getId(), run.getStatements().size(), PASTED);
 
         assertNotNull(f.lastCode, "an insert at the end must be allowed");
         assertTrue(f.lastCode.indexOf(PASTED) > f.lastCode.indexOf("int last"),

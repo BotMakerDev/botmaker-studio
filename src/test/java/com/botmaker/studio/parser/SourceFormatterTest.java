@@ -52,7 +52,7 @@ class SourceFormatterTest {
         String packed = readResource("/parser/packed-switch.java.txt");
         EditorFixture fixture = new EditorFixture(packed);
 
-        fixture.editor.addStatement(fixture.body("run"), BlockCatalog.PRINT, 0);
+        fixture.editor.addStatement(fixture.body("run").getId(),BlockCatalog.PRINT, 0);
 
         assertNotNull(fixture.lastCode, () -> "the edit was refused: " + fixture.statusMessages);
         java.util.Set<String> before = new java.util.HashSet<>(packed.lines().toList());

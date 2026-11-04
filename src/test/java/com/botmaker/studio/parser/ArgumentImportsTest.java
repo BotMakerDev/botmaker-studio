@@ -76,7 +76,7 @@ class ArgumentImportsTest {
     void insertingACallImportsItsArgumentTypes() {
         EditorFixture f = new EditorFixture(SOURCE);
 
-        f.editor.addMethodCallStatement(f.body("run"),
+        f.editor.addMethodCallStatement(f.body("run").getId(),
                 new ExpressionChoice.Method("Pixel", "find", List.of(ResolvedType.named("Color")), true),
                 0);
 

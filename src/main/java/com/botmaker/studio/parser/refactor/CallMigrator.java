@@ -8,9 +8,8 @@ import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.MethodReferences.CallSite;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
 import com.botmaker.studio.parser.refactor.SignatureMigration.CallChange;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.ResolvedType;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -26,8 +25,7 @@ import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.SwitchCase;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
 
-import java.io.IOException;
-import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -47,7 +45,7 @@ import java.util.Set;
  * source for all of them is computed and parsed first, and a single file that comes out broken abandons the
  * whole change with nothing written anywhere.
  *
- * <p>Only then does {@link #commit} touch the disk. A migration that half-lands is the failure this whole
+ * <p>Only then does the editor touch the disk. A migration that half-lands is the failure this whole
  * feature exists to prevent, so the ordering is deliberate rather than incidental.
  */
 public final class CallMigrator {
@@ -55,7 +53,7 @@ public final class CallMigrator {
     private CallMigrator() {}
 
     /** A file the migration changes, and what it should say afterwards. */
-    public record Rewritten(ProjectFile file, String newSource) {}
+    public record Rewritten(Path file, String oldSource, String newSource) {}
 
     /**
      * Records into {@code ctx}'s rewrite every call the plan changes that lives in {@code ctx.cu()} — false
@@ -94,8 +92,8 @@ public final class CallMigrator {
      * type moved) are simply absent from the result rather than rewritten to themselves.
      */
     public static List<Rewritten> rewriteOthers(SignatureMigration.Plan plan, CompilationUnit active,
-                                                ProjectAnalyzer analyzer, ProjectState state) {
-        return rewriteOthers(plan, active, analyzer, state, null, false);
+                                                ProjectAnalyzer analyzer, SourceSet sources) {
+        return rewriteOthers(plan, active, analyzer, sources, null, false);
     }
 
     /**
@@ -105,7 +103,7 @@ public final class CallMigrator {
      * would erase the mark ({@link ReviewMarker#marksSurvive}).
      */
     public static List<Rewritten> rewriteOthers(SignatureMigration.Plan plan, CompilationUnit active,
-                                                ProjectAnalyzer analyzer, ProjectState state,
+                                                ProjectAnalyzer analyzer, SourceSet sources,
                                                 ProjectConfig config, boolean marks) {
         Map<CompilationUnit, List<CallChange>> byUnit = new LinkedHashMap<>();
         for (CallChange change : plan.calls()) {
@@ -115,11 +113,11 @@ public final class CallMigrator {
 
         List<Rewritten> rewritten = new ArrayList<>();
         for (Map.Entry<CompilationUnit, List<CallChange>> entry : byUnit.entrySet()) {
-            ProjectFile file = entry.getValue().getFirst().site().file();
-            EditContext ctx = EditContext.of(entry.getKey(), analyzer, state);
+            CallSite first = entry.getValue().getFirst().site();
+            EditContext ctx = EditContext.of(entry.getKey(), analyzer, sources);
             // A change this cannot express — a constant moved to another class with no type written at the
             // call site to retarget — refuses the migration whole, exactly as an unparseable result does.
-            boolean marking = marks && ReviewMarker.marksSurvive(config, state, file.getPath());
+            boolean marking = marks && ReviewMarker.marksSurvive(config, first.file());
             Map<MethodDeclaration, Set<String>> noted = new LinkedHashMap<>();
             for (CallChange change : entry.getValue()) {
                 if (!apply(ctx, change)) return null;
@@ -127,31 +125,16 @@ public final class CallMigrator {
             }
             noted.forEach((method, entries) -> ReviewMarks.mark(ctx, method, List.copyOf(entries)));
 
-            String source = ctx.applyTo(file.getContent());
+            String source = ctx.applyTo(first.source());
             if (source == null) return null;
-            if (source.equals(file.getContent())) continue;
+            if (source.equals(first.source())) continue;
             // The one check that stands between a bad rewrite and a file the user cannot open: applyRewrite
             // returns the original text when an edit won't apply, and a rewrite that *does* apply can still
             // produce nonsense. Either way this file is not written, and neither is any other.
             if (SourceParser.hasSyntaxErrors(SourceParser.parse(source))) return null;
-            rewritten.add(new Rewritten(file, source));
+            rewritten.add(new Rewritten(first.file(), first.source(), source));
         }
         return List.copyOf(rewritten);
-    }
-
-    /**
-     * Writes the rewritten files to disk and updates the editor's copy of each.
-     *
-     * <p>The cached AST is dropped rather than re-parsed: {@code ProjectAnalyzer} re-parses a file whose AST is
-     * missing and skips one that has any, so leaving yesterday's tree in place would keep every suggestion in
-     * Studio reading the pre-migration signature.
-     */
-    public static void commit(List<Rewritten> files) throws IOException {
-        for (Rewritten each : files) {
-            Files.writeString(each.file().getPath(), each.newSource());
-            each.file().setContent(each.newSource());
-            each.file().setAst(null);
-        }
     }
 
     /** A default value for {@code type}, importing whatever naming it needs in {@code ctx}'s file. */
@@ -165,7 +148,7 @@ public final class CallMigrator {
             if (choice.isList()) ctx.addImport("java.util.List");
         });
         ResolvedType resolved = resolvedOf(type);
-        Expression value = InitializerFactory.createDefaultInitializer(ctx.ast(), resolved, ctx.cu(), ctx.state());
+        Expression value = InitializerFactory.createDefaultInitializer(ctx.ast(), resolved, ctx.cu(), ctx.sources());
         return value == null ? ctx.ast().newNullLiteral() : value;
     }
 

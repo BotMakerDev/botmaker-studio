@@ -2,6 +2,7 @@ package com.botmaker.studio.project.source;
 
 import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -36,8 +37,8 @@ public record BotParser(List<String> classpath, Path sourceRoot) {
     }
 
     /** The parser for the open project, or {@link #SYNTAX} with none. FX thread, as {@link ProjectState} is. */
-    public static BotParser of(ProjectState state) {
-        return state == null ? SYNTAX : new BotParser(state.getResolvedClasspath(), state.getSourcePath());
+    public static BotParser of(SourceSet sources) {
+        return sources == null ? SYNTAX : new BotParser(sources.classpath(), sources.sourceRoot());
     }
 
     /**

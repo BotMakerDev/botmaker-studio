@@ -15,7 +15,7 @@ import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.managed.HolderFiles;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.JdkType;
@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -361,11 +362,11 @@ public class StatementFactory {
             // fewest arguments (the simplest starting point). Seed a default value per parameter (a
             // CaptureSource slot gets the project-default target — see InitializerFactory). When no overload
             // resolves at all (unknown method), fall back to a single empty "+" slot the user fills.
-            MethodSignature overload = defaultOverload(l, ctx.state(), ctx.analyzer());
+            MethodSignature overload = defaultOverload(l, ctx.favorites(), ctx.analyzer());
             List<ResolvedType> params = overload == null ? null : overload.paramTypes();
             boolean takesHolders = overload != null && endsInClassVarargs(overload) && isEntryPoint(l);
             Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = takesHolders ? pluginValues() : Map.of();
-            List<HolderUnit> holders = takesHolders ? valuesHolders(ctx.state(), byPlugin) : List.of();
+            List<HolderUnit> holders = takesHolders ? valuesHolders(ctx.sources(), byPlugin) : List.of();
             if (!holders.isEmpty()) {
                 // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed every
                 // plugin's holder of values, from which the plugin finds its parameters' group (2026-11-04: a
@@ -418,10 +419,10 @@ public class StatementFactory {
      * project's cached index, so a file nobody opened counts and the insert does not depend on which files the
      * editor happened to show.
      */
-    static Map<HolderFiles.Key, CompilationUnit> holderUnits(ProjectState state,
+    static Map<HolderFiles.Key, CompilationUnit> holderUnits(SourceSet sources,
                                                              Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
-        if (state == null) return Map.of();
-        return BotIndex.of(state).read(trees -> {
+        if (sources == null) return Map.of();
+        return BotIndex.of(sources).read(trees -> {
             Map<HolderFiles.Key, CompilationUnit> units = new HashMap<>();
             HolderFiles.find(trees, byPlugin).forEach((key, path) -> units.put(key, trees.get(path)));
             return units;
@@ -489,8 +490,8 @@ public class StatementFactory {
      * the project lacks is left out: naming it would not compile. A file nobody opened counts too — {@code Sdk.java}
      * never had a tree, so Run activity flow was seeded {@code new Flow()} (2026-10-12).
      */
-    static List<HolderUnit> valuesHolders(ProjectState state, Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
-        Map<HolderFiles.Key, CompilationUnit> units = holderUnits(state, byPlugin);
+    static List<HolderUnit> valuesHolders(SourceSet sources, Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
+        Map<HolderFiles.Key, CompilationUnit> units = holderUnits(sources, byPlugin);
         Map<HolderFiles.Key, HolderUnit> holders = new LinkedHashMap<>();
         byPlugin.forEach((plugin, declared) -> {
             for (ManagedValue<?> value : declared) {
@@ -521,7 +522,7 @@ public class StatementFactory {
      * still resolves, otherwise the overload with the fewest parameters. {@code null} only when no overload of
      * the method resolves at all (an unknown method) — callers then use a single empty slot.
      */
-    private static MethodSignature defaultOverload(BlockType.LibraryCall l, ProjectState state,
+    private static MethodSignature defaultOverload(BlockType.LibraryCall l, UnaryOperator<String> favorites,
                                                             ProjectAnalyzer analyzer) {
         if (analyzer == null) return null;
         List<MethodSignature> sigs = analyzer.getMethods(l.facade().getSimpleName(), true).stream()
@@ -532,8 +533,7 @@ public class StatementFactory {
         // the menu proposed this name because some overload is offered, and that is the one to create.
         // fewestParams over the unfiltered list would happily land the user on a hidden shape.
         sigs = PaletteCuration.current().retainOffered(l.facade().getSimpleName(), l.method(), sigs, null);
-        String favKey = (state != null && state.getSettings() != null)
-                ? state.getSettings().favoriteSignature(l.facade().getSimpleName() + "#" + l.method()) : null;
+        String favKey = favorites.apply(l.facade().getSimpleName() + "#" + l.method());
         // A favorite pinned before the facade was curated may name an overload that is no longer offered;
         // bestForKey then finds nothing in the filtered list and the fallback takes over, which is the
         // intended degradation — a stale preference must not resurrect a hidden overload.
@@ -671,7 +671,7 @@ public class StatementFactory {
         VariableDeclarationFragment frag = ast.newVariableDeclarationFragment();
         frag.setName(ast.newSimpleName(uniqueName(ctx.analyzer(), context, "myList")));
         ResolvedType arrayType = ResolvedType.named("int[]");
-        frag.setInitializer(InitializerFactory.createArrayInitializer(ast, arrayType, Collections.emptyList(), ctx.cu(), ctx.state()));
+        frag.setInitializer(InitializerFactory.createArrayInitializer(ast, arrayType, Collections.emptyList(), ctx.cu(), ctx.sources()));
         VariableDeclarationStatement listDecl = ast.newVariableDeclarationStatement(frag);
         listDecl.setType(ProjectAnalyzer.createTypeNode(ast, arrayType));
         return listDecl;

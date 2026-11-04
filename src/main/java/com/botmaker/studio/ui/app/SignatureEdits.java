@@ -156,7 +156,7 @@ public final class SignatureEdits {
         files.put(declaring, active);
         rewriters.computeIfAbsent(declaring, unit -> ASTRewrite.create(unit.getAST())).remove(method, null);
         for (MethodReferences.CallSite site : references.calls()) {
-            files.putIfAbsent(site.unit(), site.file().getPath().toAbsolutePath().normalize());
+            files.putIfAbsent(site.unit(), site.file().toAbsolutePath().normalize());
             rewriters.computeIfAbsent(site.unit(), unit -> ASTRewrite.create(unit.getAST()))
                     .remove(site.node().getParent(), null);
         }

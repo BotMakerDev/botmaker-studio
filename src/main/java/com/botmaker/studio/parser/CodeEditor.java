@@ -1,7 +1,5 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.studio.core.BodyBlock;
-import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.nav.Refactor;
@@ -36,6 +34,7 @@ import com.botmaker.studio.parser.helpers.Precedence;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.CallMigrator;
+import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
@@ -57,6 +56,7 @@ import org.eclipse.jface.text.Document;
 import org.eclipse.jface.text.IDocument;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -168,27 +168,19 @@ public class CodeEditor {
      * about a position that {@link #canModify} could not express. Nothing generates that return any more, so
      * every statement in a body is an ordinary one and a body has no last-statement rule left.
      */
-    private boolean canInsertAt(BodyBlock targetBody, int index) {
+    private boolean canInsertAt(ASTNode targetBody, int index) {
         return true;
+    }
+
+    /** The node a {@link BlockId} names in the open file, or {@code null} when there is none any more. */
+    private ASTNode nodeAt(String id) {
+        CompilationUnit cu = getCompilationUnit();
+        return cu == null || id == null ? null : BlockId.find(cu, id).orElse(null);
     }
 
     /** Whether {@code toDelete} may be removed. Every statement is the user's, so: yes. */
     private boolean canDelete(Statement toDelete) {
         return true;
-    }
-
-    /**
-     * Translates a {@link BodyBlock} child index into a {@code Block.statements()} index by skipping the
-     * children that occupy no statements() slot — the {@link Comment}s. A {@code Comment} is not a JDT
-     * {@code Statement}, so the two indexings diverge whenever a body holds comment blocks.
-     */
-    private static int toStatementIndex(BodyBlock body, int childIndex) {
-        int astIndex = 0;
-        var children = body.getStatements();
-        for (int i = 0; i < childIndex && i < children.size(); i++) {
-            if (!(children.get(i).getAstNode() instanceof Comment)) astIndex++;
-        }
-        return astIndex;
     }
 
     private boolean triggerUpdate(String newCode, ASTNode target) {
@@ -345,7 +337,7 @@ public class CodeEditor {
      * why the handlers take a single {@link EditContext} rather than re-listing the same four arguments.
      */
     private EditContext ctx(CompilationUnit cu) {
-        return EditContext.of(cu, analyzer, state);
+        return EditContext.of(cu, analyzer, state).withFavorites(this::favoriteSignature);
     }
 
     /**
@@ -635,9 +627,16 @@ public class CodeEditor {
         insert(target, EditKind.BODY, false, (cu, code) -> MethodHandler.replaceWithMethodCall(ctx(cu), code, target, choice));
     }
 
-    public void addMethodCallStatement(BodyBlock targetBody, ExpressionChoice.Method choice, int index) {
-        if (!canInsertAt(targetBody, index)) return;
-        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> MethodHandler.addMethodCallStatement(ctx(cu), code, targetBody, choice, index));
+    /** The overload the user pinned for {@code methodKey}, a project setting, or {@code null}. */
+    private String favoriteSignature(String methodKey) {
+        StudioProjectSettings settings = state == null ? null : state.getSettings();
+        return settings == null ? null : settings.favoriteSignature(methodKey);
+    }
+
+    public void addMethodCallStatement(String bodyId, ExpressionChoice.Method choice, int index) {
+        ASTNode targetBody = nodeAt(bodyId);
+        if (targetBody == null || !canInsertAt(targetBody, index)) return;
+        insert(targetBody, EditKind.BODY, false, (cu, code) -> MethodHandler.addMethodCallStatement(ctx(cu), code, targetBody, choice, index));
     }
 
     public void addMethodToClass(TypeDeclaration typeDecl, String methodName, String returnType, int index) {
@@ -701,12 +700,11 @@ public class CodeEditor {
         if (newCode == null) return;
         // Read before the commit below overwrites them: this is what ↶ has to put back in those files.
         List<CoreApplicationEvents.FileEdit> alsoChanged = others.stream()
-                .map(each -> new CoreApplicationEvents.FileEdit(
-                        each.file().getPath(), each.file().getContent(), each.newSource()))
+                .map(each -> new CoreApplicationEvents.FileEdit(each.file(), each.oldSource(), each.newSource()))
                 .toList();
         if (!triggerUpdate(newCode, false, method, EditKind.SIGNATURE, alsoChanged)) return;
         try {
-            CallMigrator.commit(others);
+            commit(others);
         } catch (IOException e) {
             eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
                     "The function changed, but one of the files calling it couldn't be saved: " + e.getMessage()));
@@ -756,20 +754,19 @@ public class CodeEditor {
         List<CallMigrator.Rewritten> others = new ArrayList<>();
         for (Map.Entry<Path, String> rewrite : plan.rewrites().entrySet()) {
             if (rewrite.getKey().equals(activePath)) continue;
-            ProjectFile file = state.getFile(rewrite.getKey()).orElse(null);
-            if (file == null) file = new ProjectFile(rewrite.getKey(), read(rewrite.getKey()));
-            others.add(new CallMigrator.Rewritten(file, rewrite.getValue()));
+            String before = state.getFile(rewrite.getKey()).map(ProjectFile::getContent)
+                    .orElseGet(() -> read(rewrite.getKey()));
+            others.add(new CallMigrator.Rewritten(rewrite.getKey(), before, rewrite.getValue()));
         }
         if (!others.isEmpty()) ReviewMarker.snapshot(config, "Before: " + plan.summary());
 
         List<CoreApplicationEvents.FileEdit> alsoChanged = others.stream()
-                .map(each -> new CoreApplicationEvents.FileEdit(
-                        each.file().getPath(), each.file().getContent(), each.newSource()))
+                .map(each -> new CoreApplicationEvents.FileEdit(each.file(), each.oldSource(), each.newSource()))
                 .toList();
         String newCode = plan.rewrites().getOrDefault(activePath, getCurrentCode());
         if (!triggerUpdate(newCode, false, target, EditKind.SIGNATURE, alsoChanged)) return false;
         try {
-            CallMigrator.commit(others);
+            commit(others);
         } catch (IOException e) {
             eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
                     "The change was made here, but " + e.getMessage() + " couldn't be saved."));
@@ -777,6 +774,23 @@ public class CodeEditor {
         }
         eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(plan.summary() + "."));
         return true;
+    }
+
+    /**
+     * Writes the rewritten files to disk and updates the editor's copy of each.
+     *
+     * <p>The cached AST is dropped rather than re-parsed: {@code ProjectAnalyzer} re-parses a file whose AST is
+     * missing and skips one that has any, so leaving yesterday's tree in place would keep every suggestion in
+     * Studio reading the pre-migration signature.
+     */
+    private void commit(List<CallMigrator.Rewritten> files) throws IOException {
+        for (CallMigrator.Rewritten each : files) {
+            Files.writeString(each.file(), each.newSource());
+            state.getFile(each.file()).ifPresent(file -> {
+                file.setContent(each.newSource());
+                file.setAst(null);
+            });
+        }
     }
 
     /** A file the editor does not hold, as it is on disk — empty when unreadable, which the rewrite replaces. */
@@ -1109,10 +1123,11 @@ public class CodeEditor {
      * <p>The caller has already checked {@link SlotVacancy#canStandAlone}; this is the second door, since an
      * expression that is not a statement form would be written as source that does not compile.
      */
-    public void moveExpressionToStatement(Expression source, BodyBlock targetBody, int targetIndex) {
+    public void moveExpressionToStatement(Expression source, String bodyId, int targetIndex) {
+        ASTNode targetBody = nodeAt(bodyId);
         if (source == null || targetBody == null || !SlotVacancy.canStandAlone(source)) return;
         if (!canInsertAt(targetBody, targetIndex)) return;
-        edit(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+        edit(targetBody, EditKind.BODY, false, (cu, code) -> {
             EditContext context = ctx(cu);
             AST ast = cu.getAST();
             ExpressionStatement lifted =
@@ -1224,15 +1239,17 @@ public class CodeEditor {
     // STATEMENTS / FLOW
     // =================================================================================
 
-    public void addStatement(BodyBlock targetBody, BlockType type, int index) {
-        if (!canModify(targetBody.getAstNode(), EditKind.BODY) || !canInsertAt(targetBody, index)) return;
+    public void addStatement(String bodyId, BlockType type, int index) {
+        ASTNode targetBody = nodeAt(bodyId);
+        if (targetBody == null) return;
+        if (!canModify(targetBody, EditKind.BODY) || !canInsertAt(targetBody, index)) return;
         CompilationUnit cu = getCompilationUnit();
         if (cu == null) return;
         String newCode = addStatement(ctx(cu), getCurrentCode(), targetBody, type, index);
         if (newCode == null || wouldNotCompile(newCode)) return;
         // The refusal has to take the announcement with it: a BlockAddedEvent for a block that was never
         // published scrolls the canvas to a block that isn't there.
-        if (!triggerUpdate(newCode, true, targetBody.getAstNode(), EditKind.BODY)) return;
+        if (!triggerUpdate(newCode, true, targetBody, EditKind.BODY)) return;
         eventBus.publish(new CoreApplicationEvents.BlockAddedEvent(type));
     }
 
@@ -1241,9 +1258,10 @@ public class CodeEditor {
      * rather than the palette's {@code MyEnum { OPTION_A, OPTION_B }}. A name the file already uses is refused
      * by the compile check like any other insert, so the dialog's own check is a courtesy, not the guard.
      */
-    public void addEnumStatement(BodyBlock targetBody, int index, EnumDraft draft) {
-        if (draft == null || !canInsertAt(targetBody, index)) return;
-        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+    public void addEnumStatement(String bodyId, int index, EnumDraft draft) {
+        ASTNode targetBody = nodeAt(bodyId);
+        if (draft == null || targetBody == null || !canInsertAt(targetBody, index)) return;
+        insert(targetBody, EditKind.BODY, false, (cu, code) -> {
             EditContext ctx = ctx(cu);
             Statement statement = StatementFactory.createEnumDeclaration(cu.getAST(), draft);
             ListRewrite listRewrite = AstRewriteHelper.getListRewriteForBody(ctx.rewriter(), targetBody);
@@ -1260,9 +1278,10 @@ public class CodeEditor {
      * from the type chooser (2026-09-26). Any type: the type is written as a tree with its imports, and the
      * value is the grammar's fresh one for it, else the language default.
      */
-    public void declareLocal(BodyBlock targetBody, int index, String name, java.lang.reflect.Type type) {
-        if (name == null || type == null || !canInsertAt(targetBody, index)) return;
-        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+    public void declareLocal(String bodyId, int index, String name, java.lang.reflect.Type type) {
+        ASTNode targetBody = nodeAt(bodyId);
+        if (name == null || type == null || targetBody == null || !canInsertAt(targetBody, index)) return;
+        insert(targetBody, EditKind.BODY, false, (cu, code) -> {
             EditContext ctx = ctx(cu);
             AST ast = cu.getAST();
             VariableDeclarationFragment fragment = ast.newVariableDeclarationFragment();
@@ -1305,9 +1324,10 @@ public class CodeEditor {
         edit(decl, EditKind.BODY, false, (cu, code) -> deleteVariable(ctx(cu), code, decl, fix, marker));
     }
 
-    public void pasteCode(BodyBlock targetBody, int index, String codeToPaste) {
-        if (!canInsertAt(targetBody, index)) return;
-        edit(targetBody.getAstNode(), EditKind.BODY, false,
+    public void pasteCode(String bodyId, int index, String codeToPaste) {
+        ASTNode targetBody = nodeAt(bodyId);
+        if (targetBody == null || !canInsertAt(targetBody, index)) return;
+        edit(targetBody, EditKind.BODY, false,
                 (cu, code) -> pasteCodeString(ctx(cu), code, targetBody, index, codeToPaste));
     }
 
@@ -1315,9 +1335,10 @@ public class CodeEditor {
      * Inserts a statement the host built as a tree — a recorded call, whose classes came from the plugin that
      * declared it — with exactly {@code imports}. One edit, so one undo step.
      */
-    public void insertStatement(BodyBlock targetBody, int index, Statement statement, List<String> imports) {
-        if (statement == null || !canInsertAt(targetBody, index)) return;
-        insert(targetBody.getAstNode(), EditKind.BODY, false, (cu, code) -> {
+    public void insertStatement(String bodyId, int index, Statement statement, List<String> imports) {
+        ASTNode targetBody = nodeAt(bodyId);
+        if (statement == null || targetBody == null || !canInsertAt(targetBody, index)) return;
+        insert(targetBody, EditKind.BODY, false, (cu, code) -> {
             EditContext ctx = ctx(cu);
             for (String qualified : imports) ctx.addImport(qualified);
             ASTRewrite rewriter = ctx.rewriter();
@@ -1339,12 +1360,16 @@ public class CodeEditor {
      * removes code from it just as surely as dropping one in adds code. Checking only the destination would
      * let a drag empty out a generated method.
      */
-    public void moveStatement(StatementBlock blockToMove, BodyBlock sourceBody, BodyBlock targetBody, int targetIndex) {
-        if (!canModify(sourceBody.getAstNode(), EditKind.BODY) || !canInsertAt(targetBody, targetIndex)) return;
+    public void moveStatement(String statementId, String sourceBodyId, String targetBodyId, int targetIndex) {
+        ASTNode toMove = nodeAt(statementId);
+        ASTNode sourceBody = nodeAt(sourceBodyId);
+        ASTNode targetBody = nodeAt(targetBodyId);
+        if (toMove == null || sourceBody == null || targetBody == null) return;
+        if (!canModify(sourceBody, EditKind.BODY) || !canInsertAt(targetBody, targetIndex)) return;
         // A pinned return is not the user's to move out of its body either — dragging it away is a delete.
-        if (blockToMove.getAstNode() instanceof Statement moved && !canDelete(moved)) return;
-        edit(targetBody.getAstNode(), EditKind.BODY, false,
-                (cu, code) -> moveStatement(cu, code, blockToMove, sourceBody, targetBody, targetIndex));
+        if (toMove instanceof Statement moved && !canDelete(moved)) return;
+        edit(targetBody, EditKind.BODY, false,
+                (cu, code) -> moveStatement(cu, code, toMove, sourceBody, targetBody, targetIndex));
     }
 
     public void deleteElseFromIfStatement(IfStatement ifStmt) {
@@ -1691,14 +1716,13 @@ public class CodeEditor {
      * the body's end. The body was always passed, and read as its <em>start</em>: an assignment appended to
      * {@code main} could not see the {@code count} declared a line above it.
      */
-    private static ASTNode insertionContext(BodyBlock targetBody, int index) {
-        ASTNode body = targetBody.getAstNode();
+    private static ASTNode insertionContext(ASTNode body, int index) {
         if (!(body instanceof Block block)) return body;
-        int at = toStatementIndex(targetBody, index);
+        int at = BodyChildren.statementIndex(block, index);
         return at < block.statements().size() ? (ASTNode) block.statements().get(at) : block;
     }
 
-    private static String addStatement(EditContext ctx, String originalCode, BodyBlock targetBody, BlockType type, int index) {
+    private static String addStatement(EditContext ctx, String originalCode, ASTNode targetBody, BlockType type, int index) {
         ASTRewrite rewriter = ctx.rewriter();
         Statement newStatement = NodeCreator.createDefaultStatement(ctx, type, insertionContext(targetBody, index));
         if (newStatement == null) return originalCode;
@@ -1795,7 +1819,7 @@ public class CodeEditor {
         return false;
     }
 
-    private static String pasteCodeString(EditContext ctx, String originalCode, BodyBlock targetBody, int index,
+    private static String pasteCodeString(EditContext ctx, String originalCode, ASTNode targetBody, int index,
                                           String codeToPaste) {
         ASTRewrite rewriter = ctx.rewriter();
         // The clipboard carries bare source with no import context (an in-app copy is just node.toString()),
@@ -1813,13 +1837,13 @@ public class CodeEditor {
         return AstRewriteHelper.applyRewrite(rewriter, originalCode);
     }
 
-    private static String moveStatement(CompilationUnit cu, String originalCode, StatementBlock blockToMove, BodyBlock sourceBody, BodyBlock targetBody, int targetIndex) {
+    private static String moveStatement(CompilationUnit cu, String originalCode, ASTNode toMove, ASTNode sourceBody, ASTNode targetBody, int targetIndex) {
         AST ast = cu.getAST();
         ASTRewrite rewriter = ASTRewrite.create(ast);
         // A block's backing node isn't always the Statement itself: a bare expression block (e.g.
         // ImageFinder.find(...)) stores the MethodInvocation, whose enclosing ExpressionStatement is what
         // the list rewrite operates on. Walk up to the nearest Statement rather than casting blindly.
-        Statement statement = enclosingStatement(blockToMove.getAstNode());
+        Statement statement = enclosingStatement(toMove);
         if (statement == null) return originalCode;
         ListRewrite sourceListRewrite = AstRewriteHelper.getListRewriteForBody(rewriter, sourceBody);
         ListRewrite targetListRewrite = AstRewriteHelper.getListRewriteForBody(rewriter, targetBody);
@@ -2038,19 +2062,18 @@ public class CodeEditor {
     }
 
     /**
-     * Inserts {@code newStatement} at a {@link BodyBlock} child index.
+     * Inserts {@code newStatement} at a body's child index, which counts the comments drawn in it.
      *
      * <p>Returns a {@link PendingInsert} when the insertion could <b>not</b> be expressed on the rewriter and
-     * has to be done as a raw text edit instead — see {@link #commentAnchor}. In that case the caller must
+     * has to be done as a raw text edit instead — see {@link BodyChildren#commentBefore}. In that case the caller must
      * finish through {@link AstRewriteHelper#applyRewriteAndInsertAt} and {@code newStatement} is not added to
      * the list. {@code null} means the rewriter has it.
      */
-    private static PendingInsert insertIntoList(ListRewrite listRewrite, BodyBlock body, Statement newStatement,
+    private static PendingInsert insertIntoList(ListRewrite listRewrite, ASTNode node, Statement newStatement,
                                                 int relativeIndex, String textIfDeferred) {
-        ASTNode node = body.getAstNode();
-        if (node instanceof Block) {
-            Comment anchor = commentAnchor(body, relativeIndex);
-            if (anchor != null) return PendingInsert.after(anchor, textIfDeferred, body);
+        if (node instanceof Block block) {
+            Comment anchor = BodyChildren.commentBefore(block, relativeIndex);
+            if (anchor != null) return PendingInsert.after(anchor, textIfDeferred);
 
             // relativeIndex counts BodyBlock children, which include CommentBlocks — a Comment is not a JDT
             // Statement and so isn't in Block.statements(). Inserting at the raw index into a body whose only
@@ -2059,7 +2082,7 @@ public class CodeEditor {
             // the comments. (Checking `instanceof Statement` is wrong: an expression-backed statement block —
             // e.g. a bare method call — has a MethodInvocation as its node, not the ExpressionStatement, yet it
             // still occupies a slot.)
-            listRewrite.insertAt(newStatement, toStatementIndex(body, relativeIndex), null);
+            listRewrite.insertAt(newStatement, BodyChildren.statementIndex(block, relativeIndex), null);
         } else if (node instanceof SwitchCase caseNode) {
             // Colon form only. A case's statements are siblings of its label here, so offsetting from the label
             // is the insertion point. An arrow rule's body is a Block instead, and this arithmetic would write
@@ -2079,34 +2102,19 @@ public class CodeEditor {
         return null;
     }
 
-    /**
-     * The comment the insertion point sits immediately after, or {@code null} when it doesn't.
-     *
-     * <p>Why this exists: a {@link Comment} occupies no slot in {@code Block.statements()}, and JDT treats a
-     * leading comment as part of the <em>extended</em> source range of the statement that follows it. So there
-     * is no statements() index that means "after the comment" — inserting at the translated index puts the new
-     * code <b>before</b> it, which is why "Paste After" on a comment block pasted before the comment. The
-     * position is expressible only in raw offsets, hence the text-edit path.
-     */
-    private static Comment commentAnchor(BodyBlock body, int relativeIndex) {
-        var children = body.getStatements();
-        if (relativeIndex <= 0 || relativeIndex > children.size()) return null;
-        return children.get(relativeIndex - 1).getAstNode() instanceof Comment c ? c : null;
-    }
-
     /** A text insertion the rewriter can't express: {@code text} goes at {@code offset} in the original code. */
     private record PendingInsert(int offset, String text) {
 
         /** Placed at the end of {@code anchor}'s line, indented to match it. */
-        static PendingInsert after(Comment anchor, String text, BodyBlock body) {
+        static PendingInsert after(Comment anchor, String text) {
             if (text == null || text.isBlank()) return null;
-            String indent = indentOf(anchor, body);
+            String indent = indentOf(anchor);
             return new PendingInsert(anchor.getStartPosition() + anchor.getLength(),
                     "\n" + indent + text.strip());
         }
 
         /** The anchor's own column, so the inserted statement lines up with the comment rather than the brace. */
-        private static String indentOf(Comment anchor, BodyBlock body) {
+        private static String indentOf(Comment anchor) {
             ASTNode root = anchor.getRoot();
             if (!(root instanceof CompilationUnit cu)) return "    ";
             int line = cu.getLineNumber(anchor.getStartPosition());

@@ -46,7 +46,7 @@ public final class DeclareVariableDialog {
         BotRecords records = BotRecords.scan(context.getConfig(), context.getState(),
                 com.botmaker.studio.plugin.PluginHost.grammar());
         ask(owner, records, EditVariableDialog.declaredNames(context)).ifPresent(declared ->
-                context.getCodeEditor().declareLocal(body, index, declared.name(), declared.type()));
+                context.getCodeEditor().declareLocal(body.getId(), index, declared.name(), declared.type()));
     }
 
     /**

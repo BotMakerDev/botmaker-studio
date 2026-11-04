@@ -107,7 +107,7 @@ class AstRewriteFailureTest {
         EditorFixture f = new EditorFixture(SOURCE);
         BlockType classOnly = new BlockType.MethodMember("METHOD", "Method", BlockCategory.FUNCTIONS);
 
-        f.editor.addStatement(f.body("run"), classOnly, 0);
+        f.editor.addStatement(f.body("run").getId(), classOnly, 0);
 
         assertNull(f.lastCode,
                 "nothing was built, so nothing should have been published — instead the editor announced an "

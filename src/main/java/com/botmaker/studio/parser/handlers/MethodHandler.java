@@ -2,7 +2,6 @@ package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.studio.parser.ExpressionChoice;
 
-import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.parser.EditContext;
 import com.botmaker.studio.parser.NodeCreator;
 import com.botmaker.studio.palette.BotType;
@@ -20,7 +19,7 @@ import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.palette.ExpressionType;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -45,10 +44,10 @@ public class MethodHandler {
         return ctx.applyTo(originalCode);
     }
 
-    public static String addMethodCallStatement(EditContext ctx, String originalCode, BodyBlock targetBody,
+    public static String addMethodCallStatement(EditContext ctx, String originalCode, ASTNode targetBody,
                                                 ExpressionChoice.Method choice, int index) {
         ExpressionStatement stmt = ctx.ast().newExpressionStatement(createMethodInvocation(ctx, choice));
-        LambdaCallHandler.freshenParams(stmt, targetBody.getAstNode());
+        LambdaCallHandler.freshenParams(stmt, targetBody);
 
         // Insert into body
         AstRewriteHelper.getListRewriteForBody(ctx.rewriter(), targetBody).insertAt(stmt, index, null);
@@ -59,7 +58,7 @@ public class MethodHandler {
     /**
      * Builds a {@code MethodInvocation} from a menu pick; shared by NodeCreator's unified expression builder.
      *
-     * <p>The context's {@link ProjectState} is what lets a {@code CaptureSource} argument default be seeded
+     * <p>The context's {@link SourceSet} is what lets a {@code CaptureSource} argument default be seeded
      * from the project's default capture target instead of the whole desktop (see {@code InitializerFactory}).
      */
     public static MethodInvocation createMethodInvocation(EditContext ctx, ExpressionChoice.Method choice) {
