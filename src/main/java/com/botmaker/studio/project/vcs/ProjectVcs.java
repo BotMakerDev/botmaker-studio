@@ -1634,11 +1634,11 @@ public final class ProjectVcs {
             "/src/main/resources/botmaker-project.properties", BMK, ProjectVcs.VALUES);
 
     /**
-     * Every {@code values} package of the bot's sources (2026-11-04): this computer's values classes of its
-     * {@code @Param} schemas, which hold the runner's choices and so never reach a version, a push or a publish. A
-     * restore keeps them: a hard reset leaves an excluded file alone.
+     * Every {@code params} package of the bot's sources (2026-11-04): this computer's parameters, whole, which never
+     * reach a version, a push or a publish; their starting copy, {@code starting-params/}, does. A restore keeps
+     * them: a hard reset leaves an excluded file alone. A file already tracked there stays tracked.
      */
-    public static final String VALUES = "/src/main/java/**/values/";
+    public static final String VALUES = "/src/main/java/**/params/";
 
     private void writeGitignore() throws IOException {
         Path gitignore = projectDir.resolve(".gitignore");

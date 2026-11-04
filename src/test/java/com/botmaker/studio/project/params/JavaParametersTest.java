@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.studio.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -93,7 +94,7 @@ class JavaParametersTest {
 
     // ---- a schema (2026-11-04) ----------------------------------------------------------------------------
 
-    /** A new parameter goes into one of the bot's own field classes: never a schema, never a plugin's file. */
+    /** A plugin's group in params/ takes no parameter of the author's, and changes its values only. */
     @Test
     void aNewParameterGoesIntoTheBotsOwnClassOnly(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
@@ -101,95 +102,98 @@ class JavaParametersTest {
                     @Param
                     public static int tries = 10;
                 """));
-        write(config, "RunChoices.java", schema("""
-                    default int rounds() { return 2; }
-                """));
+        writeGroup(config, "sdk", "Sdk", "    public int rounds() { return 2; }\n");
 
         assertEquals(List.of("Parameters"), JavaParameters.ownClasses(config, null));
-        assertTrue(JavaParameters.add(config, null, "RunChoices", "speed", TestValues.WHOLE_NUMBER, java("1"), "", "",
-                TestValues.GRAMMAR).isEmpty(), "a schema takes no field");
+        assertTrue(JavaParameters.add(config, null, "Sdk", "speed", TestValues.WHOLE_NUMBER, java("1"), "", "",
+                TestValues.GRAMMAR).isEmpty(), "a plugin's group takes none");
+        JavaParameter rounds = JavaParameters.find(config, null, "Sdk", "rounds", TestValues.GRAMMAR).orElseThrow();
+        assertTrue(rounds.declaredByPlugin() && rounds.editable(), rounds.note());
     }
 
-    /** An EDITOR method of a schema is the author's: its value is the default body, committed with the bot. */
+    /** A fresh copy of the bot has no params/: the fit fills it from starting-params/, values and all. */
     @Test
-    void anEditorParameterIsTheDefault(@TempDir Path root) throws IOException {
+    void aFreshCopyGetsItsStartingParams(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        write(config, "RunChoices.java", schema("""
+        Path starting = startingOf(config, "bot", "RunChoices");
+        Files.createDirectories(starting.getParent());
+        Files.writeString(starting, group("bot", "RunChoices", """
                     @Param.Shown(category = "Limits", description = "How many tries")
-                    default int tries() { return 10; }
+                    public int tries() { return 10; }
                 """));
+
+        ParamsFitter.onDisk(config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
+                config.projectPath().resolve(".botmaker/values-removed"));
+
         JavaParameter tries = only(config);
-        assertTrue(tries.schema() && tries.editable(), tries.note());
-        assertEquals("RunChoices", tries.className());
+        assertTrue(tries.group() && tries.editable(), tries.note());
         assertEquals("10", tries.row().value());
         assertEquals("Limits", tries.row().category());
         assertEquals("How many tries", tries.row().description());
-
-        assertTrue(JavaParameters.setValue(config, null, tries, java("3"), TestValues.GRAMMAR).isPresent());
-
-        String source = Files.readString(config.mainPackageDir().resolve("RunChoices.java"));
-        assertTrue(source.contains("default int tries() { return 3; }"), source);
-        assertFalse(Files.exists(config.mainPackageDir().resolve("values")), "nothing private was written");
-        assertInstanceOf(JavaParameters.Outcome.Refused.class, JavaParameters.declare(config, null, only(config),
-                tries.row().toBuilder().category("Run").build(), tries.form(), TestValues.GRAMMAR));
     }
 
     /**
-     * A PUBLIC method is the runner's: its value goes to this computer's values class, created on the first one and
-     * kept to the methods it overrides, and the schema's default stays as the author wrote it.
+     * A value edit is this computer's and stays in params/; what the parameter is shown as is written to both, and
+     * only Make this the starting value copies a value into the starting copy.
      */
     @Test
-    void aPublicParameterIsWrittenToTheValuesClass(@TempDir Path root) throws IOException {
+    void anEditNeverReachesTheStartingCopy(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        write(config, "RunChoices.java", schema("""
-                    default int tries() { return 10; }
+        writeGroup(config, "bot", "RunChoices", "    public int tries() { return 10; }\n");
+        Path starting = startingOf(config, "bot", "RunChoices");
+        JavaParameter tries = only(config);
 
-                    default String mode() { return "fast"; }
-                """).replace("@Param\n", "@Param(visibility = Param.PUBLIC)\n"));
-        JavaParameter tries = JavaParameters.find(config, null, "RunChoices", "tries", TestValues.GRAMMAR)
-                .orElseThrow();
-        assertEquals(Visibility.PUBLIC, tries.row().visibility(), "the schema's visibility is its methods'");
+        assertEquals("3", JavaParameters.setValue(config, null, tries, java("3"), TestValues.GRAMMAR)
+                .orElseThrow().value());
+        assertTrue(Files.readString(groupOf(config, "bot", "RunChoices")).contains("return 3;"));
+        assertTrue(Files.readString(starting).contains("return 10;"), "the starting copy keeps its value");
 
-        Optional<ParameterRow> stored = JavaParameters.setValue(config, null, tries, java("3"), TestValues.GRAMMAR);
+        JavaParameter now = only(config);
+        assertInstanceOf(JavaParameters.Outcome.Stored.class, JavaParameters.declare(config, null, now,
+                now.row().toBuilder().category("Run").build(), now.form(), TestValues.GRAMMAR));
+        assertTrue(Files.readString(starting).contains("category = \"Run\""), Files.readString(starting));
+        assertTrue(Files.readString(starting).contains("return 10;"));
+        assertEquals("3", only(config).row().value());
 
-        assertEquals("3", stored.orElseThrow().value(), "the row reads the override back");
-        Path values = config.mainPackageDir().resolve("values/RunChoicesValues.java");
-        String written = Files.readString(values);
-        assertTrue(written.startsWith("package com.refbot.values;"), written);
-        assertTrue(written.contains("import com.refbot.RunChoices;"), written);
-        assertTrue(written.contains("implements RunChoices"), written);
-        assertTrue(written.contains("public int tries()"), written);
-        assertTrue(written.contains("return 3;"), written);
-        assertFalse(written.contains("mode()"), "only what this computer set");
-        String schema = Files.readString(config.mainPackageDir().resolve("RunChoices.java"));
-        assertTrue(schema.contains("return 10;"), schema);
-
-        JavaParameter again = JavaParameters.find(config, null, "RunChoices", "tries", TestValues.GRAMMAR)
-                .orElseThrow();
-        assertEquals(values.toAbsolutePath().normalize(), again.valuesFile().toAbsolutePath().normalize());
-        JavaParameters.setValue(config, null, again, java("4"), TestValues.GRAMMAR);
-        String rewritten = Files.readString(values);
-        assertTrue(rewritten.contains("return 4;") && !rewritten.contains("return 3;"), rewritten);
+        assertTrue(JavaParameters.makeStarting(config, null, only(config)));
+        assertTrue(Files.readString(starting).contains("return 3;"), Files.readString(starting));
     }
 
-    /** The values class imports its return type itself, whichever way the schema named it (here a wildcard). */
+    /** One the bot writes during a run is read-only here; Forget sets it back to its starting value. */
     @Test
-    void aValuesClassImportsItsReturnTypes(@TempDir Path root) throws IOException {
+    void aDuringARunParameterIsReadOnly(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        write(config, "RunChoices.java", schema("""
-                    default Duration rest() { return java.time.Duration.ofMillis(3000L); }
-                """).replace("@Param\n", "@Param(visibility = Param.PUBLIC)\n")
-                .replace("import com.botmaker", "import java.time.*;\nimport com.botmaker"));
-        JavaParameter rest = JavaParameters.find(config, null, "RunChoices", "rest", TestValues.GRAMMAR)
-                .orElseThrow();
-        assertTrue(rest.editable(), rest.note());
+        writeGroup(config, "bot", "Progress", """
+                    @Param.Shown(changes = Param.Changes.DURING_RUN)
+                    public int level() { return 1; }
+                """);
+        Path mine = groupOf(config, "bot", "Progress");
+        Files.writeString(mine, Files.readString(mine).replace("return 1;", "return 7;"));
+        JavaParameter level = only(config);
 
-        assertTrue(JavaParameters.setValue(config, null, rest, java("java.time.Duration.ofMillis(60000L)"),
-                TestValues.GRAMMAR).isPresent());
+        assertTrue(level.row().duringRun());
+        assertFalse(level.editable(), "the bot writes it");
+        assertTrue(JavaParameters.setValue(config, null, level, java("2"), TestValues.GRAMMAR).isEmpty());
+        assertEquals("7", only(config).row().value());
 
-        String written = Files.readString(config.mainPackageDir().resolve("values/RunChoicesValues.java"));
-        assertTrue(written.contains("import java.time.Duration;"), written);
-        assertTrue(written.contains("public Duration rest()"), written);
+        assertEquals("1", JavaParameters.forget(config, null, level, TestValues.GRAMMAR).orElseThrow().value());
+    }
+
+    /** A new parameter of a group the bot has none of yet is a method, written in params/ and its starting copy. */
+    @Test
+    void aNewGroupParameterIsWrittenToBothCopies(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+
+        assertEquals("5", JavaParameters.add(config, null, "RunChoices", "tries", TestValues.WHOLE_NUMBER,
+                java("5"), "Limits", "", TestValues.GRAMMAR).orElseThrow().value());
+
+        for (Path file : List.of(groupOf(config, "bot", "RunChoices"), startingOf(config, "bot", "RunChoices"))) {
+            String source = Files.readString(file);
+            assertTrue(source.startsWith("package com.refbot.params.bot;"), source);
+            assertTrue(source.contains("@Param\npublic class RunChoices"), source);
+            assertTrue(source.contains("public int tries()") && source.contains("return 5;"), source);
+            assertTrue(source.contains("category = \"Limits\""), source);
+        }
     }
 
     // ---- adding -----------------------------------------------------------------------------------------
@@ -203,10 +207,11 @@ class JavaParametersTest {
 
         assertTrue(stored.isPresent());
         assertEquals("10", stored.get().value());
-        String source = Files.readString(config.parametersSourceFile());
-        assertTrue(source.startsWith("package com.refbot.params;"), "its own package, which Studio keeps");
+        // A group since 2026-11-04: params/bot/, private, beside its starting copy.
+        String source = Files.readString(groupOf(config, "bot", "Parameters"));
+        assertTrue(source.startsWith("package com.refbot.params.bot;"), "its own package, which Studio keeps");
         assertTrue(source.contains("import com.botmaker.plugin.api.params.Param;"), source);
-        assertTrue(source.contains("public static int maxAttempts = 10;"), source);
+        assertTrue(source.contains("public int maxAttempts()") && source.contains("return 10;"), source);
         assertTrue(source.contains("category = \"Limits\""), source);
     }
 
@@ -560,17 +565,34 @@ class JavaParametersTest {
                 """.formatted(fields);
     }
 
-    /** A {@code @Param} schema interface {@code RunChoices} holding {@code methods}. */
-    private static String schema(String methods) {
+    /** A {@code @Param} group {@code name} of the folder {@code folder} of params/, holding {@code methods}. */
+    private static String group(String folder, String name, String methods) {
         return """
-                package com.refbot;
+                package com.refbot.params.%s;
 
                 import com.botmaker.plugin.api.params.Param;
 
                 @Param
-                public interface RunChoices {
+                public class %s {
                 %s}
-                """.formatted(methods);
+                """.formatted(folder, name, methods);
+    }
+
+    /** Writes the group in params/ and the same as its starting copy. */
+    private static void writeGroup(ProjectConfig config, String folder, String name, String methods)
+            throws IOException {
+        for (Path file : List.of(groupOf(config, folder, name), startingOf(config, folder, name))) {
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, group(folder, name, methods));
+        }
+    }
+
+    private static Path groupOf(ProjectConfig config, String folder, String name) {
+        return config.parametersPackageDir().resolve(folder).resolve(name + ".java");
+    }
+
+    private static Path startingOf(ProjectConfig config, String folder, String name) {
+        return config.projectPath().resolve(ParamsFitter.STARTING).resolve(folder).resolve(name + ".java");
     }
 
     private static void write(ProjectConfig config, String name, String source) throws IOException {

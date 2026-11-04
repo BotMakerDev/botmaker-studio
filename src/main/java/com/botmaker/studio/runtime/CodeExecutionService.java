@@ -1,6 +1,6 @@
 package com.botmaker.studio.runtime;
 
-import com.botmaker.plugin.host.grammar.ValuesPruner;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -19,11 +19,12 @@ import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.application.Platform;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -417,24 +418,28 @@ public class CodeExecutionService {
         // changed one. Nothing generates a project's Java any more, so a project file has no locked parts:
         // every one of them is the user's, and what they typed is what gets written.
         snapshot.writeSources();
-        // A values class never stops a build (2026-11-04): pruned to its schema first, removed when javac still refuses it.
-        Path backups = config.projectPath().resolve(VALUES_BACKUPS);
-        List<ValuesPruner.Pruned> pruned = ValuesPruner.onDisk(config.sourceRoot(), backups);
-        pruned.forEach(each -> warn(each.sentence() + " A copy is in " + VALUES_BACKUPS + "."));
-        matchEditor(pruned);
+        // A private parameter file never stops a build (2026-11-04): fitted to its starting copy first, reset from it
+        // when javac still refuses the file alone.
+        fitParams();
 
         Files.createDirectories(compiledOutputPath);
         StringBuilder output = new StringBuilder();
         boolean compiled = compileSources(snapshot, compiledOutputPath, output);
-        List<Path> refused = compiled ? List.of() : refusedValues(output.toString());
+        List<Path> refused = compiled ? List.of() : refusedParams(output.toString());
         if (!refused.isEmpty()) {
+            Path pass = config.projectPath().resolve(VALUES_BACKUPS).resolve("refused-" + System.currentTimeMillis());
+            Path params = config.parametersPackageDir().toAbsolutePath().normalize();
             for (Path file : refused) {
-                ValuesPruner.backUp(file, backups);
-                Files.deleteIfExists(file);
-                warn("WARN " + config.projectPath().relativize(file) + " did not compile and was removed; the bot"
-                        + " runs on its schema's defaults. A copy is in " + VALUES_BACKUPS + ".");
+                Path relative = params.relativize(file);
+                Path starting = config.projectPath().resolve(ParamsFitter.STARTING).resolve(relative);
+                Files.createDirectories(pass.resolve(relative).getParent());
+                Files.copy(file, pass.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
+                String reset = Files.readString(starting);
+                Files.writeString(file, reset);
+                Platform.runLater(() -> state.getFile(file).ifPresent(open -> open.setContent(reset)));
+                warn("WARN " + config.projectPath().relativize(file) + " did not compile and was reset to its"
+                        + " starting copy. A copy is in " + config.projectPath().relativize(pass) + ".");
             }
-            matchEditor(refused.stream().map(file -> new ValuesPruner.Pruned(file, Optional.empty(), List.of())).toList());
             compiled = compileSources(snapshot, compiledOutputPath, new StringBuilder());
         }
         // Only if the disk still holds what javac read: a write since would make a state nobody compiled the good one.
@@ -442,27 +447,48 @@ public class CodeExecutionService {
         return compiled;
     }
 
-    /** Where a values class is copied before Studio prunes or removes it: in no version, beside the plugins' state. */
+    /** Where a parameter file is copied before Studio fits or resets it: in no version, beside the plugins' state. */
     private static final String VALUES_BACKUPS = ".botmaker/values-removed";
 
-    /** Makes the editor's copy of each pruned or removed values class match the disk. */
-    private void matchEditor(List<ValuesPruner.Pruned> pruned) {
-        if (pruned.isEmpty()) return;
-        Platform.runLater(() -> pruned.forEach(each -> each.source().ifPresentOrElse(
-                text -> state.getFile(each.file()).ifPresent(file -> file.setContent(text)),
-                () -> state.removeFile(each.file()))));
+    /**
+     * Fits {@code params/} to {@code starting-params/} ({@link ParamsFitter#onDisk}), one WARN per file changed, and
+     * makes the editor match: run before each compile and on open, which fills a fresh copy. Never throws: a fit
+     * that fails leaves the files as they were.
+     */
+    public void fitParams() {
+        Path params = config.parametersPackageDir().toAbsolutePath().normalize();
+        List<ParamsFitter.Fitted> fitted;
+        try {
+            fitted = ParamsFitter.onDisk(params, config.projectPath().resolve(ParamsFitter.STARTING),
+                    config.projectPath().resolve(VALUES_BACKUPS));
+        } catch (IOException | UncheckedIOException e) {
+            warn("WARN parameters could not be fitted to their starting copy: " + e.getMessage());
+            return;
+        }
+        if (fitted.isEmpty()) return;
+        fitted.forEach(each -> warn("WARN params/" + each.sentence() + " A copy is in " + VALUES_BACKUPS + "."));
+        Platform.runLater(() -> fitted.forEach(each -> {
+            Path file = params.resolve(each.file());
+            each.source().ifPresentOrElse(text -> state.getFile(file).ifPresentOrElse(open -> open.setContent(text),
+                            () -> state.addFile(new ProjectFile(file, text))),
+                    () -> state.removeFile(file));
+        }));
     }
 
     /**
-     * The values classes to remove when javac's {@code output} names errors in values classes alone. An error
-     * anywhere else (a schema mid-edit, a dependency that did not resolve) may be what the values class trips on, so
-     * then none is removed.
+     * The params files to reset when javac's {@code output} names errors in params files alone, each with a starting
+     * copy. An error anywhere else (a class mid-edit, a dependency that did not resolve) may be what the file trips
+     * on, so then none is reset.
      */
-    private List<Path> refusedValues(String output) {
-        List<Path> files = TreeCompile.errorFiles(output);
-        if (files.isEmpty() || !files.stream().allMatch(ValuesPruner::isValuesFile)) return List.of();
-        return files.stream().map(file -> file.isAbsolute() ? file : config.projectPath().resolve(file))
+    private List<Path> refusedParams(String output) {
+        Path params = config.parametersPackageDir().toAbsolutePath().normalize();
+        Path starting = config.projectPath().resolve(ParamsFitter.STARTING);
+        List<Path> files = TreeCompile.errorFiles(output).stream()
+                .map(file -> (file.isAbsolute() ? file : config.projectPath().resolve(file)).toAbsolutePath().normalize())
                 .distinct().toList();
+        boolean all = !files.isEmpty() && files.stream().allMatch(file -> file.startsWith(params)
+                && Files.isRegularFile(starting.resolve(params.relativize(file))));
+        return all ? files : List.of();
     }
 
     private void warn(String line) {

@@ -237,25 +237,28 @@ class ProjectVcsTest {
     }
 
     /**
-     * This computer's values of the bot's schemas (2026-11-04) are in no version, and a restore leaves them as they
-     * are: they hold the runner's choices, which must never reach the bot's remote.
+     * This computer's parameters (2026-11-04) are in no version, and a restore leaves them as they are: they hold the
+     * runner's choices, which must never reach the bot's remote. Their starting copy is versioned.
      */
     @Test
-    void valuesAreNeverVersioned(@TempDir Path dir) throws IOException {
+    void paramsAreNeverVersioned(@TempDir Path dir) throws IOException {
         ProjectVcs vcs = new ProjectVcs(dir);
         Path bot = Files.createDirectories(dir.resolve("src/main/java/com/refbot"));
         Files.writeString(bot.resolve("Bot.java"), "v1");
         vcs.init();
         String firstSha = vcs.history().get(0).sha();
-        Path values = Files.createDirectories(bot.resolve("values")).resolve("RunChoicesValues.java");
-        Files.writeString(values, "private");
+        Path params = Files.createDirectories(bot.resolve("params/bot")).resolve("RunChoices.java");
+        Files.writeString(params, "private");
+        Path starting = Files.createDirectories(dir.resolve("starting-params/bot")).resolve("RunChoices.java");
+        Files.writeString(starting, "shipped");
         Files.writeString(bot.resolve("Bot.java"), "v2");
         vcs.checkpoint(VersionOrigin.SAVE, "v2");
+        assertEquals(1, vcs.filesAtHead(path -> path.startsWith("starting-params/")).size(), "the starting copy is");
 
         vcs.restoreTo(firstSha);
 
-        assertEquals("private", Files.readString(values));
-        assertTrue(vcs.filesAtHead(path -> path.contains("/values/")).isEmpty(), "no version holds it");
+        assertEquals("private", Files.readString(params));
+        assertTrue(vcs.filesAtHead(path -> path.contains("/params/")).isEmpty(), "no version holds it");
     }
 
     /**

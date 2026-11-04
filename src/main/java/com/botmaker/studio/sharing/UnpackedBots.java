@@ -5,7 +5,8 @@ import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.plugin.api.PluginState;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.shared.tools.UserDirs;
-import com.botmaker.studio.project.params.ValuesClasses;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
+import com.botmaker.studio.project.source.BotParser;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -175,9 +177,11 @@ public final class UnpackedBots {
     }
 
     /**
-     * Moves every {@code values} package under {@code older}'s sources to the same place in {@code tag}, where
-     * {@code tag} has none: this computer's values of the bot's schemas, never in a tag, kept across an update.
-     * False when one would not move or could not be looked for: then {@code older} must not be deleted.
+     * Moves every file of each {@code params} package under {@code older}'s sources to the same place in {@code tag}:
+     * this computer's parameters, never in a tag, kept across an update. A file the tag already has is replaced
+     * when the tag's is a {@code @Param} group (a copy filled from its starting copy), and kept otherwise (a class
+     * the tag versions). False when one would not move or could not be looked for: then {@code older} must not be
+     * deleted.
      */
     static boolean moveValues(Path older, Path tag) {
         Path sources = older.resolve("src/main/java");
@@ -185,19 +189,50 @@ public final class UnpackedBots {
         List<Path> found;
         try (Stream<Path> walk = Files.walk(sources)) {
             found = walk.filter(Files::isDirectory)
-                    .filter(dir -> dir.getFileName().toString().equals(ValuesClasses.PACKAGE)).toList();
+                    .filter(dir -> dir.getFileName().toString().equals(ParamsFitter.PARAMS)).toList();
         } catch (IOException e) {
             System.err.println("Could not look for values in " + older + ": " + e.getMessage());
             return false;
         }
         boolean moved = true;
         for (Path values : found) {
-            // A values package inside another moves with it.
+            // A params package inside another moves with it.
             if (found.stream().anyMatch(outer -> !outer.equals(values) && values.startsWith(outer))) continue;
-            Path to = tag.resolve(older.relativize(values));
-            if (!Files.exists(to)) moved &= moveState(values, to);
+            List<Path> files;
+            try (Stream<Path> walk = Files.walk(values)) {
+                files = walk.filter(Files::isRegularFile).toList();
+            } catch (IOException e) {
+                System.err.println("Could not look for values in " + values + ": " + e.getMessage());
+                return false;
+            }
+            for (Path file : files) {
+                Path to = tag.resolve(older.relativize(file));
+                if (Files.exists(to) && !isGroupFile(to)) continue;
+                moved &= moveFile(file, to);
+            }
         }
         return moved;
+    }
+
+    /** Whether {@code file} is a {@code @Param} group's source; false when it cannot be read. */
+    private static boolean isGroupFile(Path file) {
+        try {
+            return ParamsFitter.isGroup(BotParser.syntax(Files.readString(file)));
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Moves one file, replacing what is there; false, said, when it will not move. */
+    private static boolean moveFile(Path from, Path to) {
+        try {
+            Files.createDirectories(to.getParent());
+            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        } catch (IOException e) {
+            System.err.println("Could not keep this computer's parameters " + from + ": " + e.getMessage());
+            return false;
+        }
     }
 
     /** Moves the plugins' state {@code from} one folder {@code to} another; false, said, when it will not move. */

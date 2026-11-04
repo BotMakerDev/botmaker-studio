@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.grammar.BotNames;
 import com.botmaker.plugin.host.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.plugin.host.grammar.SourceNode;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
@@ -14,12 +15,16 @@ import com.botmaker.studio.project.source.ValueTypeResolver;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
 import org.eclipse.jdt.core.dom.IExtendedModifier;
+import org.eclipse.jdt.core.dom.MemberValuePair;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.NormalAnnotation;
+import org.eclipse.jdt.core.dom.ReturnStatement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 
@@ -101,30 +106,21 @@ public final class JavaParameterSource {
      */
     public static List<JavaParameter> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
                                            BotRecords records, BotNames names, List<ManagedValue<?>> known) {
-        return read(file, source, unit, grammar, records, names, known, ValuesClasses.NONE);
-    }
-
-    /**
-     * The same, with this machine's {@code values}: a {@code PUBLIC} method of a {@code @Param} schema shows the
-     * value its values class overrides it with, else its {@code default}.
-     */
-    public static List<JavaParameter> read(Path file, String source, CompilationUnit unit, ValueGrammar grammar,
-                                           BotRecords records, BotNames names, List<ManagedValue<?>> known,
-                                           ValuesClasses values) {
         List<JavaParameter> out = new ArrayList<>();
         unit.accept(new ASTVisitor() {
             @Override
             public boolean visit(TypeDeclaration type) {
-                // A schema is a public top-level interface: its values class, in another package, implements it.
-                boolean schemaShaped = type.isInterface() && type.isPackageMemberTypeDeclaration()
-                        && Modifier.isPublic(type.getModifiers());
-                Annotation schema = schemaShaped ? BotAnnotation.PARAM.on(type) : null;
-                if (schema == null) return true;
-                Map<String, Object> shared = BotAnnotation.PARAM.members(schema);
+                // A group is a top-level class marked @Param (2026-11-04): each of its parameters one method, whole.
+                boolean groupShaped = !type.isInterface() && type.isPackageMemberTypeDeclaration();
+                Annotation group = groupShaped ? BotAnnotation.PARAM.on(type) : null;
+                if (group == null) return true;
+                Map<String, Object> shared = BotAnnotation.PARAM.members(group);
+                String owner = pluginFolder(file).map(folder -> "A parameter of the " + folder + " plugin, in its"
+                        + " folder of params/: only its value is yours to change.").orElse("");
                 for (MethodDeclaration method : type.getMethods()) {
-                    if (!Modifier.isDefault(method.getModifiers())) continue;
+                    if (!isParameter(method)) continue;
                     out.add(readMethod(file, source, grammar, records, names, type.getName().getIdentifier(), shared,
-                            method, values));
+                            method).owned(owner, ""));
                 }
                 return true;
             }
@@ -178,46 +174,92 @@ public final class JavaParameterSource {
     }
 
     /**
-     * One {@code default} method of a {@code @Param} schema (2026-11-04). Its {@link Param.Shown} members win over
-     * the schema's own ({@code shared}); a {@code PUBLIC} one reads its value from this machine's values class when
-     * that overrides it, and from its {@code default} body otherwise.
+     * One parameter of a {@code @Param} group (2026-11-04): the method's name, its return type and, as its value, what
+     * its body returns. Its {@link Param.Shown} members win over the group's own ({@code shared}). One the bot writes
+     * during a run is read-only here.
      */
     private static JavaParameter readMethod(Path file, String source, ValueGrammar grammar, BotRecords records,
-                                            BotNames names, String schema, Map<String, Object> shared,
-                                            MethodDeclaration method, ValuesClasses values) {
+                                            BotNames names, String group, Map<String, Object> shared,
+                                            MethodDeclaration method) {
         Annotation shownOn = BotAnnotation.PARAM_SHOWN.on(method);
         Map<String, Object> shown = shownOn == null ? Map.of() : BotAnnotation.PARAM_SHOWN.members(shownOn);
         String name = method.getName().getIdentifier();
-        Visibility visibility = Visibility.fromId(either(shown, shared, "visibility"));
+        Param.Changes changes = changesOf(shownOn);
 
-        Expression value = ValuesClasses.returned(method).orElse(null);
-        String held = source;
-        Path valuesFile = null;
-        if (visibility == Visibility.PUBLIC) {
-            Optional<ValuesClasses.Held> overriding = values.of(schema).filter(v -> v.returns().containsKey(name));
-            if (overriding.isPresent()) {
-                value = overriding.get().returns().get(name);
-                held = overriding.get().source();
-                valuesFile = overriding.get().file();
-            }
-        }
-        String initializer = value == null ? "" : text(held, value);
+        Expression value = returned(method).orElse(null);
+        String initializer = value == null ? "" : text(source, value);
 
         Type form = ValueTypeResolver.of(grammar, method.getReturnType2(),
                 method.getExtraDimensions(), records.declaredNames());
         boolean readable = value != null && (form instanceof ValueTypes.BotClass declared
                 ? records.partsOf(declared, initializer).isPresent()
-                : grammar.read(form, new SourceNode(value, held), names).isPresent());
-        String note = whyNotEditable(grammar, form, records, readable, initializer, value != null);
+                : grammar.read(form, new SourceNode(value, source), names).isPresent());
+        String note = changes == Param.Changes.DURING_RUN ? DURING_RUN_NOTE
+                : whyNotEditable(grammar, form, records, readable, initializer, value != null);
 
         ParameterRow row = ParameterRow.named(name, ValueTypes.sourceName(form))
                 .value(initializer)
                 .description(string(shown, "description"))
                 .category(either(shown, shared, "category"))
-                .visibility(visibility)
+                .changes(changes)
                 .build();
-        return new JavaParameter(file, schema, row, form, initializer, note.isEmpty(), note, "", "", true,
-                valuesFile);
+        return new JavaParameter(file, group, row, form, initializer, note.isEmpty(), note, "", "", true);
+    }
+
+    /** Why a during-a-run parameter's cell is read-only. */
+    public static final String DURING_RUN_NOTE = "the bot writes it during a run; Forget sets it back to its starting"
+            + " value";
+
+    /** Whether {@code method} is one parameter of its group: a no-argument, non-void instance method with a body. */
+    static boolean isParameter(MethodDeclaration method) {
+        int modifiers = method.getModifiers();
+        return !method.isConstructor() && method.parameters().isEmpty() && method.getBody() != null
+                && method.getReturnType2() != null && !method.getReturnType2().toString().equals("void")
+                && !Modifier.isStatic(modifiers) && !Modifier.isPrivate(modifiers);
+    }
+
+    /** {@code @Param.Shown(changes = …)} as written, by its constant's last name; outside a run without one. */
+    private static Param.Changes changesOf(Annotation shown) {
+        if (!(shown instanceof NormalAnnotation normal)) return Param.Changes.OUTSIDE_RUN;
+        for (Object each : normal.values()) {
+            MemberValuePair pair = (MemberValuePair) each;
+            if (!pair.getName().getIdentifier().equals("changes")) continue;
+            String written = pair.getValue().toString();
+            return Param.Changes.fromId(written.substring(written.lastIndexOf('.') + 1));
+        }
+        return Param.Changes.OUTSIDE_RUN;
+    }
+
+    /**
+     * The plugin whose folder of {@code params/} holds {@code file} ({@code params/sdk/Sdk.java} is the
+     * {@code sdk} plugin's), or empty for the bot's own: {@code params/bot/} or {@code params/} itself.
+     */
+    static Optional<String> pluginFolder(Path file) {
+        if (file == null) return Optional.empty();
+        Path dir = file.toAbsolutePath().normalize().getParent();
+        for (Path at = dir; at != null && at.getParent() != null; at = at.getParent()) {
+            // The nearest params/ decides: a file directly in it is the bot's, whatever folders sit above.
+            if (at.getFileName() != null && at.getFileName().toString().equals(ParamsFitter.PARAMS)) {
+                return Optional.empty();
+            }
+            if (at.getParent().getFileName() != null
+                    && at.getParent().getFileName().toString().equals(ParamsFitter.PARAMS)) {
+                String folder = at.getFileName().toString();
+                return folder.equals(BOT) ? Optional.empty() : Optional.of(folder);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** The folder of {@code params/} that holds the bot's own groups. */
+    public static final String BOT = "bot";
+
+    /** The expression a method's body is exactly {@code return <expr>;} of, when it takes no parameter. */
+    static Optional<Expression> returned(MethodDeclaration method) {
+        Block body = method.getBody();
+        if (body == null || !method.parameters().isEmpty() || body.statements().size() != 1) return Optional.empty();
+        return body.statements().getFirst() instanceof ReturnStatement ret && ret.getExpression() != null
+                ? Optional.of(ret.getExpression()) : Optional.empty();
     }
 
     /** {@code member} as {@code first} sets it, else as {@code second} does. */

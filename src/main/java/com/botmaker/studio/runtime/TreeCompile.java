@@ -1,6 +1,6 @@
 package com.botmaker.studio.runtime;
 
-import com.botmaker.plugin.host.grammar.ValuesPruner;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;
@@ -73,12 +73,21 @@ public final class TreeCompile {
     }
 
     /**
-     * The bot's sources but this machine's values classes (2026-11-04): the bot compiles against its schemas alone,
-     * and a values class an update no longer fits is pruned at the next build, never a reason to refuse the update.
+     * The bot's sources with each private parameter file that has a starting copy swapped for that copy (2026-11-04):
+     * the bot compiles against the parameters it ships, and a params file an update no longer fits is fitted at the
+     * next build, never a reason to refuse the update. A starting copy with no params file yet is compiled too.
      */
     private static List<String> sources(ProjectConfig config) {
-        return ClassPathManager.findJavaFiles(config.sourceRoot()).stream()
-                .filter(file -> !ValuesPruner.isValuesFile(Path.of(file))).toList();
+        Path params = config.parametersPackageDir().toAbsolutePath().normalize();
+        Path starting = config.projectPath().resolve(ParamsFitter.STARTING).toAbsolutePath().normalize();
+        List<String> starts = Files.isDirectory(starting) ? ClassPathManager.findJavaFiles(starting) : List.of();
+        List<String> out = new ArrayList<>(starts);
+        for (String file : ClassPathManager.findJavaFiles(config.sourceRoot())) {
+            Path at = Path.of(file).toAbsolutePath().normalize();
+            boolean swapped = at.startsWith(params) && Files.isRegularFile(starting.resolve(params.relativize(at)));
+            if (!swapped) out.add(file);
+        }
+        return out;
     }
 
     /** Each file javac's {@code output} names an error in, as javac wrote its path. */

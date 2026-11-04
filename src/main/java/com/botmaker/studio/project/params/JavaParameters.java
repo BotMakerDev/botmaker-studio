@@ -7,6 +7,7 @@ import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ParamsFitter;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
@@ -123,12 +124,10 @@ public final class JavaParameters {
             // The bot's own constants, so Flows.MAIN or Activities.Rest.class in an initialiser reads as a value.
             ManagedConstants.Lookup names = new ManagedConstants.Lookup(ManagedConstants.over(index), grammar);
             BotRecords records = BotRecords.over(grammar, units.values());
-            // This machine's values classes, so a PUBLIC schema method shows what it overrides (2026-11-04).
-            ValuesClasses values = ValuesClasses.over(units, index.sources());
             List<JavaParameter> out = new ArrayList<>();
             units.forEach((file, unit) -> out.addAll(
                     JavaParameterSource.read(file, index.sources().get(file), unit, grammar, records, names,
-                            managed, values)));
+                            managed)));
             return List.copyOf(out);
         });
     }
@@ -154,7 +153,7 @@ public final class JavaParameters {
         Set<String> plugins = new HashSet<>();
         for (JavaParameter parameter : scan(config, state)) {
             if (parameter.declaredByPlugin()) plugins.add(parameter.className());
-            else if (!parameter.schema()) names.add(parameter.className());
+            else names.add(parameter.className());
         }
         names.removeAll(plugins);
         return List.copyOf(names);
@@ -248,16 +247,29 @@ public final class JavaParameters {
                            Type wantedForm, ValueGrammar grammar, boolean guarded) {
         if (parameter == null || wanted == null) return gone(parameter);
         BotIndex was = BotIndex.of(config, state);
+        // A group's starting copy is outside the sources, so putBack does not hold it: kept here to put back too.
+        Optional<Path> starting = parameter.group()
+                ? startingFile(config, parameter.file()).filter(Files::isRegularFile) : Optional.empty();
+        Optional<String> startingWas = starting.flatMap(file -> currentSource(null, file));
         Outcome outcome = apply(config, state, parameter, wanted, wantedForm, grammar);
         if (outcome instanceof Outcome.Refused) {
             putBack(config, state, was.sources());
+            putBackStarting(config, starting, startingWas);
             return outcome;
         }
         if (!guarded) return outcome;
         Optional<String> broke = was.firstNewError(BotIndex.of(config, state));
         if (broke.isEmpty()) return outcome;
         putBack(config, state, was.sources());
+        putBackStarting(config, starting, startingWas);
         return new Outcome.Refused("That would stop the bot compiling, so nothing was changed: " + broke.get());
+    }
+
+    /** Writes {@code was} back to the starting copy {@code file} when it changed. */
+    private static void putBackStarting(ProjectConfig config, Optional<Path> file, Optional<String> was) {
+        if (file.isEmpty() || was.isEmpty()) return;
+        if (currentSource(null, file.get()).filter(was.get()::equals).isPresent()) return;
+        ProjectWrites.replace(config, file.get(), was.get(), "Put back the starting copy of " + file.get().getFileName());
     }
 
     /** {@link #declare}'s edits, one after the other, each re-reading the field the one before it moved. */
@@ -273,10 +285,7 @@ public final class JavaParameters {
             return new Outcome.Refused(parameter.qualified() + " is a plugin's parameter: only its value can be"
                     + " changed. " + parameter.owner());
         }
-        if (parameter.schema() && !declarationKept) {
-            return new Outcome.Refused(parameter.qualified() + " is a method of the schema " + parameter.className()
-                    + ": change its name, type or how it is shown in that interface.");
-        }
+        if (parameter.group()) return applyToGroup(config, state, parameter, wanted, wantedForm, grammar);
 
         if (!wanted.name().equals(name)) {
             Optional<String> refused = rename(config, state, parameter, wanted.name());
@@ -348,9 +357,21 @@ public final class JavaParameters {
                                              String category, String description, ValueGrammar grammar) {
         if (config == null || className == null || className.isBlank()) return Optional.empty();
         if (find(config, state, className, name, grammar).isPresent()) return Optional.empty();
-        // A plugin's file and a schema interface take no field of the author's (2026-11-04).
+        // A plugin's file takes no parameter of the author's.
         if (classes(config, state).contains(className) && !ownClasses(config, state).contains(className)) {
             return Optional.empty();
+        }
+        // A group, or a class the bot has none of yet (2026-11-04): a method, written in params/ and its starting
+        // copy alike, so the fitter keeps it.
+        Optional<Path> group = groupFile(config, state, className, grammar);
+        if (group.isEmpty() && !classes(config, state).contains(className)) group = createGroup(config, state, className);
+        if (group.isPresent()) {
+            JavaValue start = value != null ? value : grammar.freshSpelling(form).orElse(null);
+            UnaryOperator<String> added = source -> JavaParameterEdits.addMethod(source, grammar, className, name,
+                    form, start, category, description, Param.Changes.OUTSIDE_RUN);
+            if (!rewrite(config, state, group.get(), added)) return Optional.empty();
+            rewriteStarting(config, group.get(), added);
+            return reread(config, state, className, name, grammar);
         }
         if (!classes(config, state).contains(className)) {
             Optional<Path> holder = createClass(config, className);
@@ -385,9 +406,10 @@ public final class JavaParameters {
             return new Outcome.Refused(parameter.qualified() + " is a plugin's parameter, and BotMaker writes it"
                     + " back while the plugin is in the project. " + parameter.owner());
         }
-        if (parameter.schema()) {
-            return new Outcome.Refused(parameter.qualified() + " is a method of the schema " + parameter.className()
-                    + ": remove it from that interface.");
+        if (parameter.group()) {
+            return new Outcome.Refused(parameter.name() + " is a parameter of the group " + parameter.className()
+                    + ": it cannot be removed here yet. Remove it from both " + parameter.className()
+                    + ".java files, in params/ and starting-params/.");
         }
         BotIndex index = BotIndex.of(config, state);
         int start = fieldStart(index, parameter);
@@ -646,62 +668,126 @@ public final class JavaParameters {
     /** Replaces a parameter's value with {@code initializer}'s tree. */
     private static boolean writeValue(ProjectConfig config, ProjectState state, JavaParameter parameter,
                                       JavaValue initializer) {
-        if (parameter.writesValuesClass()) return writeValuesClass(config, state, parameter, initializer);
-        if (parameter.schema()) {
-            return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setDefault(
+        // A group's value is this computer's, in params/ only: the starting copy changes by its own action.
+        if (parameter.group()) {
+            return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setReturned(
                     source, parameter.className(), parameter.name(), initializer));
         }
         return rewrite(config, state, parameter.file(), source -> JavaParameterEdits.setValue(
                 source, parameter.className(), parameter.name(), initializer));
     }
 
-    /**
-     * Writes a {@code PUBLIC} schema method's value as this machine's override, in the schema's values class
-     * (2026-11-04): the one this machine has, else {@code values/<Schema>Values.java} in the bot's package, created.
-     * The values class is never committed ({@link ValuesClasses}).
-     */
-    private static boolean writeValuesClass(ProjectConfig config, ProjectState state, JavaParameter parameter,
-                                            JavaValue initializer) {
-        if (config == null) return false;
-        BotIndex index = BotIndex.of(config, state);
-        Path schemaFile = parameter.file().toAbsolutePath().normalize();
-        CompilationUnit schemaUnit = index.read(units -> units.get(schemaFile));
-        if (schemaUnit == null) return false;
-        String valuesClass = parameter.className() + ValuesClasses.SUFFIX;
-        Optional<Path> held = index.read(units -> ValuesClasses.over(units, index.sources()))
-                .of(parameter.className()).map(ValuesClasses.Held::file);
-        Path file = held.isPresent() ? held.get() : createValuesClass(config, state, schemaUnit, parameter.className());
-        if (file == null) return false;
-        return rewrite(config, state, file, source -> JavaParameterEdits.override(
-                source, valuesClass, parameter.name(), parameter.form(), initializer));
+    // ---- a group's parameters (2026-11-04) -----------------------------------------------------------------
+    //
+    // A group lives whole in params/, never versioned; its starting copy, the same path under starting-params/ at
+    // the bot's root, is committed. A value edit writes params/ only; what the parameter is (category, description,
+    // when it changes) and a new parameter go to both, so the fitter keeps them.
+
+    /** {@link #apply} for a method of a group: its value in params/, what it is shown as in both copies. */
+    private static Outcome applyToGroup(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                        ParameterRow wanted, Type wantedForm, ValueGrammar grammar) {
+        ParameterRow before = parameter.row();
+        if (!wanted.name().equals(before.name()) || wantedForm != null && !wantedForm.equals(parameter.form())) {
+            return new Outcome.Refused(parameter.name() + " is a parameter of the group " + parameter.className()
+                    + ": its name and type cannot be changed here yet. Add a new one and stop using this one.");
+        }
+        Map<String, String> members = new LinkedHashMap<>();
+        if (!wanted.category().equals(before.category())) members.put("category", wanted.category());
+        if (!wanted.description().equals(before.description())) members.put("description", wanted.description());
+        if (wanted.changes() != before.changes()) members.put("changes", wanted.changes().id());
+        if (!members.isEmpty()) {
+            UnaryOperator<String> shown = source -> JavaParameterEdits.setShown(
+                    source, parameter.className(), parameter.name(), members);
+            if (!rewrite(config, state, parameter.file(), shown)) {
+                return new Outcome.Refused("How " + parameter.name() + " is shown could not be written.");
+            }
+            rewriteStarting(config, parameter.file(), shown);
+        }
+        if (!wanted.value().equals(before.value())) {
+            if (before.duringRun() || !parameter.editable()) {
+                return new Outcome.Refused(parameter.name() + "'s value cannot be set here: "
+                        + (before.duringRun() ? "the bot writes it during a run." : parameter.note()));
+            }
+            Optional<JavaValue> value = JavaValue.parse(wanted.value());
+            if (value.isEmpty() || !writeValue(config, state, parameter, value.get())) {
+                return new Outcome.Refused(parameter.name() + "'s value “" + wanted.value() + "” could not be written.");
+            }
+        }
+        return reread(config, state, parameter.className(), parameter.name(), grammar)
+                .<Outcome>map(Outcome.Stored::new).orElseGet(() -> gone(parameter));
     }
 
     /**
-     * Writes an empty values class of the top-level schema {@code schema} into {@code <bot>.values}, known to the
-     * editor at once, and answers where it is; {@code null} when it could not be written. An existing file is kept.
+     * Makes {@code parameter}'s value on this computer its starting value: the one value copied into its starting
+     * copy, with the imports it needs ({@link ParamsFitter#withValue}). Answers whether the starting copy changed.
      */
-    private static Path createValuesClass(ProjectConfig config, ProjectState state, CompilationUnit schemaUnit,
-                                          String schema) {
-        String schemaPackage = schemaUnit.getPackage() == null ? ""
-                : schemaUnit.getPackage().getName().getFullyQualifiedName();
-        String valuesPackage = config.mainPackage() + "." + ValuesClasses.PACKAGE;
-        Path file = config.mainPackageDir().resolve(ValuesClasses.PACKAGE)
-                .resolve(schema + ValuesClasses.SUFFIX + ".java");
-        if (Files.isRegularFile(file)) return file;
+    public static boolean makeStarting(ProjectConfig config, ProjectState state, JavaParameter parameter) {
+        if (config == null || parameter == null || !parameter.group()) return false;
+        Optional<String> mine = currentSource(state, parameter.file());
+        return mine.isPresent() && rewriteStarting(config, parameter.file(),
+                starting -> ParamsFitter.withValue(starting, mine.get(), parameter.name()));
+    }
+
+    /**
+     * Sets {@code parameter} back to its starting value: what a during-a-run parameter the bot wrote is reset with.
+     * Answers the row as it now reads, or empty when there is no starting copy to read it from.
+     */
+    public static Optional<ParameterRow> forget(ProjectConfig config, ProjectState state, JavaParameter parameter) {
+        return forget(config, state, parameter, PluginHost.grammar());
+    }
+
+    /** The same, against a given grammar. */
+    public static Optional<ParameterRow> forget(ProjectConfig config, ProjectState state, JavaParameter parameter,
+                                                ValueGrammar grammar) {
+        if (config == null || parameter == null || !parameter.group()) return Optional.empty();
+        Optional<String> starting = startingFile(config, parameter.file()).flatMap(file -> currentSource(null, file));
+        if (starting.isEmpty()) return Optional.empty();
+        rewrite(config, state, parameter.file(),
+                source -> ParamsFitter.withValue(source, starting.get(), parameter.name()));
+        return reread(config, state, parameter.className(), parameter.name(), grammar);
+    }
+
+    /** Whether {@code className} is a group: a {@code @Param} class in params/, by any parameter read from it. */
+    private static Optional<Path> groupFile(ProjectConfig config, ProjectState state, String className,
+                                            ValueGrammar grammar) {
+        for (JavaParameter parameter : scan(config, state, grammar)) {
+            if (parameter.group() && parameter.className().equals(className)) return Optional.of(parameter.file());
+        }
+        Path own = ownGroupFile(config, className);
+        return Files.isRegularFile(own) ? Optional.of(own) : Optional.empty();
+    }
+
+    /** Where the bot's own group {@code className} is: {@code params/bot/<Class>.java}. */
+    private static Path ownGroupFile(ProjectConfig config, String className) {
+        return config.parametersPackageDir().resolve(JavaParameterSource.BOT).resolve(className + ".java");
+    }
+
+    /**
+     * Creates the bot's own group {@code className}, an empty {@code @Param} class, in params/ and in its starting
+     * copy, the params one known to the editor at once; answers its params file, or empty when it could not be
+     * written. An existing file is kept.
+     */
+    private static Optional<Path> createGroup(ProjectConfig config, ProjectState state, String className) {
+        Path file = ownGroupFile(config, className);
         String source = """
-                package %s;
+                package %s.%s;
 
                 import %s;
 
                 /**
-                 * This computer's values of {@link %s}: each method here overrides the schema's default. Never
-                 * committed, versioned or published.
+                 * Parameters of this bot. Each method is one, whole: its name, its type and, as what it returns, its
+                 * value on this computer. This file is never versioned; its starting copy is.
                  */
-                public final class %s implements %s {
+                @Param
+                public class %s {
                 }
-                """.formatted(valuesPackage, schemaPackage.isEmpty() ? schema : schemaPackage + "." + schema, schema,
-                schema + ValuesClasses.SUFFIX, schema);
-        if (!ProjectWrites.create(config, file, source, "Create " + schema + ValuesClasses.SUFFIX)) return null;
+                """.formatted(config.parametersPackage(), JavaParameterSource.BOT, Param.class.getCanonicalName(),
+                className);
+        Optional<Path> starting = startingFile(config, file);
+        if (starting.isEmpty() || !ProjectWrites.create(config, file, source, "Create " + className)) {
+            return Optional.empty();
+        }
+        ProjectWrites.create(config, starting.get(), source, "Create " + className);
         if (state != null && state.getFile(file).isEmpty()) {
             try {
                 state.addFile(new ProjectFile(file, Files.readString(file)));
@@ -709,7 +795,42 @@ public final class JavaParameters {
                 // Read from disk by the next walk instead.
             }
         }
-        return file;
+        return Optional.of(file);
+    }
+
+    /** The starting copy of the params file {@code file}: the same path under {@code starting-params/}. */
+    static Optional<Path> startingFile(ProjectConfig config, Path file) {
+        Path params = config.parametersPackageDir().toAbsolutePath().normalize();
+        Path at = file.toAbsolutePath().normalize();
+        if (!at.startsWith(params)) return Optional.empty();
+        return Optional.of(config.projectPath().resolve(ParamsFitter.STARTING).resolve(params.relativize(at)));
+    }
+
+    /**
+     * Applies {@code edit} to the starting copy of {@code file}, on disk (it is outside the sources, so no editor
+     * holds it), and answers whether it changed. Nothing is done when there is no starting copy.
+     */
+    private static boolean rewriteStarting(ProjectConfig config, Path file, UnaryOperator<String> edit) {
+        Optional<Path> starting = startingFile(config, file).filter(Files::isRegularFile);
+        if (starting.isEmpty()) return false;
+        Optional<String> was = currentSource(null, starting.get());
+        if (was.isEmpty()) return false;
+        String now = edit.apply(was.get());
+        return !now.equals(was.get()) && ProjectWrites.replace(config, starting.get(), now,
+                "Change the starting copy of " + starting.get().getFileName());
+    }
+
+    /** {@code file} as the editor holds it, else as the disk does; empty when unreadable. */
+    private static Optional<String> currentSource(ProjectState state, Path file) {
+        if (state != null) {
+            Optional<ProjectFile> open = state.getFile(file);
+            if (open.isPresent()) return Optional.of(open.get().getContent());
+        }
+        try {
+            return Optional.of(Files.readString(file));
+        } catch (IOException unreadable) {
+            return Optional.empty();
+        }
     }
 
     /**

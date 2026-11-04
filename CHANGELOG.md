@@ -14,20 +14,22 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added (private values)
 
-- **A values class never stops a build** (2026-11-04): before each compile, Studio prunes this computer's values
-  classes to their schemas (`ValuesPruner`) and says each change in the Run tab; one javac still refuses is removed
-  with a `WARN` line and the bot compiled again. An update's compile check leaves `values/` out, so it never refuses
-  an update.
+- **Parameters are this computer's, in `params/`** (2026-11-04): a parameter is one method of a `@Param` group
+  class in the bot's `params/` package — `params/bot/<Group>.java` for the bot's own, `params/<plugin>/…` for a
+  plugin's — whose body is this computer's value. `params/` is in `.git/info/exclude` (it replaces `values/`);
+  `starting-params/` at the bot's root is committed and holds each group as a fresh copy starts it.
+- **Fitted on open and before each compile** (2026-11-04): `ParamsFitter.onDisk` fills `params/` from
+  `starting-params/` and fits each file to its starting copy, one `WARN` per file changed. A params file javac
+  refuses alone is backed up and reset from its starting copy, with one `WARN`, and the bot compiled again. An
+  update's compile check compiles the starting copies in place of the private files, so it never refuses an update.
+- **The Parameters window reads groups** (2026-11-04): one row per method. The rail is grouped by owner (*This bot*,
+  then *Plugins*). A group's row has *Changed: Outside a run | During a run*; a during-run row's value is read-only
+  (the bot writes it). A value edit writes `params/` only; a new parameter, its category, note and when it changes
+  go to both copies. The row menu has *Make this the starting value* and *Forget* (back to the starting value). A
+  plugin's rows are value-only. Renaming, retyping or removing a group's parameter is refused with a sentence for
+  now. The schema-interface and `values/` classes are gone.
 - **A parameter the author adds never lands in a plugin's file** (2026-11-04): the Parameters window's add row
-  offers only the bot's own field classes (`JavaParameters.ownClasses`), so a bot whose only `@Param` class was
-  `plugins/sdk/Sdk.java` gets a `Parameters.java` instead.
-
-- **A `@Param` schema's methods are rows of the Parameters window** (2026-11-04): each `default` method of an
-  interface marked `@Param`, filed and shown by `@Param.Shown` or the interface's own members. Setting an `EDITOR`
-  one rewrites its `default` body (the author's value, committed); setting a `PUBLIC` one writes this computer's
-  override into `values/<Schema>Values.java` in the bot's package, created on the first value, and the row reads
-  the override back. Renaming, retyping, refiling or removing a schema's method is refused with a sentence: done in
-  the interface for now.
+  offers only the bot's own classes (`JavaParameters.ownClasses`); a bot with none gets `params/bot/Parameters.java`.
 - **`values/` is in no version** (`ProjectVcs.VALUES` in `.git/info/exclude`), so the runner's choices never reach
   a push, a publish or a `.bmk`; a restore keeps it, and a run copy moved to a newer tag takes the older tag's
   values packages along (`UnpackedBots.moveValues`).

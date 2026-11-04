@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.plugin.api.params.Param;
+
 import java.util.Objects;
 
 /**
@@ -50,8 +52,10 @@ public final class ParameterRow {
     private final String description;
     private final String category;
     private final Visibility visibility;
+    private final Param.Changes changes;
 
     private ParameterRow(Builder b) {
+        this.changes = b.changes == null ? Param.Changes.OUTSIDE_RUN : b.changes;
         this.name = b.name;
         this.typeName = b.typeName;
         this.value = b.value == null ? "" : b.value;
@@ -118,7 +122,17 @@ public final class ParameterRow {
         return visibility == Visibility.PUBLIC;
     }
 
-    /** What an editor calls this — its {@link #description()} when it has one, else its {@link #name()}. */
+    /** When it changes: outside a run (the window edits it) or during one (the bot writes it). */
+    public Param.Changes changes() {
+        return changes;
+    }
+
+    /** Whether the bot writes it during a run, so the window shows it read-only. */
+    public boolean duringRun() {
+        return changes == Param.Changes.DURING_RUN;
+    }
+
+    /** What an editor calls this —its {@link #description()} when it has one, else its {@link #name()}. */
     public String displayLabel() {
         return description.isBlank() ? name : description;
     }
@@ -137,7 +151,8 @@ public final class ParameterRow {
                 .value(value)
                 .description(description)
                 .category(category)
-                .visibility(visibility);
+                .visibility(visibility)
+                .changes(changes);
     }
 
     /** Equal when every component is: what makes "did anything change" answerable. */
@@ -150,12 +165,13 @@ public final class ParameterRow {
                 && value.equals(other.value)
                 && description.equals(other.description)
                 && category.equals(other.category)
-                && visibility == other.visibility;
+                && visibility == other.visibility
+                && changes == other.changes;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, typeName, value, description, category, visibility);
+        return Objects.hash(name, typeName, value, description, category, visibility, changes);
     }
 
     @Override
@@ -172,6 +188,7 @@ public final class ParameterRow {
         private String description;
         private String category;
         private Visibility visibility;
+        private Param.Changes changes;
 
         private Builder(String name, String typeName) {
             this.name = name == null ? "" : name.trim();
@@ -200,6 +217,12 @@ public final class ParameterRow {
         /** Whether the bot's user is offered this. Defaults to {@link Visibility#PUBLIC} — a parameter exists to be set. */
         public Builder visibility(Visibility visibility) {
             this.visibility = visibility;
+            return this;
+        }
+
+        /** When it changes (2026-11-04). Defaults to {@link Param.Changes#OUTSIDE_RUN}. */
+        public Builder changes(Param.Changes changes) {
+            this.changes = changes;
             return this;
         }
 

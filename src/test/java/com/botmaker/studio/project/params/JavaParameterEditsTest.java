@@ -339,4 +339,21 @@ class JavaParameterEditsTest {
         assertEquals("Naming", parameter.row().category());
         assertTrue(parameter.editable(), parameter.note());
     }
+
+    @Test
+    void duringARunImportsParamWhenOnlyShownWasImported() {
+        String source = """
+                package p;
+
+                import com.botmaker.plugin.api.params.Param.Shown;
+
+                public class Run {
+                    @Shown(category = "x")
+                    public int tries() { return 1; }
+                }
+                """;
+        String out = JavaParameterEdits.setShown(source, "Run", "tries", Map.of("changes", "during-run"));
+        assertTrue(out.contains("Param.Changes.DURING_RUN"), out);
+        assertTrue(out.contains("import com.botmaker.plugin.api.params.Param;"), out);
+    }
 }

@@ -295,6 +295,8 @@ public class BotProject {
                 diagnosticsManager, config, state, eventBus
         );
         this.codeExecutionService = codeExec;
+        // On open, params/ is fitted to starting-params/: a fresh copy gets its starting values (2026-11-04).
+        codeExec.fitParams();
 
         this.debuggingService = new DebuggingService(
                 state, eventBus, codeExec, config

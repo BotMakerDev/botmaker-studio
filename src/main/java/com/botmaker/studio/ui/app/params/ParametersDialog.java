@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.StyleClasses;
+import com.botmaker.plugin.api.params.Param;
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.project.params.Visibility;
 import com.botmaker.studio.nav.Usages;
@@ -41,6 +42,8 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
@@ -63,10 +66,14 @@ import javafx.util.Duration;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
@@ -304,7 +311,10 @@ public final class ParametersDialog {
                 }
                 switch (row) {
                     case VariableRailModel.Heading heading -> {
-                        setText(heading.text() + ".java");
+                        // An owner caption, a group (its class name) or a field class (its file).
+                        boolean caption = heading.text().equals(THIS_BOT) || heading.text().equals(PLUGINS);
+                        setText(caption ? heading.text().toUpperCase(Locale.ROOT)
+                                : isGroup(heading.text()) ? heading.text() : heading.text() + ".java");
                         // A heading is a label that happens to live in a list, so it must not look or behave
                         // like a row you can land on — arrow-keying onto one would select nothing at all.
                         setDisable(true);
@@ -476,7 +486,7 @@ public final class ParametersDialog {
 
     /** Redraws the rail (the counts move on every add, delete and re-tag) and keeps the selection. */
     private void rebuildRail() {
-        List<VariableRailModel.Row> railRows = VariableRailModel.rowsOf(filed(), sections(), addedCategories);
+        List<VariableRailModel.Row> railRows = byOwner(VariableRailModel.rowsOf(filed(), sections(), addedCategories));
         rail.getItems().setAll(railRows);
         VariableRailModel.Row keep = railRows.stream()
                 .filter(r -> r instanceof VariableRailModel.TagRow t && t.tag().equalsIgnoreCase(selectedTag)
@@ -490,6 +500,43 @@ public final class ParametersDialog {
         }
         rebuildParams();
         refreshRailActions();
+    }
+
+    /** The rail's owner captions (layout-v3, 2026-11-04): the bot's own sections, then the plugins'. */
+    private static final String THIS_BOT = "This bot";
+    private static final String PLUGINS = "Plugins";
+
+    /** {@code railRows} with {@link #THIS_BOT} before the first own section and {@link #PLUGINS} before the first plugin's. */
+    private List<VariableRailModel.Row> byOwner(List<VariableRailModel.Row> railRows) {
+        Set<String> plugins = pluginSections();
+        List<VariableRailModel.Row> out = new ArrayList<>();
+        boolean own = false;
+        boolean plugin = false;
+        for (VariableRailModel.Row row : railRows) {
+            if (row instanceof VariableRailModel.Heading heading) {
+                boolean isPlugin = plugins.contains(heading.text());
+                if (isPlugin && !plugin) out.add(new VariableRailModel.Heading(PLUGINS));
+                if (!isPlugin && !own) out.add(new VariableRailModel.Heading(THIS_BOT));
+                plugin |= isPlugin;
+                own |= !isPlugin;
+            }
+            out.add(row);
+        }
+        return out;
+    }
+
+    /** The sections a plugin owns: a plugin's file, or its folder of params/. */
+    private Set<String> pluginSections() {
+        Set<String> out = new HashSet<>();
+        for (JavaParameter entry : rows) {
+            if (entry.declaredByPlugin()) out.add(entry.className());
+        }
+        return out;
+    }
+
+    /** Whether {@code className} is a {@code @Param} group in params/, by any row read from it. */
+    private boolean isGroup(String className) {
+        return rows.stream().anyMatch(entry -> entry.group() && entry.className().equals(className));
     }
 
     /**
@@ -579,16 +626,22 @@ public final class ParametersDialog {
         for (JavaParameter entry : rows) {
             if (!classes.contains(entry.className())) classes.add(entry.className());
         }
+        // The bot's own first, then the plugins' (layout-v3): a stable sort keeps each side's order.
+        Set<String> plugins = pluginSections();
+        classes.sort(Comparator.comparing(plugins::contains));
         return classes;
     }
 
     /** The heading of one section, what it is, and — when it holds nothing yet — the line that says so. */
     private Node sectionHeader(String className, boolean empty) {
-        Label heading = new Label(className + ".java");
+        boolean group = isGroup(className);
+        Label heading = new Label(group ? className : className + ".java");
         heading.getStyleClass().add("param-section-heading");
         VBox box = new VBox(2, heading);
         box.setPadding(new Insets(6, 0, 0, 0));
-        Label what = new Label("Your bot's own fields. The bot reads them as " + className + ".<name>.");
+        Label what = new Label(group
+                ? "Each parameter is this computer's, never versioned; its starting value ships with the bot."
+                : "Your bot's own fields. The bot reads them as " + className + ".<name>.");
         what.getStyleClass().add("dialog-hint-text");
         box.getChildren().add(what);
         if (empty) {
@@ -609,6 +662,9 @@ public final class ParametersDialog {
         // A plugin's parameter (2026-10-11): its name, type, category, note and audience are the plugin's, which
         // the bot's code reads by name; only its value is the user's.
         boolean mine = !entry.declaredByPlugin();
+        // A group's parameter (2026-11-04) keeps its name and type here; its value, filing, note and when it
+        // changes are edited, and the row menu sets its starting value.
+        boolean declarable = mine && !entry.group();
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(6);
@@ -617,7 +673,7 @@ public final class ParametersDialog {
         // A plugin's row is shown as a label, not a disabled text field: a field you may not type in reads
         // as something broken, where a label reads as a fact about who owns the row.
         Node name;
-        if (mine) {
+        if (declarable) {
             TextField field = new TextField(v.name());
             field.focusedProperty().addListener((o, was, is) -> {
                 if (!is) commitRename(entry, field);
@@ -629,8 +685,8 @@ public final class ParametersDialog {
             name = field;
         } else {
             Label label = new Label(v.name());
-            label.setTooltip(new Tooltip("Declared by a plugin — its name and type are the plugin's. "
-                    + entry.owner()));
+            label.setTooltip(new Tooltip(mine ? "Its name and type stay as they were added."
+                    : "Declared by a plugin — its name and type are the plugin's. " + entry.owner()));
             name = label;
         }
 
@@ -639,7 +695,7 @@ public final class ParametersDialog {
         ValueGrammar grammar = PluginHost.grammar();
 
         Node type;
-        if (mine) {
+        if (declarable) {
             TypeChooser picker = typeChooser();
             picker.setType(entry.form());
             picker.setPrefWidth(180);
@@ -688,9 +744,10 @@ public final class ParametersDialog {
 
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox head = mine ? new HBox(8, grip, name, type, spacer, drop)
-                : new HBox(8, name, type, spacer);
-        if (mine) {
+        HBox head = declarable ? new HBox(8, grip, name, type, spacer, drop)
+                : mine ? new HBox(8, grip, name, type, spacer) : new HBox(8, name, type, spacer);
+        if (entry.group()) head.getChildren().addAll(changedBar(entry, mine), rowMenu(entry));
+        if (declarable) {
             ClockSwitch.other(entry.form()).filter(grammar::known)
                     .ifPresent(other -> head.getChildren().add(head.getChildren().indexOf(type) + 1,
                             clockBar(entry)));
@@ -736,7 +793,8 @@ public final class ParametersDialog {
         GridPane.setHgrow(note, Priority.ALWAYS);
         row++;
 
-        grid.add(shared, 1, row);
+        // A group has no audience: every parameter is this computer's own (2026-11-04).
+        if (!entry.group()) grid.add(shared, 1, row);
 
         VBox card = new VBox(grid);
         card.setPadding(new Insets(4, 0, 4, 0));
@@ -764,6 +822,65 @@ public final class ParametersDialog {
         why.getStyleClass().add("dialog-hint-text");
         why.setWrapText(true);
         return new VBox(2, written, why);
+    }
+
+    /**
+     * <b>Outside a run | During a run</b> (layout-v3): when a group's parameter changes. During a run the bot writes
+     * it and the value cell is read-only. A plugin's is shown, not switched.
+     */
+    private Node changedBar(JavaParameter entry, boolean mine) {
+        ToggleGroup group = new ToggleGroup();
+        HBox bar = new HBox();
+        bar.getStyleClass().add("choice-mode-bar");
+        Param.Changes[] sides = Param.Changes.values();
+        for (int i = 0; i < sides.length; i++) {
+            Param.Changes side = sides[i];
+            ToggleButton button = new ToggleButton(side.displayName());
+            button.setToggleGroup(group);
+            button.setSelected(entry.row().changes() == side);
+            button.setDisable(!mine);
+            button.getStyleClass().add(i == 0 ? "choice-mode-first" : "choice-mode-last");
+            button.setTooltip(new Tooltip(side == Param.Changes.DURING_RUN
+                    ? "The bot writes it during a run; here it is read-only."
+                    : "You set it here; the bot only reads it."));
+            button.setOnAction(e -> {
+                if (entry.row().changes() == side) {
+                    button.setSelected(true);
+                    return;
+                }
+                edit(entry, "when it changes", current -> current.toBuilder().changes(side).build());
+            });
+            bar.getChildren().add(button);
+        }
+        return bar;
+    }
+
+    /** A group parameter's row menu: make this computer's value the one the bot ships with, or go back to that one. */
+    private Node rowMenu(JavaParameter entry) {
+        MenuItem starting = new MenuItem("Make this the starting value");
+        starting.setOnAction(e -> change("making " + entry.name() + "'s value its starting one", () -> {
+            flushValues();
+            JavaParameter now = find(entry.className(), entry.name());
+            if (!JavaParameters.makeStarting(config, state, now == null ? entry : now)) {
+                error(entry.name() + " has no starting copy to write, or it already starts at this value.");
+                return;
+            }
+            error("");
+        }));
+        MenuItem forget = new MenuItem("Forget (back to its starting value)");
+        forget.setOnAction(e -> change("forgetting " + entry.name(), () -> {
+            if (JavaParameters.forget(config, state, entry).isEmpty()) {
+                error(entry.name() + " has no starting copy to go back to.");
+                return;
+            }
+            error("");
+            reload();
+            rebuildParams();
+        }));
+        MenuButton menu = new MenuButton("⋯", null, starting, forget);
+        menu.getStyleClass().add("row-icon-button");
+        menu.setTooltip(new Tooltip("Its starting value: what a fresh copy of the bot begins with."));
+        return menu;
     }
 
     /** The chooser every type on this window is picked with: what a picker can write, and the bot's records. */

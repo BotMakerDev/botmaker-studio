@@ -7,6 +7,7 @@ import com.botmaker.plugin.host.grammar.SourceFormatter;
 import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -79,18 +80,18 @@ public final class JavaParameterEdits {
     }
 
     /**
-     * Replaces what the {@code default} method {@code methodName} of the schema {@code schema} returns with
-     * {@code value} — an {@code EDITOR} parameter's value is the author's, so it is the schema's own (2026-11-04).
-     * Unchanged when there is no such method or its body is not one {@code return}.
+     * Replaces what the parameter {@code methodName} of the group {@code group} returns with {@code value}
+     * (2026-11-04), adding the imports it names. Unchanged when there is no such method or its body is not one
+     * {@code return}.
      */
-    public static String setDefault(String source, String schema, String methodName, JavaValue value) {
+    public static String setReturned(String source, String group, String methodName, JavaValue value) {
         if (value == null) return source;
         CompilationUnit unit = BotParser.syntax(source);
         AST ast = unit.getAST();
         ASTRewrite rewrite = ASTRewrite.create(ast);
-        TypeDeclaration type = typeDeclaration(unit, schema);
+        TypeDeclaration type = typeDeclaration(unit, group);
         MethodDeclaration method = type == null ? null : methodOf(type, methodName);
-        Expression returned = method == null ? null : ValuesClasses.returned(method).orElse(null);
+        Expression returned = method == null ? null : JavaParameterSource.returned(method).orElse(null);
         if (returned == null) return source;
         rewrite.replace(returned, value.copyInto(ast), null);
         addImports(unit, rewrite, value.imports());
@@ -98,49 +99,118 @@ public final class JavaParameterEdits {
     }
 
     /**
-     * {@code source}, the values class {@code valuesClass}, with {@code methodName} overridden to return
-     * {@code value}: the override replaced when there is one, added after the others when not. Its return type is
-     * written from {@code form}, with the imports it needs. Unchanged when there is no such class, or {@code form}
-     * has no node.
+     * {@code source} with the parameter {@code name} added to the group {@code group} (2026-11-04):
+     * {@code public <form> name() { return value; }}, under a {@code @Param.Shown} carrying the members the author
+     * chose. Unchanged when there is no such class, it already has a method of that name, the grammar cannot write
+     * {@code form}, or there is no value.
      */
-    public static String override(String source, String valuesClass, String name, Type form, JavaValue value) {
-        if (value == null) return source;
+    @SuppressWarnings("unchecked")
+    public static String addMethod(String source, ValueGrammar grammar, String group, String name, Type form,
+                                   JavaValue value, String category, String description, Param.Changes changes) {
+        if (value == null || !writable(grammar, form) || name == null || name.isBlank()) return source;
         CompilationUnit unit = BotParser.syntax(source);
         AST ast = unit.getAST();
-        ASTRewrite rewrite = ASTRewrite.create(ast);
-        TypeDeclaration type = typeDeclaration(unit, valuesClass);
-        if (type == null) return source;
-        // The return type is written from the parameter's form, importing what it names, wherever the schema
-        // found it (its own package, a wildcard import): the values class sits in another package.
+        TypeDeclaration type = typeDeclaration(unit, group);
+        if (type == null || methodOf(type, name) != null) return source;
         Set<String> imports = new LinkedHashSet<>(value.imports());
         org.eclipse.jdt.core.dom.Type returnType = ValueTypes.node(ast, form, imports).orElse(null);
         if (returnType == null) return source;
-        MethodDeclaration present = methodOf(type, name);
-        Expression returned = present == null ? null : ValuesClasses.returned(present).orElse(null);
-        if (returned != null) {
-            rewrite.replace(returned, value.copyInto(ast), null);
-        } else {
-            MethodDeclaration method = ast.newMethodDeclaration();
-            MarkerAnnotation overrides = ast.newMarkerAnnotation();
-            overrides.setTypeName(ast.newSimpleName("Override"));
-            method.modifiers().add(overrides);
-            method.modifiers().add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
-            method.setReturnType2(returnType);
-            method.setName(ast.newSimpleName(name));
-            Block body = ast.newBlock();
-            ReturnStatement ret = ast.newReturnStatement();
-            ret.setExpression(value.copyInto(ast));
-            body.statements().add(ret);
-            method.setBody(body);
-            ListRewrite members = rewrite.getListRewrite(type, TypeDeclaration.BODY_DECLARATIONS_PROPERTY);
-            if (present != null) {
-                members.replace(present, method, null);
-            } else {
-                members.insertLast(method, null);
-            }
+        MethodDeclaration method = ast.newMethodDeclaration();
+        List<MemberValuePair> members = new ArrayList<>();
+        if (category != null && !category.isBlank()) members.add(member(ast, "category", category));
+        if (description != null && !description.isBlank()) members.add(member(ast, "description", description));
+        if (changes == Param.Changes.DURING_RUN) members.add(changesMember(ast, changes));
+        if (!members.isEmpty()) {
+            NormalAnnotation shown = ast.newNormalAnnotation();
+            shown.setTypeName(ast.newName(SHOWN));
+            shown.values().addAll(members);
+            method.modifiers().add(shown);
+            if (!importsSimpleName(unit, Param.class.getSimpleName())) imports.add(Param.class.getCanonicalName());
         }
-        addImports(unit, rewrite, List.copyOf(imports));
+        method.modifiers().add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+        method.setReturnType2(returnType);
+        method.setName(ast.newSimpleName(name));
+        Block body = ast.newBlock();
+        ReturnStatement ret = ast.newReturnStatement();
+        ret.setExpression(value.copyInto(ast));
+        body.statements().add(ret);
+        method.setBody(body);
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        rewrite.getListRewrite(type, TypeDeclaration.BODY_DECLARATIONS_PROPERTY).insertLast(method, null);
+        String declared = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        CompilationUnit reparsed = BotParser.syntax(declared);
+        ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
+        addImports(reparsed, importing, List.copyOf(imports));
+        return AstRewriteHelper.applyRewrite(importing, declared);
+    }
+
+    /**
+     * {@code source} with the {@code @Param.Shown} members of the parameter {@code name} of {@code group} set, a blank
+     * value removing one (2026-11-04); {@code changes} is spelled {@code during-run} or {@code outside-run}, the
+     * default, which removes the member. A method without the annotation gains one; unchanged when there is no such
+     * method.
+     */
+    public static String setShown(String source, String group, String name, Map<String, String> members) {
+        if (members == null || members.isEmpty()) return source;
+        CompilationUnit unit = BotParser.syntax(source);
+        AST ast = unit.getAST();
+        TypeDeclaration type = typeDeclaration(unit, group);
+        MethodDeclaration method = type == null ? null : methodOf(type, name);
+        if (method == null) return source;
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        Annotation existing = BotAnnotation.PARAM_SHOWN.on(method);
+        NormalAnnotation normal;
+        boolean imported = importsSimpleName(unit, Param.class.getSimpleName());
+        if (existing instanceof NormalAnnotation present) {
+            normal = present;
+        } else {
+            normal = ast.newNormalAnnotation();
+            normal.setTypeName(existing == null ? ast.newName(SHOWN)
+                    : (Name) ASTNode.copySubtree(ast, existing.getTypeName()));
+            ListRewrite modifiers = rewrite.getListRewrite(method, MethodDeclaration.MODIFIERS2_PROPERTY);
+            if (existing == null) modifiers.insertFirst(normal, null);
+            else modifiers.replace(existing, normal, null);
+        }
+        boolean fresh = !(existing instanceof NormalAnnotation);
+        ListRewrite pairs = fresh ? null : rewrite.getListRewrite(normal, NormalAnnotation.VALUES_PROPERTY);
+        // A new annotation, or Param.Changes written into one: both spell Param, which must be imported.
+        boolean namesParam = existing == null;
+        for (Map.Entry<String, String> entry : members.entrySet()) {
+            MemberValuePair present = fresh ? null : pairOf(normal, entry.getKey());
+            boolean changes = entry.getKey().equals("changes");
+            boolean blank = entry.getValue() == null || entry.getValue().isBlank()
+                    || changes && Param.Changes.fromId(entry.getValue()) == Param.Changes.OUTSIDE_RUN;
+            if (blank) {
+                if (present != null) pairs.remove(present, null);
+                continue;
+            }
+            MemberValuePair replacement = changes ? changesMember(ast, Param.Changes.fromId(entry.getValue()))
+                    : member(ast, entry.getKey(), entry.getValue());
+            namesParam |= changes;
+            if (fresh) addPair(normal, replacement);
+            else if (present != null) pairs.replace(present, replacement, null);
+            else pairs.insertLast(replacement, null);
+        }
+        if (fresh && normal.values().isEmpty()) return source;
+        if (namesParam && !imported) addImports(unit, rewrite, List.of(Param.class.getCanonicalName()));
         return AstRewriteHelper.applyRewrite(rewrite, source);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void addPair(NormalAnnotation annotation, MemberValuePair pair) {
+        annotation.values().add(pair);
+    }
+
+    /** How {@code @Param.Shown} is written on a method this host adds or marks. */
+    private static final String SHOWN = Param.class.getSimpleName() + "." + Param.Shown.class.getSimpleName();
+
+    /** {@code changes = Param.Changes.DURING_RUN}. */
+    private static MemberValuePair changesMember(AST ast, Param.Changes changes) {
+        MemberValuePair pair = ast.newMemberValuePair();
+        pair.setName(ast.newSimpleName("changes"));
+        pair.setValue(ast.newName(Param.class.getSimpleName() + "." + Param.Changes.class.getSimpleName() + "."
+                + changes.name()));
+        return pair;
     }
 
     /** The method called {@code name} declared directly in {@code type}, or {@code null}. */
