@@ -40,10 +40,10 @@ class ManagedHoldersTest {
     private static final PluginCoordinate TEST = new PluginCoordinate("com.github.BotMakerDev", "botmaker-test");
 
     private static final List<ManagedValue<?>> DECLARED = List.of(
-            ManagedValue.method(TestValue.Id.GREETING).in("Sdk").holds(String.class, null).because("Mine."),
-            ManagedValue.method(TestValue.Id.REST_BETWEEN).in("Sdk").holds(java.time.Duration.class, null)
+            ManagedValue.method(TestValue.Id.GREETING).in(TestValue.Holder.SDK).holds(String.class, null).because("Mine."),
+            ManagedValue.method(TestValue.Id.REST_BETWEEN).in(TestValue.Holder.SDK).holds(java.time.Duration.class, null)
                     .because("Mine."),
-            ManagedValue.openSet(TestValue.Id.PICTURES).of(String.class).in("Pictures").because("Mine."),
+            ManagedValue.openSet(TestValue.Id.PICTURES).of(String.class).in(TestValue.Holder.PICTURES).because("Mine."),
             ManagedValue.method(TestValue.Id.OPENED_ONLY).openedOnly().holds(String.class).because("Mine."));
 
     /** The test JVM's own classpath: it carries {@link TestValue}, as a bot's carries its plugin's marker. */
@@ -98,7 +98,7 @@ class ManagedHoldersTest {
     @Test
     void anEnumSetIsAnEmptyAnnotatedEnumOfItsElement() {
         ManagedValue<TestOutcome> outcomes = ManagedValue.openSet(TestValue.Id.OUTCOMES)
-                .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine.");
+                .ofEnum(TestOutcome.class, TestOutcome::named).in(TestValue.Holder.OUTCOMES).because("Mine.");
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
                 ProjectConfig.forDirectory(dir.resolve("bot")), SDK, outcomes, List.of(outcomes),
                 TestValues.GRAMMAR)).source();
@@ -113,10 +113,10 @@ class ManagedHoldersTest {
     @Test
     void aTypedValueIsMarkedWithThePluginsAnnotation() {
         List<ManagedValue<?>> declared = List.of(
-                ManagedValue.method(TestValue.Id.GREETING).in("Values").holds(String.class, null).because("Mine."),
-                ManagedValue.method(TestValue.Id.REST_BETWEEN).in("Values").holds(String.class, null)
+                ManagedValue.method(TestValue.Id.GREETING).in(TestValue.Holder.VALUES).holds(String.class, null).because("Mine."),
+                ManagedValue.method(TestValue.Id.REST_BETWEEN).in(TestValue.Holder.VALUES).holds(String.class, null)
                         .because("Mine."),
-                ManagedValue.openSet(TestValue.Id.NAMES).of(String.class).in("Names").because("Mine."));
+                ManagedValue.openSet(TestValue.Id.NAMES).of(String.class).in(TestValue.Holder.NAMES).because("Mine."));
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
 
         String values = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(config,
@@ -193,10 +193,10 @@ class ManagedHoldersTest {
         return null;
     }
 
-    private static final ManagedValue<Boolean> DO_SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in("Sdk")
+    private static final ManagedValue<Boolean> DO_SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in(TestValue.Holder.SDK)
             .startsAs(ManagedHoldersTest::setUpFirst).shown("Run", "Set up first", Param.Visibility.PUBLIC).because("Mine.");
 
-    private static final ManagedValue<java.time.Duration> PAUSE = ManagedValue.param(TestValue.Id.PAUSE).in("Sdk")
+    private static final ManagedValue<java.time.Duration> PAUSE = ManagedValue.param(TestValue.Id.PAUSE).in(TestValue.Holder.SDK)
             .startsAs(ManagedHoldersTest::noPause).shown("", "", Param.Visibility.EDITOR).because("Mine.");
 
     /**
@@ -330,7 +330,7 @@ class ManagedHoldersTest {
     /** A parameter no plugin's grammar can spell is left out; the holder's values are still written. */
     @Test
     void anUnwritableParameterCostsOnlyItself() {
-        ManagedValue<java.awt.Point> spot = ManagedValue.param(TestValue.Id.MINE).in("Sdk")
+        ManagedValue<java.awt.Point> spot = ManagedValue.param(TestValue.Id.MINE).in(TestValue.Holder.SDK)
                 .startsAs(ManagedHoldersTest::somewhere).shown("", "", Param.Visibility.EDITOR).because("Mine.");
         List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), spot);
         String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
@@ -348,7 +348,7 @@ class ManagedHoldersTest {
     @Test
     void anEmptySetOfClassesParameterIsWritten() {
         ManagedValue<java.util.Set<Class<? extends TestOutcome>>> skip = ManagedValue.param(TestValue.Id.NAMES)
-                .in("Sdk").startsAs(ManagedHoldersTest::skipNothing).shown("Run", "Skipped", Param.Visibility.PUBLIC)
+                .in(TestValue.Holder.SDK).startsAs(ManagedHoldersTest::skipNothing).shown("Run", "Skipped", Param.Visibility.PUBLIC)
                 .because("Mine.");
         String had = """
                 package com.bot.params.com_github_botmakerdev.botmaker_sdk;

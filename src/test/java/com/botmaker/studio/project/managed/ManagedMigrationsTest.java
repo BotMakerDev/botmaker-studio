@@ -34,12 +34,14 @@ class ManagedMigrationsTest {
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(MigrationTypes.types(), List.of());
 
     private static final List<ManagedValue<?>> DECLARED = List.of(
-            ManagedValue.openSet(TestValue.Id.OLD_SHOTS).of(OldShot.class).in("OldShots").because("Old."),
-            ManagedValue.openSet(TestValue.Id.SHOTS).of(Shot.class).in("Shots").because("New."),
-            ManagedValue.openSet(TestValue.Id.OLD_FRAMES).of(OldFrame.class).in("OldFrames").because("Old."),
-            ManagedValue.openSet(TestValue.Id.FRAMES).of(Frame.class).in("Frames").because("New."),
-            ManagedValue.openSet(TestValue.Id.OLD_PAINTS).of(OldPaint.class).in("OldPaints").because("Old."),
-            ManagedValue.openSet(TestValue.Id.PAINTS).of(Paint.class).in("Paints").because("New."));
+            ManagedValue.openSet(TestValue.Id.OLD_SHOTS).of(OldShot.class).in(TestValue.Holder.OLD_SHOTS).because("Old."),
+            ManagedValue.openSet(TestValue.Id.SHOTS).of(Shot.class).in(TestValue.Holder.SHOTS).because("New."),
+            ManagedValue.openSet(TestValue.Id.OLD_FRAMES).of(OldFrame.class).in(TestValue.Holder.OLD_FRAMES)
+                    .because("Old."),
+            ManagedValue.openSet(TestValue.Id.FRAMES).of(Frame.class).in(TestValue.Holder.FRAMES).because("New."),
+            ManagedValue.openSet(TestValue.Id.OLD_PAINTS).of(OldPaint.class).in(TestValue.Holder.OLD_PAINTS)
+                    .because("Old."),
+            ManagedValue.openSet(TestValue.Id.PAINTS).of(Paint.class).in(TestValue.Holder.PAINTS).because("New."));
 
     private static final String OLD_SHOTS = """
             package com.bot.plugins.sdk;

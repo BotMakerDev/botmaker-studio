@@ -34,7 +34,7 @@ class NestedClassesTest {
             .fields(TestScreen.Field.class, TestScreen::field)
             .setup(TestScreen::setup)
             .referredToAs(TestScreen::named)
-            .in("Screens").because("Mine.");
+            .in(TestValue.Holder.SCREENS).because("Mine.");
 
     private static final String ID = SET.id();
 

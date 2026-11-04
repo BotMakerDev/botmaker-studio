@@ -31,8 +31,8 @@ class MigrationCleanupTest {
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(MigrationTypes.types(), List.of());
 
     private static final List<ManagedValue<?>> DECLARED = List.of(
-            ManagedValue.openSet(TestValue.Id.OLD_SHOTS).of(OldShot.class).in("OldShots").because("Old."),
-            ManagedValue.openSet(TestValue.Id.SHOTS).of(Shot.class).in("Shots").because("New."));
+            ManagedValue.openSet(TestValue.Id.OLD_SHOTS).of(OldShot.class).in(TestValue.Holder.OLD_SHOTS).because("Old."),
+            ManagedValue.openSet(TestValue.Id.SHOTS).of(Shot.class).in(TestValue.Holder.SHOTS).because("New."));
 
     private static final String OLD_SHOTS = """
             package com.bot.plugins.sdk;

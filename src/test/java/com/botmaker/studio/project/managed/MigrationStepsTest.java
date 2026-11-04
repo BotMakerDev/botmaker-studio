@@ -42,10 +42,11 @@ class MigrationStepsTest {
     private static final ValueGrammar GRAMMAR = ValueGrammar.of(MigrationTypes.types(), List.of());
 
     private static final List<ManagedValue<?>> DECLARED = List.of(
-            ManagedValue.openSet(TestValue.Id.OLD_SHOTS).of(OldShot.class).in("OldShots").because("Old."),
-            ManagedValue.openSet(TestValue.Id.SHOTS).of(Shot.class).in("Shots").because("New."),
-            ManagedValue.openSet(TestValue.Id.OLD_FRAMES).of(OldFrame.class).in("OldFrames").because("Old."),
-            ManagedValue.openSet(TestValue.Id.FRAMES).of(Frame.class).in("Frames").because("New."));
+            ManagedValue.openSet(TestValue.Id.OLD_SHOTS).of(OldShot.class).in(TestValue.Holder.OLD_SHOTS).because("Old."),
+            ManagedValue.openSet(TestValue.Id.SHOTS).of(Shot.class).in(TestValue.Holder.SHOTS).because("New."),
+            ManagedValue.openSet(TestValue.Id.OLD_FRAMES).of(OldFrame.class).in(TestValue.Holder.OLD_FRAMES)
+                    .because("Old."),
+            ManagedValue.openSet(TestValue.Id.FRAMES).of(Frame.class).in(TestValue.Holder.FRAMES).because("New."));
 
     private static final String OLD_SHOTS = """
             package com.bot.plugins.sdk;
@@ -286,7 +287,7 @@ class MigrationStepsTest {
         assertEquals(List.of(), MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED, DECLARED),
                 "a version that still declares the set strands nothing");
         List<ManagedValue<?>> renamed = List.of(ManagedValue.openSet(TestValue.Id.SHOTS).of(OldShot.class)
-                .in("Shots").because("Renamed."));
+                .in(TestValue.Holder.SHOTS).because("Renamed."));
         assertEquals(1, MigrationSteps.stranded(index, GRAMMAR, DECLARED, DECLARED, renamed).size(),
                 "the same type under another id loses the values too");
     }

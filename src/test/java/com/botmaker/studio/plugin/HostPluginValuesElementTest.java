@@ -16,8 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class HostPluginValuesElementTest {
 
     private static final List<ManagedValue<?>> DECLARED = List.of(
-            ManagedValue.openSet(TestValue.Id.WORDS).of(CharSequence.class).in("Words").because("Mine."),
-            ManagedValue.method(TestValue.Id.WORDS_TOO).in("Values").holds(Integer.class, 1).because("Mine."));
+            ManagedValue.openSet(TestValue.Id.WORDS).of(CharSequence.class).in(TestValue.Holder.WORDS).because("Mine."),
+            ManagedValue.method(TestValue.Id.WORDS_TOO).in(TestValue.Holder.VALUES).holds(Integer.class, 1).because("Mine."));
 
     private static final String WORDS = ManagedValue.idOf(TestValue.Id.WORDS);
 

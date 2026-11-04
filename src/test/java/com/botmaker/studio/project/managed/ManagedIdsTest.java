@@ -31,8 +31,8 @@ class ManagedIdsTest {
             Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)), null);
 
     private static final List<ManagedValue<?>> KNOWN = List.of(
-            ManagedValue.method(TestValue.Id.GREETING).in("Values").holds(String.class, null).because("Mine."),
-            ManagedValue.openSet(TestValue.Id.NAMES).of(String.class).in("Names").because("Mine."));
+            ManagedValue.method(TestValue.Id.GREETING).in(TestValue.Holder.VALUES).holds(String.class, null).because("Mine."),
+            ManagedValue.openSet(TestValue.Id.NAMES).of(String.class).in(TestValue.Holder.NAMES).because("Mine."));
 
     private static final String GREETING = ManagedValue.idOf(TestValue.Id.GREETING);
 

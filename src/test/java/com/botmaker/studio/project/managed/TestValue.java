@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.plugin.api.managed.ManagedId;
 import com.botmaker.plugin.api.managed.ManagedMarker;
 
 import java.lang.annotation.ElementType;
@@ -15,9 +16,14 @@ public @interface TestValue {
 
     Id value();
 
-    enum Id {
+    enum Id implements ManagedId<Holder> {
         GREETING, FAREWELL, NAMES, REST_BETWEEN, PICTURES, FLOW, MINE, OPENED_ONLY, WORDS, WORDS_TOO, OUTCOMES,
         GREETING_V1, OUTCOMES_V1, ACTIVITIES, DO_SETUP, PAUSE, OLD_SHOTS, SHOTS, OLD_FRAMES, FRAMES, OLD_PAINTS, PAINTS,
         SCREENS
+    }
+
+    enum Holder {
+        SDK, VALUES, NAMES, PICTURES, WORDS, OUTCOMES, ACTIVITIES, SCREENS, STEPS, SHOTS, OLD_SHOTS, FRAMES, OLD_FRAMES,
+        PAINTS, OLD_PAINTS
     }
 }

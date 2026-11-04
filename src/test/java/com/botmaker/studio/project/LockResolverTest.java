@@ -176,7 +176,7 @@ class LockResolverTest {
     // --- files and fields another window owns (2026-09-19) --------------------------------------------------
 
     private static final List<ManagedValue<?>> PICTURES = List.of(
-            ManagedValue.openSet(TestValue.Id.PICTURES).of(String.class).in("Pictures")
+            ManagedValue.openSet(TestValue.Id.PICTURES).of(String.class).in(TestValue.Holder.PICTURES)
                     .because("Change pictures in the picture window."),
             ManagedValue.method(TestValue.Id.FLOW).openedOnly().holds(String.class)
                     .because("Draw the flow in ✂ Activity Flow."));

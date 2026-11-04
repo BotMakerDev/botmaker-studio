@@ -25,12 +25,12 @@ class ManagedRepairsTest {
     private static final ValueGrammar GRAMMAR = ValueGrammar.empty();
     private static final String NOTE = "Reset by the upgrade.";
 
-    static final ManagedValue<String> GREETING = ManagedValue.method(TestValue.Id.GREETING).in("Values")
+    static final ManagedValue<String> GREETING = ManagedValue.method(TestValue.Id.GREETING).in(TestValue.Holder.VALUES)
             .holds(String.class, "hi").because("New.");
     static final ManagedValue<TestOutcome> ACTIVITIES = ManagedValue.openSet(TestValue.Id.ACTIVITIES)
             .ofEnumGroups(TestOutcome.class, ManagedRepairsTest::inGroup)
             .groupedAs(Group.class, ManagedRepairsTest::group)
-            .in("Activities").because("New.");
+            .in(TestValue.Holder.ACTIVITIES).because("New.");
 
     /** What the version the bot moves to declares: no {@code GREETING_V1}, and {@code ACTIVITIES} nested now. */
     private static final List<ManagedValue<?>> LIVE = List.of(GREETING, ACTIVITIES);
@@ -232,7 +232,7 @@ class ManagedRepairsTest {
                     private Words() {}
                 }
                 """.formatted(config.mainPackage())));
-        ManagedValue<String> set = ManagedValue.openSet(TestValue.Id.WORDS).of(String.class).in("Words")
+        ManagedValue<String> set = ManagedValue.openSet(TestValue.Id.WORDS).of(String.class).in(TestValue.Holder.WORDS)
                 .because("New.");
 
         ManagedRepairs.Planned plan = ManagedRepairs.plan(index, List.of(set), GRAMMAR, NOTE);
@@ -242,7 +242,7 @@ class ManagedRepairsTest {
                 && plan.left().getFirst().contains("@Migrate rule"), plan.left().toString());
     }
 
-    static final ManagedValue<List<Integer>> NUMBERS = ManagedValue.param(TestValue.Id.NAMES).in("Sdk")
+    static final ManagedValue<List<Integer>> NUMBERS = ManagedValue.param(TestValue.Id.NAMES).in(TestValue.Holder.SDK)
             .startsAs(ManagedRepairsTest::noNumbers).shown("Game", "Numbers", null).because("New.");
 
     public static List<Integer> noNumbers() {
@@ -280,10 +280,10 @@ class ManagedRepairsTest {
     }
 
     static final ManagedValue<java.util.Set<Class<? extends TestOutcome>>> SKIP = ManagedValue.param(TestValue.Id.WORDS)
-            .in("Sdk").startsAs(ManagedRepairsTest::noSkip).shown("Run", "Skip", null).because("New.");
-    static final ManagedValue<String[]> TAGS = ManagedValue.param(TestValue.Id.WORDS_TOO).in("Sdk")
+            .in(TestValue.Holder.SDK).startsAs(ManagedRepairsTest::noSkip).shown("Run", "Skip", null).because("New.");
+    static final ManagedValue<String[]> TAGS = ManagedValue.param(TestValue.Id.WORDS_TOO).in(TestValue.Holder.SDK)
             .startsAs(ManagedRepairsTest::noTags).shown("Run", "Tags", null).because("New.");
-    static final ManagedValue<Boolean> SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in("Sdk")
+    static final ManagedValue<Boolean> SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in(TestValue.Holder.SDK)
             .startsAs(ManagedRepairsTest::setup).shown("Run", "Setup", null).because("New.");
 
     public static java.util.Set<Class<? extends TestOutcome>> noSkip() {
@@ -383,7 +383,7 @@ class ManagedRepairsTest {
     @Test
     @SuppressWarnings("unchecked")
     void aGenericFieldIsCarriedAsTheMethodOfItsRawClass(@TempDir Path dir) {
-        ManagedValue<List<String>> names = ManagedValue.method(TestValue.Id.NAMES).in("Values")
+        ManagedValue<List<String>> names = ManagedValue.method(TestValue.Id.NAMES).in(TestValue.Holder.VALUES)
                 .holds((Class<List<String>>) (Class<?>) List.class, List.of()).because("New.");
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path values = holder(config, "Values");

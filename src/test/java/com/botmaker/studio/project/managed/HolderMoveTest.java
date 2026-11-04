@@ -26,7 +26,7 @@ class HolderMoveTest {
 
     private static final PluginCoordinate SDK = new PluginCoordinate("com.github.BotMakerDev", "botmaker-sdk");
     private static final List<ManagedValue<?>> DECLARED = List.of(
-            ManagedValue.method(TestValue.Id.GREETING).in("Sdk").holds(String.class, null).because("Mine."));
+            ManagedValue.method(TestValue.Id.GREETING).in(TestValue.Holder.SDK).holds(String.class, null).because("Mine."));
     private static final List<PluginFiles.Holder> HOLDERS = List.of(
             new PluginFiles.Holder(SDK, "SDK", "com_github_botmakerdev.botmaker_sdk", "Sdk", DECLARED));
 

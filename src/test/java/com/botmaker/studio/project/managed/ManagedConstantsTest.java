@@ -43,7 +43,7 @@ class ManagedConstantsTest {
 
     /** What a bound plugin declares: the set the class below is marked as. */
     private static final List<ManagedValue<?>> KNOWN = List.of(
-            ManagedValue.openSet(TestValue.Id.PICTURES).of(Picture.class).in("Pictures").because("Mine."));
+            ManagedValue.openSet(TestValue.Id.PICTURES).of(Picture.class).in(TestValue.Holder.PICTURES).because("Mine."));
 
     private static final String PICTURES = """
             package com.bot.plugins.sdk;
@@ -115,7 +115,7 @@ class ManagedConstantsTest {
     @Test
     void aSetReferredToByNameReadsAndWritesEachReferenceByItsName() {
         List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.PICTURES).of(Picture.class)
-                .referredToAs(ManagedConstantsTest::referenced).in("Pictures").because("Mine."));
+                .referredToAs(ManagedConstantsTest::referenced).in(TestValue.Holder.PICTURES).because("Mine."));
         String twins = PICTURES.replace("images/gold.png", "images/ore.png");
         ManagedConstants.Lookup lookup = new ManagedConstants.Lookup(ManagedConstants.read(twins, known), GRAMMAR);
 
@@ -200,7 +200,7 @@ class ManagedConstantsTest {
             }
         };
         List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
-                .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine."));
+                .ofEnum(TestOutcome.class, TestOutcome::named).in(TestValue.Holder.OUTCOMES).because("Mine."));
         String outcomes = """
                 package com.bot.plugins.sdk;
 
@@ -241,7 +241,7 @@ class ManagedConstantsTest {
     @Test
     void aConstantInsideAPartReadsAsItsValueAndIsWrittenAsTheConstant() {
         List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
-                .ofEnum(TestOutcome.class, TestOutcome::named).in("Outcomes").because("Mine."));
+                .ofEnum(TestOutcome.class, TestOutcome::named).in(TestValue.Holder.OUTCOMES).because("Mine."));
         String outcomes = """
                 package com.bot.plugins.sdk;
 
@@ -304,7 +304,7 @@ class ManagedConstantsTest {
         List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
                 .ofEnumGroups(TestOutcome.class, ManagedConstantsTest::inGroup)
                 .groupedAs(Group.class, ManagedConstantsTest::group)
-                .in("Activities").because("Mine."));
+                .in(TestValue.Holder.ACTIVITIES).because("Mine."));
         String activities = """
                 package com.bot.plugins.sdk;
 
@@ -341,8 +341,8 @@ class ManagedConstantsTest {
         List<ManagedValue<?>> known = List.of(ManagedValue.openSet(TestValue.Id.OUTCOMES)
                         .ofEnumGroups(TestOutcome.class, ManagedConstantsTest::inGroup)
                         .groupedAs(Group.class, ManagedConstantsTest::group)
-                        .in("Activities").because("Mine."),
-                ManagedValue.openSet(TestValue.Id.FLOW).of(Step.class).in("Steps").because("Mine."));
+                        .in(TestValue.Holder.ACTIVITIES).because("Mine."),
+                ManagedValue.openSet(TestValue.Id.FLOW).of(Step.class).in(TestValue.Holder.STEPS).because("Mine."));
         String activities = """
                 package com.bot.plugins.sdk;
 

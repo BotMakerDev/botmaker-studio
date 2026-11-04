@@ -24,9 +24,9 @@ class LeftoverFieldsTest {
 
     private static final ValueGrammar GRAMMAR = ValueGrammar.empty();
 
-    static final ManagedValue<Boolean> SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in("Sdk")
+    static final ManagedValue<Boolean> SETUP = ManagedValue.param(TestValue.Id.DO_SETUP).in(TestValue.Holder.SDK)
             .startsAs(LeftoverFieldsTest::setup).shown("Run", "Setup", null).because("New.");
-    static final ManagedValue<List<Integer>> NUMBERS = ManagedValue.param(TestValue.Id.NAMES).in("Sdk")
+    static final ManagedValue<List<Integer>> NUMBERS = ManagedValue.param(TestValue.Id.NAMES).in(TestValue.Holder.SDK)
             .startsAs(LeftoverFieldsTest::noNumbers).shown("Game", "Numbers", null).because("New.");
     private static final List<ManagedValue<?>> LIVE = List.of(SETUP, NUMBERS);
 

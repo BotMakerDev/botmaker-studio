@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (holders by enum)
+
+- The tests' managed values name their holders by `TestValue.Holder` constants (2026-11-04), as the contract
+  now asks; Studio still reads a holder's simple name, so nothing it writes moves.
+
 ### Changed (private values)
 
 - A new parameter's value stays in `params/`: its starting copy gets the type's blank value, and only *Make this the

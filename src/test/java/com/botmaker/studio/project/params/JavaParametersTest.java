@@ -325,7 +325,7 @@ class JavaParametersTest {
                 .fields(TestScreen.Field.class, TestScreen::field)
                 .setup(TestScreen::setup)
                 .referredToAs(TestScreen::named)
-                .in("Screens").because("Mine.");
+                .in(TestValue.Holder.SCREENS).because("Mine.");
         Mark mark = Mark.of(ReadOff.class).withClassOf("screen", set, PluginValues.Member.of("HOME")).with("field", "gold");
 
         String out = JavaParameterEdits.withMarks(source, "Progress", "gold", List.of(mark), List.of(), screens)
@@ -351,7 +351,7 @@ class JavaParametersTest {
                 .fields(TestScreen.Field.class, TestScreen::field)
                 .setup(TestScreen::setup)
                 .referredToAs(TestScreen::named)
-                .in("Screens").because("Mine.");
+                .in(TestValue.Holder.SCREENS).because("Mine.");
         ParameterWrite unnamed = ParameterWrite.of("Progress", "gold", 0)
                 .marked(Mark.of(ReadOff.class).withClassOf("screen", set, PluginValues.Member.of("GONE")));
 
