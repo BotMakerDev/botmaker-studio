@@ -191,8 +191,6 @@ class LibraryCallImportsTest {
         CompilationUnit sdk = StatementFactory.holderUnits(state, java.util.Map.of(SDK, List.of()))
                 .get(key);
         assertNotNull(sdk);
-        assertTrue(StatementFactory.declaresField(sdk, "Sdk", "flow"));
-        assertTrue(!StatementFactory.declaresField(sdk, "Sdk", "skip"), "a field the holder lacks is not named");
 
         StatementFactory.holderName(ctx, new StatementFactory.HolderUnit(key, sdk), new java.util.HashMap<>());
         assertTrue(ctx.applyTo(HOST).contains("import com.mybot.plugins.com_github_botmakerdev.botmaker_sdk.Sdk;"), ctx.applyTo(HOST));

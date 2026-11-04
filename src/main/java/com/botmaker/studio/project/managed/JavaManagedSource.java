@@ -7,6 +7,7 @@ import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;
@@ -16,6 +17,7 @@ import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.ReturnStatement;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import java.lang.reflect.Type;
 import java.nio.file.Path;
@@ -128,7 +130,8 @@ public final class JavaManagedSource {
         if (!Modifier.isPublic(modifiers)) {
             return "not public: the bot can call it, the plugin's window cannot show it being changed";
         }
-        if (!Modifier.isStatic(modifiers)) {
+        // A parameter group's method is one parameter, whole (2026-11-04): an instance method by design.
+        if (!Modifier.isStatic(modifiers) && !inParamGroup(method)) {
             return "not static: a plugin's value belongs to the bot, not to an instance of a class";
         }
         if (!method.parameters().isEmpty()) {
@@ -172,5 +175,11 @@ public final class JavaManagedSource {
      */
     public static String idOf(Annotation annotation) {
         return ManagedIds.idOf(annotation, PluginHost.managedValues());
+    }
+
+    /** Whether {@code method} is declared by a top-level class marked {@code @Param}: a parameter group. */
+    static boolean inParamGroup(MethodDeclaration method) {
+        return method.getParent() instanceof TypeDeclaration type && !type.isInterface()
+                && type.isPackageMemberTypeDeclaration() && BotAnnotation.PARAM.on(type) != null;
     }
 }

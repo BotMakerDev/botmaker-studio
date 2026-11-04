@@ -52,30 +52,47 @@ class LeftoverFieldsTest {
             }
             """;
 
+    private static final String GROUP = """
+            package %s.params.test;
+
+            import %s;
+            import %s;
+
+            @Param
+            public class Sdk {
+                @TestValue(TestValue.Id.DO_SETUP)
+                public boolean doSetup() {
+                    return false;
+                }
+            }
+            """;
+
+    /** A plugin's parameter is a method of its group (2026-11-04): reset rewrites what it returns. */
     @Test
     void aParameterOfItsTypeTakesItsFirstValueAgain(@TempDir Path dir) {
         ProjectConfig config = ProjectConfig.forDirectory(dir);
-        Path sdk = holder(config);
-        BotIndex index = index(config, Map.of(sdk, sdk(config, "Integer")));
+        Path group = config.parametersPackageDir().resolve("test").resolve("Sdk.java").toAbsolutePath().normalize();
+        BotIndex index = index(config, Map.of(group, GROUP.formatted(config.mainPackage(),
+                com.botmaker.plugin.api.params.Param.class.getCanonicalName(), TestValue.class.getCanonicalName())));
+        JavaParameter parameter = new JavaParameter(group, "Sdk", ParameterRow.named("doSetup", "boolean").build(),
+                ValueTypes.NONE, "false", true, "", "New.", SETUP.id(), true);
 
-        Refactor.Outcome reset = LeftoverFields.reset(index, owned(sdk, "doSetup", SETUP), LIVE, GRAMMAR);
+        Refactor.Outcome reset = LeftoverFields.reset(index, parameter, LIVE, GRAMMAR);
 
         Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class, reset, reset.toString());
-        assertTrue(plan.rewrites().get(sdk).contains("doSetup = true"), plan.rewrites().get(sdk));
+        assertTrue(plan.rewrites().get(group).contains("return true;"), plan.rewrites().get(group));
     }
 
-    /** The upgrade's own test: {@code List<String>} where the plugin declares {@code List<Integer>} is gone. */
+    /** A field is the old shape, which the upgrade repairs: reset leaves it alone and says so. */
     @Test
-    void aParameterOfAnotherTypeIsRemovedAndWrittenAnew(@TempDir Path dir) {
+    void aParameterFieldIsLeftToTheUpgrade(@TempDir Path dir) {
         ProjectConfig config = ProjectConfig.forDirectory(dir);
         Path sdk = holder(config);
         BotIndex index = index(config, Map.of(sdk, sdk(config, "String")));
 
         Refactor.Outcome reset = LeftoverFields.reset(index, owned(sdk, "numbers", NUMBERS), LIVE, GRAMMAR);
 
-        Refactor.Planned plan = assertInstanceOf(Refactor.Planned.class, reset, reset.toString());
-        assertFalse(plan.rewrites().get(sdk).contains("List<String>"), plan.rewrites().get(sdk));
-        assertTrue(plan.summary().startsWith("Removed Sdk.numbers"), plan.summary());
+        assertTrue(((Refactor.Refused) reset).reason().contains("Upgrade"), reset.toString());
     }
 
     @Test

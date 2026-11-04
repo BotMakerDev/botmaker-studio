@@ -7,9 +7,7 @@ import com.botmaker.studio.nav.Usages;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.managed.ManagedIds;
-import com.botmaker.studio.project.managed.ManagedRepairs;
 import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
@@ -38,10 +36,9 @@ public final class LeftoverFields {
     private LeftoverFields() {}
 
     /**
-     * {@code parameter}, a plugin's, as its plugin declares it now: its value set back to the declaration's first
-     * one, or — a field of another type, which the upgrade's own test finds ({@link ManagedRepairs#fieldFits}) —
-     * removed and written anew in its holder. Refused for the bot's own parameter, one no plugin declares now, and
-     * a plan that would stop the bot compiling.
+     * {@code parameter}, a plugin's method of its group, its value set back to the declaration's first one
+     * (2026-11-04). Refused for the bot's own parameter, one no plugin declares now, a field (the old shape, which
+     * the upgrade repairs), and a plan that would stop the bot compiling.
      *
      * @param live every value the bound plugins declare
      */
@@ -64,39 +61,24 @@ public final class LeftoverFields {
         Path file = parameter.file().toAbsolutePath().normalize();
         String text = index.sources().get(file);
         if (text == null) return new Refactor.Refused(name + "'s file is not part of the bot any more.");
-        Optional<Boolean> fits = ManagedRepairs.fieldFits(index, value, live, file, parameter.className());
-        if (fits.isEmpty()) {
-            return new Refactor.Refused(name + " could not be read as its plugin's field, so nothing was changed.");
+        // A plugin's parameter is a method of its group since 2026-11-04; a field is the old shape the upgrade repairs.
+        if (!parameter.group()) {
+            return new Refactor.Refused(name + " is a field, the old shape of its plugin's parameter: Project ▸"
+                    + " Upgrade… repairs it, and binding the plugin writes it anew in params/.");
         }
-        Refactor.Planned plan;
-        if (fits.get()) {
-            Optional<JavaValue> first = value.initial() == null ? Optional.empty()
-                    : grammar.initializer(value.form(), value.initial());
-            if (first.isEmpty()) {
-                return new Refactor.Refused(name + "'s first value cannot be written as Java, so nothing was changed.");
-            }
-            String reset = JavaParameterEdits.setValue(text, parameter.className(), parameter.name(), first.get());
-            if (reset.equals(text)) {
-                return new Refactor.Refused(parameter.initializer().strip().equals(first.get().source().strip())
-                        ? name + " already has its first value, " + first.get().source() + "."
-                        : name + "'s value could not be rewritten, so nothing was changed.");
-            }
-            plan = new Refactor.Planned("Set " + name + " back to its first value, " + first.get().source(),
-                    Map.of(file, reset));
-        } else {
-            // Written anew only in its holder, where the plugin looks for it: anywhere else it would just be gone.
-            if (!parameter.className().equals(value.holder())) {
-                return new Refactor.Refused(name + " is another type than its plugin declares, and it is not in "
-                        + value.holder() + ", where its plugin writes it: move it there, or delete it by hand.");
-            }
-            String removed = JavaParameterEdits.remove(text, parameter.className(), parameter.name());
-            String written = ManagedHolders.keptValues(removed, List.of(value), grammar);
-            if (removed.equals(text) || written.equals(removed)) {
-                return new Refactor.Refused(name + " could not be written anew, so nothing was changed.");
-            }
-            plan = new Refactor.Planned("Removed " + name + ", which is not the type its plugin declares now, and"
-                    + " wrote it anew as the plugin declares it", Map.of(file, written));
+        Optional<JavaValue> first = value.initial() == null ? grammar.freshSpelling(value.form())
+                : grammar.initializer(value.form(), value.initial());
+        if (first.isEmpty()) {
+            return new Refactor.Refused(name + "'s first value cannot be written as Java, so nothing was changed.");
         }
+        String reset = JavaParameterEdits.setReturned(text, parameter.className(), parameter.name(), first.get());
+        if (reset.equals(text)) {
+            return new Refactor.Refused(parameter.initializer().strip().equals(first.get().source().strip())
+                    ? name + " already has its first value, " + first.get().source() + "."
+                    : name + "'s value could not be rewritten, so nothing was changed.");
+        }
+        Refactor.Planned plan = new Refactor.Planned("Set " + name + " back to its first value, "
+                + first.get().source(), Map.of(file, reset));
         return Refactor.checked(index, plan, "Resetting " + name);
     }
 

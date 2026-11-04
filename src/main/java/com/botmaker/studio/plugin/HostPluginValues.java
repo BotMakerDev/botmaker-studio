@@ -30,7 +30,6 @@ import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.managed.ManagedMethod;
 import com.botmaker.studio.project.managed.ManagedMigrations;
 import com.botmaker.studio.project.managed.ManagedSets;
-import com.botmaker.studio.project.params.JavaParameter;
 import com.botmaker.studio.project.params.JavaParameterEdits;
 import com.botmaker.studio.project.params.JavaParameters;
 import com.botmaker.studio.project.source.BotIndex;
@@ -177,7 +176,8 @@ public final class HostPluginValues implements PluginValues {
                 // condition holds), is written into the holder the bot has.
                 java.util.Map<Path, List<ManagedValue<?>>> kept = value instanceof ManagedOpenSet<?>
                         ? java.util.Map.of()
-                        : ManagedHolders.valuesToKeep(index(), java.util.Map.of(plugin.coordinate(), List.of(value)));
+                        : ManagedHolders.valuesToKeep(config, index(),
+                                java.util.Map.of(plugin.coordinate(), List.of(value)));
                 if (!kept.isEmpty()) {
                     if (state.isReaderMode()) return Optional.of("This project is open read-only.");
                     return keep(kept).isEmpty() ? Optional.of("BotMaker cannot write a starting value for "
@@ -266,7 +266,7 @@ public final class HostPluginValues implements PluginValues {
         java.util.Map<PluginCoordinate, List<ManagedValue<?>>> params = new java.util.LinkedHashMap<>();
         byPlugin.forEach((plugin, declared) ->
                 params.put(plugin, declared.stream().filter(ManagedParam.class::isInstance).toList()));
-        keep(ManagedHolders.valuesToKeep(index(), params))
+        keep(ManagedHolders.valuesToKeep(config, index(), params))
                 .forEach(file -> written.add(config.projectPath().relativize(file).toString()));
         return List.copyOf(written);
     }
@@ -287,6 +287,9 @@ public final class HostPluginValues implements PluginValues {
             changed.add(file);
             return after;
         }));
+        // A parameter added to a group is added to its starting copy too, or the next open's fit drops it.
+        kept.forEach((file, values) -> JavaParameters.rewriteStarting(config, file,
+                source -> ManagedHolders.keptValues(source, values, PluginHost.grammar())));
         if (!changed.isEmpty()) redraw(changed);
         return changed;
     }
@@ -335,50 +338,13 @@ public final class HostPluginValues implements PluginValues {
 
     // ── the contract's operations, by declaration: each the spelled one below ────────────────────────────
 
+    /**
+     * A plugin's parameter is a marked method of its group in {@code params/} (2026-11-04), opened and written as
+     * any method value is: what it returns is this computer's value, and its starting copy is never touched.
+     */
     @Override
     public Optional<ValueContext> open(ManagedValue<?> value) {
-        if (value == null) return Optional.empty();
-        return value instanceof ManagedParam<?> ? openParam(value) : open(value.id());
-    }
-
-    /** A plugin's parameter field: the file it is in and its class and name. */
-    private record MarkedParam(Path file, ManagedHolders.FieldName field) {}
-
-    /** The field carrying the parameter {@code value}'s mark, editable or not; empty when the bot has none. */
-    private Optional<MarkedParam> markedParam(ManagedValue<?> value) {
-        List<ManagedValue<?>> known = PluginHost.managedValues();
-        MarkedParam[] found = {null};
-        BotSources.forEach(config, state, (visited, source) -> {
-            if (found[0] == null) {
-                ManagedHolders.markedParam(source, value, known)
-                        .ifPresent(field -> found[0] = new MarkedParam(visited, field));
-            }
-            return null;
-        });
-        return Optional.ofNullable(found[0]);
-    }
-
-    /**
-     * A plugin's own parameter, the {@code @Param} field carrying its mark, as a value — read and written as a row
-     * of the Parameters window is (2026-10-12: the SDK's {@code launchTargets} and {@code vm}, which its game dialog
-     * and ⚙ Bot Settings write). Empty when the bot has no such field, or its initialiser is not one the grammar
-     * rewrites.
-     */
-    private Optional<ValueContext> openParam(ManagedValue<?> value) {
-        Optional<MarkedParam> marked = markedParam(value);
-        if (marked.isEmpty()) return Optional.empty();
-        Path[] file = {marked.get().file()};
-        ManagedHolders.FieldName[] named = {marked.get().field()};
-        return JavaParameters.find(config, state, named[0].className(), named[0].name(), PluginHost.grammar())
-                .filter(JavaParameter::editable)
-                .map(parameter -> HostValueContext.of(parameter.form(), parameter.initializer(), services,
-                        expression -> {
-                            recorded(() -> {
-                                snapshot();
-                                JavaParameters.setValue(config, state, parameter, imported(expression));
-                            });
-                            redraw(java.util.Set.of(file[0]));
-                        }, this::constants));
+        return value == null ? Optional.empty() : open(value.id());
     }
 
     /** The bot's managed constants as they stand now, which a value of one of them is read and written as. */
@@ -391,8 +357,8 @@ public final class HostPluginValues implements PluginValues {
         // A parameter the bot already declares is there to open, or written by hand and left alone; only a missing
         // one is written. create(String) finds methods only.
         if (value instanceof ManagedParam<?>) {
-            if (openParam(value).isPresent()) return Optional.empty();
-            if (markedParam(value).isPresent()) {
+            Optional<ManagedMethod> found = JavaManagedValues.find(config, state, value.id());
+            if (found.isPresent() && !found.get().editable()) {
                 return Optional.of(ManagedIds.spelled(value.id(), PluginHost.managedValues())
                         + " is written by hand, so BotMaker leaves it alone.");
             }
@@ -857,6 +823,9 @@ public final class HostPluginValues implements PluginValues {
     /** A new class's file written; inside a batch, the next write reads the bot's types again (WriteSteps.Step#types). */
     private void create(Path file, String source, String label) {
         ProjectWrites.create(config, file, source, label);
+        // A plugin's group in params/ is written with its starting copy, which the fitter keeps params/ to.
+        JavaParameters.startingFile(config, file).ifPresent(starting ->
+                ProjectWrites.create(config, starting, source, label));
         WriteSteps.Step open = WriteSteps.open();
         if (open != null) open.typesChanged();
     }

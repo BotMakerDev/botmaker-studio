@@ -2,11 +2,9 @@ package com.botmaker.studio.parser.factories;
 
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
-import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.FunctionDraft;
@@ -16,7 +14,6 @@ import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.managed.HolderFiles;
-import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -369,29 +366,13 @@ public class StatementFactory {
             Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = takesHolders ? pluginValues() : Map.of();
             List<HolderUnit> holders = takesHolders ? valuesHolders(ctx.state(), byPlugin) : List.of();
             if (!holders.isEmpty()) {
-                // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed each
-                // plugin's parameter of the type an argument before them takes, then every plugin's holder of
-                // values: the arguments Studio knows and the author would look up.
-                List<HeldParam> fields = new ArrayList<>(pluginParams(holders, l.facade(), byPlugin));
+                // An entry point taking the bot's values classes — Bot.runFlow(Sdk.class) — is handed every
+                // plugin's holder of values, from which the plugin finds its parameters' group (2026-11-04: a
+                // parameter is a method of its group in params/, never a holder's field to pass).
                 Map<String, HolderFiles.Key> named = new HashMap<>();
                 for (ResolvedType p : params.subList(0, params.size() - 1)) {
-                    HeldParam field = fields.stream().filter(f -> erased(f.param().form()).equals(erased(p)))
-                            .findFirst().orElse(null);
-                    if (field == null) {
-                        mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, p));
-                        ctx.addImportForType(p);
-                        continue;
-                    }
-                    fields.remove(field);
-                    String member = ManagedHolders.memberName(field.param());
-                    if (!declaresField(field.holder().unit(), field.holder().key().name(), member)) {
-                        // A holder an older plugin wrote may lack the field until the next bind: its first value
-                        // compiles where naming the field would not.
-                        mi.arguments().add(freshValue(ctx, field.param()));
-                        continue;
-                    }
-                    mi.arguments().add(ast.newQualifiedName(holderName(ctx, field.holder(), named),
-                            ast.newSimpleName(member)));
+                    mi.arguments().add(InitializerFactory.createDefaultInitializer(ctx, p));
+                    ctx.addImportForType(p);
                 }
                 for (HolderUnit holder : holders) {
                     TypeLiteral literal = ast.newTypeLiteral();
@@ -426,45 +407,8 @@ public class StatementFactory {
         return array && "Class".equals(last.leafType().simpleName());
     }
 
-    /**
-     * The parameters ({@code ManagedValue.param}) living in one of {@code holders} that the plugin serving
-     * {@code facade} declares, in its order — never another plugin's, whose {@code boolean} would fit as well.
-     * The serving plugin is the one whose class loader loaded the facade.
-     */
-    private static List<HeldParam> pluginParams(List<HolderUnit> holders, Class<?> facade,
-                                                Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin) {
-        for (LoadedPlugin plugin : PluginHost.plugins()) {
-            if (plugin.plugin().getClass().getClassLoader() != facade.getClassLoader()) continue;
-            List<HeldParam> held = new ArrayList<>();
-            for (ManagedValue<?> value : byPlugin.getOrDefault(plugin.coordinate(), List.of())) {
-                if (!(value instanceof ManagedParam<?> param)) continue;
-                HolderFiles.Key key = HolderFiles.Key.of(plugin.coordinate(), param.holder());
-                holders.stream().filter(h -> h.key().equals(key)).findFirst()
-                        .ifPresent(holder -> held.add(new HeldParam(param, holder)));
-            }
-            return held;
-        }
-        return List.of();
-    }
-
-    /** A type's class name without its arguments: {@code java.util.Set} for {@code Set<Class<?>>}. */
-    private static String erased(java.lang.reflect.Type type) {
-        return type instanceof java.lang.reflect.ParameterizedType generic ? generic.getRawType().getTypeName()
-                : type.getTypeName();
-    }
-
-    private static String erased(ResolvedType type) {
-        String name = type.qualifiedName();
-        int generic = name.indexOf('<');
-        return generic < 0 ? name : name.substring(0, generic);
-    }
-
     /** A plugin's holder the bot declares, and the tree of its file. */
     record HolderUnit(HolderFiles.Key key, CompilationUnit unit) {
-    }
-
-    /** A plugin's parameter and the holder it lives in. */
-    private record HeldParam(ManagedParam<?> param, HolderUnit holder) {
     }
 
     /**
@@ -517,21 +461,6 @@ public class StatementFactory {
         return false;
     }
 
-    /** Whether {@code unit}'s class {@code holder} declares a field {@code name}. */
-    static boolean declaresField(CompilationUnit unit, String holder, String name) {
-        for (Object type : unit.types()) {
-            if (!(type instanceof TypeDeclaration declaration) || !declaration.getName().getIdentifier().equals(holder)) {
-                continue;
-            }
-            for (FieldDeclaration field : declaration.getFields()) {
-                for (Object fragment : field.fragments()) {
-                    if (((VariableDeclarationFragment) fragment).getName().getIdentifier().equals(name)) return true;
-                }
-            }
-        }
-        return false;
-    }
-
     /**
      * Imports the bot's class {@code holder} by its file's package — {@code com.egezg.plugins.sdk.Sdk} from
      * {@code com.egezg.Base}. Found by simple name it depended on the index knowing the bot's own sources, which
@@ -542,20 +471,6 @@ public class StatementFactory {
                 .map(declared -> declared.getName().getFullyQualifiedName());
         if (pkg.isPresent()) ctx.addImport(pkg.get() + "." + holder);
         else ctx.addImportForSimpleName(holder);
-    }
-
-    /**
-     * {@code field}'s first value as the holder would be written with it ({@code Set.of()}, imports added), the
-     * way {@code ManagedHolders} spells it — or {@code null} when the grammar writes none. Never the parameter
-     * type's default: that is what wrote {@code new Flow()}.
-     */
-    private static Expression freshValue(EditContext ctx, ManagedParam<?> field) {
-        var grammar = PluginHost.grammar();
-        Optional<JavaValue> fresh = field.initial() != null
-                ? grammar.spell(field.form(), field.initial()) : grammar.freshSpelling(field.form());
-        if (fresh.isEmpty()) return ctx.ast().newNullLiteral();
-        fresh.get().imports().forEach(ctx::addImport);
-        return fresh.get().copyInto(ctx.ast());
     }
 
     /** Whether {@code l}'s method is a plugin's {@code @EntryPoint}, offered inside {@code main} only. */

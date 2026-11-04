@@ -799,7 +799,7 @@ public final class JavaParameters {
     }
 
     /** The starting copy of the params file {@code file}: the same path under {@code starting-params/}. */
-    static Optional<Path> startingFile(ProjectConfig config, Path file) {
+    public static Optional<Path> startingFile(ProjectConfig config, Path file) {
         Path params = config.parametersPackageDir().toAbsolutePath().normalize();
         Path at = file.toAbsolutePath().normalize();
         if (!at.startsWith(params)) return Optional.empty();
@@ -810,7 +810,7 @@ public final class JavaParameters {
      * Applies {@code edit} to the starting copy of {@code file}, on disk (it is outside the sources, so no editor
      * holds it), and answers whether it changed. Nothing is done when there is no starting copy.
      */
-    private static boolean rewriteStarting(ProjectConfig config, Path file, UnaryOperator<String> edit) {
+    public static boolean rewriteStarting(ProjectConfig config, Path file, UnaryOperator<String> edit) {
         Optional<Path> starting = startingFile(config, file).filter(Files::isRegularFile);
         if (starting.isEmpty()) return false;
         Optional<String> was = currentSource(null, starting.get());

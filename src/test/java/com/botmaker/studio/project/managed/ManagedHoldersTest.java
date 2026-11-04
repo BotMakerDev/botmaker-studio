@@ -199,21 +199,30 @@ class ManagedHoldersTest {
     private static final ManagedValue<java.time.Duration> PAUSE = ManagedValue.param(TestValue.Id.PAUSE).in("Sdk")
             .startsAs(ManagedHoldersTest::noPause).shown("", "", Param.Visibility.EDITOR).because("Mine.");
 
-    /** A plugin's parameters are marked {@code @Param} fields, written before the holder's methods (2026-10-11). */
+    /**
+     * A plugin's parameters are methods of its group in {@code params/}, beside the holder's folder (2026-11-04):
+     * the holder keeps its own values, and the group is a {@code @Param} class the Parameters window reads.
+     */
     @Test
-    void aParameterIsAMarkedParamFieldBeforeTheMethods() {
+    void aParameterIsAMethodOfItsGroupInParams() {
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         List<ManagedValue<?>> declared = List.of(DECLARED.getFirst(), DO_SETUP, PAUSE);
-        String source = assertInstanceOf(ManagedHolders.Plan.Write.class, ManagedHolders.plan(
-                ProjectConfig.forDirectory(dir.resolve("bot")), SDK, DECLARED.getFirst(), declared,
-                TestValues.GRAMMAR)).source();
+        ManagedHolders.Plan.Write holder = assertInstanceOf(ManagedHolders.Plan.Write.class,
+                ManagedHolders.plan(config, SDK, DECLARED.getFirst(), declared, TestValues.GRAMMAR));
+        assertTrue(!holder.source().contains("doSetup"), holder.source());
 
-        assertTrue(source.contains("    @TestValue(TestValue.Id.DO_SETUP)\n    @Param(category = \"Run\","
-                + " visibility = Param.PUBLIC, description = \"Set up first\")\n    public static boolean doSetup = true;"),
+        ManagedHolders.Plan.Write group = assertInstanceOf(ManagedHolders.Plan.Write.class,
+                ManagedHolders.plan(config, SDK, DO_SETUP, declared, TestValues.GRAMMAR));
+        String source = group.source();
+        assertEquals(ManagedHolders.groupFile(config, SDK, "Sdk"), group.file());
+        assertTrue(source.contains("package " + config.parametersPackage() + ".com_github_botmakerdev.botmaker_sdk;"),
                 source);
-        assertTrue(source.contains("    @TestValue(TestValue.Id.PAUSE)\n    @Param\n    public static Duration pause"
-                + " = null;"), source);
-        assertTrue(source.indexOf("doSetup") < source.indexOf("greeting()"), source);
-        assertTrue(source.contains("import " + Param.class.getCanonicalName() + ";"), source);
+        assertTrue(source.contains("@Param\npublic class Sdk"), source);
+        assertTrue(source.contains("@TestValue(TestValue.Id.DO_SETUP)"), source);
+        assertTrue(source.contains("category = \"Run\""), source);
+        assertTrue(source.contains("public boolean doSetup()"), source);
+        assertTrue(source.contains("return true;"), source);
+        assertTrue(source.contains("public Duration pause()"), source);
         assertEquals(0, parse(source).getProblems().length, source);
 
         List<JavaParameter> read = JavaParameterSource.read(null, source, TestValues.GRAMMAR, BotRecords.none(), BOUND);
@@ -222,41 +231,37 @@ class ManagedHoldersTest {
         assertTrue(read.getFirst().editable(), read.getFirst().note());
     }
 
-    /** A holder the bot has gets back a parameter it lacks; one it has, or a holder it lacks, is left alone. */
+    /** A group the bot has gets back a parameter it lacks; one it has, or a group it lacks, is left alone. */
     @Test
-    void onBindAMissingParameterIsAddedToTheHolderTheBotHas() {
-        Path sdk = dir.resolve("src/main/java/com/bot/plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java");
+    void onBindAMissingParameterIsAddedToTheGroupTheBotHas() {
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
+        Path sdk = ManagedHolders.groupFile(config, SDK, "Sdk").toAbsolutePath().normalize();
         String had = """
-                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
+                package com.bot.params.com_github_botmakerdev.botmaker_sdk;
 
                 import %s;
 
-                public final class Sdk {
-
-                    @TestValue(TestValue.Id.GREETING)
-                    public static String greeting() {
-                        return "hi";
-                    }
+                @Param
+                public class Sdk {
                 }
-                """.formatted(TestValue.class.getCanonicalName());
+                """.formatted(Param.class.getCanonicalName());
         com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
                 java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
                 dir);
         java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = java.util.Map.of(SDK,
                 List.of(DECLARED.getFirst(), DO_SETUP));
 
-        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(index, byPlugin);
+        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(config, index, byPlugin);
         assertEquals(List.of(DO_SETUP), kept.get(sdk));
         String after = ManagedHolders.keptValues(had, kept.get(sdk), TestValues.GRAMMAR);
-        assertTrue(after.contains("public static boolean doSetup = true;"), after);
-        assertTrue(after.indexOf("doSetup") < after.indexOf("greeting()"), after);
-        assertTrue(after.contains("import " + Param.class.getCanonicalName() + ";"), after);
+        assertTrue(after.contains("public boolean doSetup()"), after);
+        assertTrue(after.contains("@TestValue(TestValue.Id.DO_SETUP)"), after);
         assertEquals(0, parse(after).getProblems().length, after);
 
         // Kept as declared already: nothing to write.
         assertEquals(after, ManagedHolders.keptValues(after, kept.get(sdk), TestValues.GRAMMAR));
-        assertTrue(ManagedHolders.valuesToKeep(index, java.util.Map.of(new PluginCoordinate("com.github.BotMakerDev", "botmaker-other"), List.of(DO_SETUP)))
-                .isEmpty());
+        assertTrue(ManagedHolders.valuesToKeep(config, index, java.util.Map.of(
+                new PluginCoordinate("com.github.BotMakerDev", "botmaker-other"), List.of(DO_SETUP))).isEmpty());
     }
 
     /**
@@ -289,44 +294,23 @@ class ManagedHoldersTest {
         assertEquals(java.util.Map.of(new HolderFiles.Key("com_github_botmakerdev.botmaker_sdk","Sdk"), moved), found);
     }
 
-    /** A field of the parameter's name from before the plugin declared it is marked, never declared twice. */
+    /** A marked method whose category or note the plugin since changed gets the plugin's back; its value stays. */
     @Test
-    void anUnmarkedFieldOfTheNameIsMarkedNotDuplicated() {
+    void aMarkedParameterMethodsDeclarationFollowsThePlugin() {
         String had = """
-                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
+                package com.bot.params.com_github_botmakerdev.botmaker_sdk;
 
                 import %s;
                 import %s;
 
-                public final class Sdk {
-
-                    @Param(category = "Run", visibility = Param.PUBLIC, description = "Set up first")
-                    public static boolean doSetup = false;
-                }
-                """.formatted(TestValue.class.getCanonicalName(), Param.class.getCanonicalName());
-
-        String after = ManagedHolders.keptValues(had, List.of(DO_SETUP), TestValues.GRAMMAR);
-
-        assertTrue(after.contains("@TestValue(TestValue.Id.DO_SETUP)"), after);
-        assertEquals(1, after.split("boolean doSetup", -1).length - 1, after);
-        assertTrue(after.contains("doSetup = false;"), "the user's value stays: " + after);
-        assertEquals(0, parse(after).getProblems().length, after);
-    }
-
-    /** A marked field whose category, note or audience the plugin since changed gets the plugin's back. */
-    @Test
-    void aMarkedFieldsDeclarationFollowsThePlugin() {
-        String had = """
-                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
-
-                import %s;
-                import %s;
-
-                public final class Sdk {
+                @Param
+                public class Sdk {
 
                     @TestValue(TestValue.Id.DO_SETUP)
-                    @Param(category = "Old", description = "Old words")
-                    public static boolean doSetup = false;
+                    @Param.Shown(category = "Old", description = "Old words")
+                    public boolean doSetup() {
+                        return false;
+                    }
                 }
                 """.formatted(TestValue.class.getCanonicalName(), Param.class.getCanonicalName());
 
@@ -334,8 +318,8 @@ class ManagedHoldersTest {
 
         assertTrue(after.contains("category = \"Run\""), after);
         assertTrue(after.contains("description = \"Set up first\""), after);
-        assertTrue(after.contains("visibility = Param.PUBLIC") || after.contains("visibility = \"public\""), after);
-        assertTrue(after.contains("doSetup = false;"), after);
+        assertTrue(after.contains("return false;"), "the user's value stays: " + after);
+        assertEquals(1, after.split("boolean doSetup", -1).length - 1, after);
         assertEquals(0, parse(after).getProblems().length, after);
     }
 
@@ -367,13 +351,15 @@ class ManagedHoldersTest {
                 .in("Sdk").startsAs(ManagedHoldersTest::skipNothing).shown("Run", "Skipped", Param.Visibility.PUBLIC)
                 .because("Mine.");
         String had = """
-                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
+                package com.bot.params.com_github_botmakerdev.botmaker_sdk;
 
-                public final class Sdk {
+                @com.botmaker.plugin.api.params.Param
+                public class Sdk {
                 }
                 """;
         String after = ManagedHolders.keptValues(had, List.of(skip), TestValues.GRAMMAR);
-        assertTrue(after.contains("public static Set<Class<? extends TestOutcome>> names = Set.of();"), after);
+        assertTrue(after.contains("public Set<Class<? extends TestOutcome>> names()"), after);
+        assertTrue(after.contains("return Set.of();"), after);
         assertEquals(0, parse(after).getProblems().length, after);
     }
 
@@ -405,10 +391,11 @@ class ManagedHoldersTest {
                 dir);
         ManagedValue<?> rest = DECLARED.get(1);
         java.util.Map<PluginCoordinate, List<ManagedValue<?>>> byPlugin = java.util.Map.of(SDK,
-                List.of(DECLARED.getFirst(), rest, DO_SETUP));
+                List.of(DECLARED.getFirst(), rest));
 
-        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(index, byPlugin);
-        assertEquals(List.of(rest, DO_SETUP), kept.get(sdk));
+        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(
+                ProjectConfig.forDirectory(dir.resolve("bot")), index, byPlugin);
+        assertEquals(List.of(rest), kept.get(sdk));
         String after = ManagedHolders.keptValues(had, kept.get(sdk), TestValues.GRAMMAR);
         assertTrue(after.contains("@TestValue(TestValue.Id.REST_BETWEEN)"), after);
         assertTrue(after.contains("public static Duration restBetween()"), after);
@@ -419,6 +406,30 @@ class ManagedHoldersTest {
         assertTrue(after.contains("return \"hi\";"), after);
         assertEquals(0, parse(after).getProblems().length, after);
         assertEquals(after, ManagedHolders.keptValues(after, kept.get(sdk), TestValues.GRAMMAR));
+    }
+
+    /** A method value an old marked field still holds is not written beside it: the upgrade makes it the method. */
+    @Test
+    void aMethodValueAFieldStillHoldsIsNotWrittenBesideIt() {
+        Path sdk = dir.resolve("src/main/java/com/bot/plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java");
+        String had = """
+                package com.bot.plugins.com_github_botmakerdev.botmaker_sdk;
+
+                import %s;
+
+                public final class Sdk {
+
+                    @TestValue(TestValue.Id.GREETING)
+                    public static String greeting = "hello";
+                }
+                """.formatted(TestValue.class.getCanonicalName());
+        com.botmaker.studio.project.source.BotIndex index = com.botmaker.studio.project.source.BotIndex.over(
+                java.util.Map.of(sdk, had), Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)),
+                dir);
+
+        java.util.Map<Path, List<ManagedValue<?>>> kept = ManagedHolders.valuesToKeep(
+                ProjectConfig.forDirectory(dir.resolve("bot")), index, java.util.Map.of(SDK, List.of(DECLARED.getFirst())));
+        assertTrue(kept.isEmpty(), kept.toString());
     }
 
     /** An unmarked method of the value's name is the user's: no second one is written beside it. */

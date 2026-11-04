@@ -119,8 +119,12 @@ public final class JavaParameterSource {
                         + " folder of params/: only its value is yours to change.").orElse("");
                 for (MethodDeclaration method : type.getMethods()) {
                     if (!isParameter(method)) continue;
+                    // A plugin's own parameter carries its mark, which names its declaration (2026-11-04).
+                    String id = ManagedIds.idOf(ManagedIds.on(method, known), known);
+                    String whose = !owner.isEmpty() || id.isEmpty() ? owner
+                            : "A plugin's parameter, marked as its own: only its value is yours to change.";
                     out.add(readMethod(file, source, grammar, records, names, type.getName().getIdentifier(), shared,
-                            method).owned(owner, ""));
+                            method).owned(whose, id));
                 }
                 return true;
             }

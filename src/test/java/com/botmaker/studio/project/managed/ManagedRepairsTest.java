@@ -262,24 +262,21 @@ class ManagedRepairsTest {
             """;
 
     /**
-     * A parameter whose field has another type than the plugin's now is the old shape (2026-10-13, a bot's
-     * {@code List<String> launchTargets} after the SDK made it {@code List<Launcher>}): removed, so the bind
-     * writes it anew; the same type is left alone.
+     * A parameter field is the old shape, whatever its type (2026-11-04: a plugin's parameter is a method of its
+     * group in params/): removed, so the bind writes it anew there.
      */
     @Test
-    void aParameterOfAnotherTypeIsRemovedAndOneOfItsTypeKept(@TempDir Path dir) {
+    void aParameterFieldIsRemovedWhateverItsType(@TempDir Path dir) {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
         Path sdk = holder(config, "Sdk");
         String test = TestValue.class.getCanonicalName();
 
-        ManagedRepairs.Planned old = ManagedRepairs.plan(index(config, Map.of(sdk,
-                SDK_NUMBERS.formatted(config.mainPackage(), test, "String"))), List.of(NUMBERS), GRAMMAR, NOTE);
-        assertEquals(Set.of(sdk), old.deleted(), old.sentences().toString());
-        assertTrue(old.repaired().getFirst().contains("is declared another way now"), old.repaired().toString());
-
-        ManagedRepairs.Planned same = ManagedRepairs.plan(index(config, Map.of(sdk,
-                SDK_NUMBERS.formatted(config.mainPackage(), test, "Integer"))), List.of(NUMBERS), GRAMMAR, NOTE);
-        assertTrue(same.isEmpty(), same.sentences().toString());
+        for (String element : List.of("String", "Integer")) {
+            ManagedRepairs.Planned old = ManagedRepairs.plan(index(config, Map.of(sdk,
+                    SDK_NUMBERS.formatted(config.mainPackage(), test, element))), List.of(NUMBERS), GRAMMAR, NOTE);
+            assertEquals(Set.of(sdk), old.deleted(), old.sentences().toString());
+            assertTrue(old.repaired().getFirst().contains("is declared another way now"), old.repaired().toString());
+        }
     }
 
     static final ManagedValue<java.util.Set<Class<? extends TestOutcome>>> SKIP = ManagedValue.param(TestValue.Id.WORDS)
@@ -311,18 +308,26 @@ class ManagedRepairsTest {
 
                 import %s;
                 import %s;
+                import %s;
                 import java.util.Set;
 
-                public final class Sdk {
+                @Param
+                public class Sdk {
                     @TestValue(TestValue.Id.WORDS)
-                    public static Set<Class<? extends TestOutcome>> skip = Set.of(TestOutcome.Named.class);
+                    public Set<Class<? extends TestOutcome>> skip() {
+                        return Set.of(TestOutcome.Named.class);
+                    }
                     @TestValue(TestValue.Id.WORDS_TOO)
-                    public static String tags[] = {"a"};
+                    public String[] tags() {
+                        return new String[]{"a"};
+                    }
                     @TestValue(TestValue.Id.DO_SETUP)
-                    public static boolean doSetup = false;
+                    public boolean doSetup() {
+                        return false;
+                    }
                 }
                 """.formatted(config.mainPackage(), TestValue.class.getCanonicalName(),
-                TestOutcome.class.getCanonicalName())));
+                TestOutcome.class.getCanonicalName(), com.botmaker.plugin.api.params.Param.class.getCanonicalName())));
 
         ManagedRepairs.Planned plan = ManagedRepairs.plan(index, List.of(SKIP, TAGS, SETUP), GRAMMAR, NOTE);
 
@@ -345,6 +350,60 @@ class ManagedRepairsTest {
                 """.formatted(config.mainPackage(), TestValue.class.getCanonicalName())));
 
         assertTrue(ManagedRepairs.held(index).contains(ManagedValue.idOf(TestValue.Id.DO_SETUP)));
+    }
+
+    /**
+     * A marked field whose value became a method value is rewritten as that method, returning what it held
+     * (2026-11-04: the SDK's {@code launchTargets} and {@code vm}, bot data now).
+     */
+    @Test
+    void aFieldWhoseValueIsAMethodNowIsRewrittenAsOne(@TempDir Path dir) {
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
+        Path values = holder(config, "Values");
+        BotIndex index = index(config, Map.of(values, """
+                package %s.plugins.test;
+
+                import %s;
+
+                public final class Values {
+                    @TestValue(TestValue.Id.GREETING)
+                    public static String greeting = "hello";
+                }
+                """.formatted(config.mainPackage(), TestValue.class.getCanonicalName())));
+
+        ManagedRepairs.Planned plan = ManagedRepairs.plan(index, List.of(GREETING), GRAMMAR, NOTE);
+
+        String after = plan.rewrites().get(values);
+        assertTrue(after != null && after.contains("public static String greeting()"), plan.sentences().toString());
+        assertTrue(after.contains("return \"hello\";"), after);
+        assertTrue(plan.repaired().getFirst().contains("is a method now"), plan.repaired().toString());
+    }
+
+    /** The SDK's {@code launchTargets} is declared by its raw class; the field spells its element: still carried. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aGenericFieldIsCarriedAsTheMethodOfItsRawClass(@TempDir Path dir) {
+        ManagedValue<List<String>> names = ManagedValue.method(TestValue.Id.NAMES).in("Values")
+                .holds((Class<List<String>>) (Class<?>) List.class, List.of()).because("New.");
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
+        Path values = holder(config, "Values");
+        BotIndex index = index(config, Map.of(values, """
+                package %s.plugins.test;
+
+                import %s;
+                import java.util.List;
+
+                public final class Values {
+                    @TestValue(TestValue.Id.NAMES)
+                    public static List<String> names = List.of("steam:1");
+                }
+                """.formatted(config.mainPackage(), TestValue.class.getCanonicalName())));
+
+        ManagedRepairs.Planned plan = ManagedRepairs.plan(index, List.of(names), GRAMMAR, NOTE);
+
+        String after = plan.rewrites().get(values);
+        assertTrue(after != null && after.contains("public static List<String> names()"), plan.sentences().toString());
+        assertTrue(after.contains("return List.of(\"steam:1\");"), after);
     }
 
     private static Path holder(ProjectConfig config, String className) {

@@ -8,16 +8,26 @@ import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.refactor.ReviewMarker;
 import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.SourceFormatter;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
+import org.eclipse.jdt.core.dom.AST;
+import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.Annotation;
+import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.EnumDeclaration;
+import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
+import org.eclipse.jdt.core.dom.IExtendedModifier;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.Modifier;
+import org.eclipse.jdt.core.dom.ReturnStatement;
+import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
@@ -145,6 +155,21 @@ public final class ManagedRepairs {
             if (mark == null) continue;
             ManagedValue<?> value = byId.get(mark.id());
             String spelled = ManagedIds.spelled(mark.id(), live);
+            // The author's data, written once as a field, keeps what the author wrote as the method it is now.
+            Optional<String> carried = value == null ? Optional.empty()
+                    : asMethod(sources.get(mark.file()), mark, value);
+            if (carried.isPresent()) {
+                Map<Path, String> tried = new LinkedHashMap<>(sources);
+                tried.put(mark.file(), carried.get());
+                BotIndex after = current.replacing(tried);
+                if (current.firstNewError(after).isEmpty()) {
+                    sources = tried;
+                    current = after;
+                    repaired.add(mark.qualified() + " (" + spelled + ") is a method now, so it was rewritten as one"
+                            + " returning what it held.");
+                    continue;
+                }
+            }
             if (value == null || !fits(mark, value)) {
                 String why = value == null ? "is no longer one of the plugin's values" : "is declared another way now";
                 Map<Path, String> without = without(sources, mark);
@@ -220,20 +245,6 @@ public final class ManagedRepairs {
         return ids;
     }
 
-    /**
-     * Whether the field {@code className} of {@code file} carrying the parameter {@code value}'s mark is written
-     * the way its plugin declares it now — the upgrade's own test, so a {@code List<String>} left for a
-     * {@code List<Launcher>} does not fit; empty when that class's fields carry no such mark (a nested class's are
-     * not read).
-     */
-    public static Optional<Boolean> fieldFits(BotIndex index, ManagedValue<?> value, List<ManagedValue<?>> live,
-                                              Path file, String className) {
-        return marks(index, live, Set.of(value.marker())).stream()
-                .filter(mark -> mark.kind() == Kind.FIELD && mark.id().equals(value.id())
-                        && mark.file().equals(file) && mark.className().equals(className))
-                .findFirst().map(mark -> fits(mark, value));
-    }
-
     // --- reading -----------------------------------------------------------------------------------------------
 
     /**
@@ -300,12 +311,54 @@ public final class ManagedRepairs {
         return switch (mark.kind()) {
             case TYPE -> value instanceof ManagedOpenSet<?>
                     && mark.enumType() == (value instanceof ManagedOpenSet.OneEnum<?>);
-            // A method returning another type is the old shape: resetting its expression would not compile.
-            case METHOD -> value instanceof ManagedMethod<?> && value.type().getName().equals(mark.returns());
-            // A field of another type is the old shape too: the plugin reads it as its own type, and finds nothing.
-            case FIELD -> value instanceof ManagedParam<?> param && (mark.returns() == null
-                    || spelled(param.form()) == null || mark.returns().equals(spelled(param.form())));
+            // A method returning another type is the old shape: resetting its expression would not compile. A
+            // parameter is a method of its group since 2026-11-04.
+            case METHOD -> (value instanceof ManagedMethod<?> || value instanceof ManagedParam<?>)
+                    && value.type().getName().equals(mark.returns());
+            // A field is the old shape of every value (2026-11-04): a parameter is a group's method, and what was a
+            // field of the author's data a holder's static method (carried by asMethod).
+            case FIELD -> false;
         };
+    }
+
+    /**
+     * A marked field whose value is a method value now, of the type it was written as (2026-11-04: the SDK's
+     * {@code launchTargets} and {@code vm}), as that method: {@code public static <type> name() { return <its
+     * initialiser>; }}, its mark kept and its {@code @Param} dropped. Empty when the mark is no such field.
+     */
+    private static Optional<String> asMethod(String source, Mark mark, ManagedValue<?> value) {
+        // By the raw class: the SDK declares launchTargets as List.class, the field spells List<Launcher>.
+        if (source == null || mark.kind() != Kind.FIELD || !(value instanceof ManagedMethod<?>) || mark.returns() == null
+                || !mark.returns().replaceFirst("<.*", "").equals(spelled(value.type()))) {
+            return Optional.empty();
+        }
+        CompilationUnit unit = BotParser.syntax(source);
+        if (!(declaration(unit, mark) instanceof FieldDeclaration field) || field.fragments().size() != 1) {
+            return Optional.empty();
+        }
+        VariableDeclarationFragment fragment = (VariableDeclarationFragment) field.fragments().getFirst();
+        if (fragment.getInitializer() == null || fragment.getExtraDimensions() != 0) return Optional.empty();
+        AST ast = unit.getAST();
+        MethodDeclaration method = ast.newMethodDeclaration();
+        method.setName(ast.newSimpleName(mark.member()));
+        method.setReturnType2((org.eclipse.jdt.core.dom.Type) ASTNode.copySubtree(ast, field.getType()));
+        @SuppressWarnings("unchecked")
+        List<IExtendedModifier> modifiers = method.modifiers();
+        for (Object each : field.modifiers()) {
+            if (each instanceof Annotation annotation && BotAnnotation.PARAM.marks(annotation)) continue;
+            if (each instanceof Modifier modifier && modifier.isFinal()) continue;
+            modifiers.add((IExtendedModifier) ASTNode.copySubtree(ast, (ASTNode) each));
+        }
+        Block body = ast.newBlock();
+        ReturnStatement returned = ast.newReturnStatement();
+        returned.setExpression((Expression) ASTNode.copySubtree(ast, fragment.getInitializer()));
+        @SuppressWarnings("unchecked")
+        List<Statement> statements = body.statements();
+        statements.add(returned);
+        method.setBody(body);
+        ASTRewrite rewrite = ASTRewrite.create(ast);
+        rewrite.replace(field, method, null);
+        return Optional.of(SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source)));
     }
 
     /**

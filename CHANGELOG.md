@@ -12,6 +12,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (private values)
+
+- **A plugin's parameter is written in its group, in both copies** (2026-11-04): binding a plugin writes each
+  parameter it declares as a marked method of `params/<plugin>/<Holder>.java` and of its starting copy under
+  `starting-params/`, never as a field of its holder. Plugin windows, the Runner and the Parameters window open
+  it there; `params reset` rewrites what it returns. A new `Bot.runFlow` block passes only the holders.
+- **The upgrade repairs the old shapes**: a marked parameter field is removed (kept unmarked while the bot names
+  it) and bind writes it anew in its group; a marked field whose value is a method now (the SDK's
+  `launchTargets`, `vm`) becomes that static method, returning what it held.
+
 ### Added (private values)
 
 - **Parameters are this computer's, in `params/`** (2026-11-04): a parameter is one method of a `@Param` group
