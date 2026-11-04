@@ -747,13 +747,13 @@ public final class JavaParameters {
 
     /**
      * Makes {@code parameter}'s value on this computer its starting value: the one value copied into its starting
-     * copy, with the imports it needs ({@link ParamsFitter#withValue}). Answers whether the starting copy changed.
+     * copy, with the imports it needs ({@link ParamsFitter#withStartingValue}). Answers whether the starting copy changed.
      */
     public static boolean makeStarting(ProjectConfig config, ProjectState state, JavaParameter parameter) {
         if (config == null || parameter == null || !parameter.group()) return false;
         Optional<String> mine = currentSource(state, parameter.file());
         return mine.isPresent() && rewriteStarting(config, parameter.file(),
-                starting -> ParamsFitter.withValue(starting, mine.get(), parameter.name()));
+                starting -> ParamsFitter.withStartingValue(starting, mine.get(), parameter.name()));
     }
 
     /**

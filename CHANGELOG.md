@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (private values)
 
+- *Make this the starting value* copies a value without the time a run wrote it (`@Param.Kept`), which stays private;
+  Forget takes the time away with the value (2026-11-04).
+
 - **A new parameter class or group is built as a JDT tree** (2026-11-04), not from a text template; a name that is not a
   Java class name is refused. A field initialised by a bare `{1, 2}` stays a field: it is no value of a method.
 - **An upgrade moves a bot's own `@Param` fields to `params/`** (2026-11-04): a `Param.PUBLIC` field becomes one
