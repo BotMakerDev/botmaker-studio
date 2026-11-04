@@ -151,6 +151,30 @@ class FieldParametersTest {
     }
 
     @Test
+    void anArrayInitializerStaysAField(@TempDir Path dir) {
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
+
+        FieldParameters.Plan plan = plan(config, Map.of(
+                "Parameters", holder(config,
+                        "    @Param(visibility = Param.PUBLIC) public static int[] slots = {1, 2};"),
+                "Reader", reader(config, "return Parameters.slots.length;")));
+
+        assertTrue(plan.starting().isEmpty(), plan.toString());
+    }
+
+    @Test
+    void aNewGroupIsAMarkedClassOfItsPackage(@TempDir Path dir) {
+        ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
+
+        String group = JavaParameters.emptyGroup(config, "Progress");
+
+        assertTrue(group.contains("package " + config.parametersPackage() + ".bot;"), group);
+        assertTrue(group.contains("import " + Param.class.getCanonicalName() + ";"), group);
+        assertTrue(group.contains("@Param"), group);
+        assertTrue(group.contains("public class Progress"), group);
+    }
+
+    @Test
     void anEnumThatHeldAFieldKeepsItsConstants(@TempDir Path dir) {
         ProjectConfig config = ProjectConfig.forDirectory(dir.resolve("bot"));
 

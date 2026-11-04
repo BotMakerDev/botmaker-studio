@@ -14,8 +14,10 @@ import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectWrites;
 import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.studio.project.managed.ManagedHolders;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.services.BotSources;
+import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Assignment;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
@@ -25,7 +27,11 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.FieldAccess;
 import org.eclipse.jdt.core.dom.FieldDeclaration;
+import org.eclipse.jdt.core.dom.IExtendedModifier;
 import org.eclipse.jdt.core.dom.ImportDeclaration;
+import org.eclipse.jdt.core.dom.MarkerAnnotation;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.Modifier;
 import org.eclipse.jdt.core.dom.Name;
 import org.eclipse.jdt.core.dom.NodeFinder;
 import org.eclipse.jdt.core.dom.NullLiteral;
@@ -37,9 +43,11 @@ import org.eclipse.jdt.core.dom.SimpleName;
 import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.StringLiteral;
 import org.eclipse.jdt.core.dom.TextBlock;
+import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 
+import javax.lang.model.SourceVersion;
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
@@ -567,24 +575,35 @@ public final class JavaParameters {
         // is still the one a field goes into, never a second of the same name in params.
         Path beside = config.mainPackageDir().resolve(className + ".java");
         if (Files.isRegularFile(beside)) return Optional.of(beside);
+        if (!isClassName(className)) return Optional.empty();
         Path file = config.parametersPackageDir().resolve(className + ".java");
-        String source = """
-                package %s;
-
-                import %s;
-
-                /**
-                 * The bot's settings. Each field is one row of the Parameters window, and the bot reads it by
-                 * name — <code>%s.restBetween</code> — so a misspelling is a compile error and the type is the
-                 * type.
-                 */
-                public final class %s {
-
-                    private %s() {}
-                }
-                """.formatted(config.parametersPackage(), Param.class.getCanonicalName(), className,
-                className, className);
+        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        TypeDeclaration holder = ast.newTypeDeclaration();
+        holder.setName(ast.newSimpleName(className));
+        holder.setJavadoc(ManagedHolders.javadoc(ast, List.of(
+                "The bot's settings. Each field is one row of the Parameters window, and the bot reads it by",
+                "name — <code>" + className + ".restBetween</code> — so a misspelling is a compile error and the type is the",
+                "type.")));
+        @SuppressWarnings("unchecked")
+        List<IExtendedModifier> modifiers = holder.modifiers();
+        modifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+        modifiers.add(ast.newModifier(Modifier.ModifierKeyword.FINAL_KEYWORD));
+        MethodDeclaration constructor = ast.newMethodDeclaration();
+        constructor.setConstructor(true);
+        constructor.setName(ast.newSimpleName(className));
+        constructor.setBody(ast.newBlock());
+        @SuppressWarnings("unchecked")
+        List<IExtendedModifier> constructorModifiers = constructor.modifiers();
+        constructorModifiers.add(ast.newModifier(Modifier.ModifierKeyword.PRIVATE_KEYWORD));
+        @SuppressWarnings("unchecked")
+        List<BodyDeclaration> members = holder.bodyDeclarations();
+        members.add(constructor);
+        String source = ManagedHolders.unit(ast, config.parametersPackage(), Set.of(Param.class.getCanonicalName()), holder);
         return ProjectWrites.create(config, file, source, "Create " + className) ? Optional.of(file) : Optional.empty();
+    }
+
+    private static boolean isClassName(String name) {
+        return SourceVersion.isIdentifier(name) && !SourceVersion.isKeyword(name);
     }
 
     /**
@@ -773,20 +792,20 @@ public final class JavaParameters {
 
     /** The source of the bot's own group {@code className} with no parameter yet. */
     static String emptyGroup(ProjectConfig config, String className) {
-        return """
-                package %s.%s;
-
-                import %s;
-
-                /**
-                 * Parameters of this bot. Each method is one, whole: its name, its type and, as what it returns, its
-                 * value on this computer. This file is never versioned; its starting copy is.
-                 */
-                @Param
-                public class %s {
-                }
-                """.formatted(config.parametersPackage(), JavaParameterSource.BOT, Param.class.getCanonicalName(),
-                className);
+        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        TypeDeclaration group = ast.newTypeDeclaration();
+        group.setName(ast.newSimpleName(className));
+        group.setJavadoc(ManagedHolders.javadoc(ast, List.of(
+                "Parameters of this bot. Each method is one, whole: its name, its type and, as what it returns, its",
+                "value on this computer. This file is never versioned; its starting copy is.")));
+        MarkerAnnotation param = ast.newMarkerAnnotation();
+        param.setTypeName(ast.newSimpleName(Param.class.getSimpleName()));
+        @SuppressWarnings("unchecked")
+        List<IExtendedModifier> modifiers = group.modifiers();
+        modifiers.add(param);
+        modifiers.add(ast.newModifier(Modifier.ModifierKeyword.PUBLIC_KEYWORD));
+        return ManagedHolders.unit(ast, config.parametersPackage() + "." + JavaParameterSource.BOT,
+                Set.of(Param.class.getCanonicalName()), group);
     }
 
     /**
@@ -795,6 +814,7 @@ public final class JavaParameters {
      * written. An existing file is kept.
      */
     private static Optional<Path> createGroup(ProjectConfig config, ProjectState state, String className) {
+        if (!isClassName(className)) return Optional.empty();
         Path file = ownGroupFile(config, className);
         String source = emptyGroup(config, className);
         Optional<Path> starting = startingFile(config, file);

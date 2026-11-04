@@ -128,7 +128,7 @@ public final class ManagedHolders {
     }
 
     /** One file's unit — its package, the imports it needs and its one type — as source. */
-    private static String unit(AST ast, String pkg, Set<String> imports, AbstractTypeDeclaration written) {
+    public static String unit(AST ast, String pkg, Set<String> imports, AbstractTypeDeclaration written) {
         CompilationUnit unit = ast.newCompilationUnit();
         PackageDeclaration declaration = ast.newPackageDeclaration();
         declaration.setName(ast.newName(pkg));
@@ -279,7 +279,7 @@ public final class ManagedHolders {
 
     /** A doc comment of {@code lines}, one untagged element each: the flattener starts each on its own line. */
     @SuppressWarnings("unchecked")
-    private static Javadoc javadoc(AST ast, List<String> lines) {
+    public static Javadoc javadoc(AST ast, List<String> lines) {
         Javadoc javadoc = ast.newJavadoc();
         for (String line : lines) {
             TagElement element = ast.newTagElement();

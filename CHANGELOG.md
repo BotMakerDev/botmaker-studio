@@ -14,6 +14,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (private values)
 
+- **A new parameter class or group is built as a JDT tree** (2026-11-04), not from a text template; a name that is not a
+  Java class name is refused. A field initialised by a bare `{1, 2}` stays a field: it is no value of a method.
 - **An upgrade moves a bot's own `@Param` fields to `params/`** (2026-11-04): a `Param.PUBLIC` field becomes one
   method of `params/bot/<Class>.java` and its `starting-params/` copy at the field's current value, every read a call
   of it, and a holder left empty is deleted. A field that names no visibility, or `Param.EDITOR`, only its author sets,

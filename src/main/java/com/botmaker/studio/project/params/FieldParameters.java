@@ -2,6 +2,7 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.SourceNode;
 import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.nav.Refactor;
 import com.botmaker.studio.nav.Usages;
@@ -15,6 +16,7 @@ import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
 import org.eclipse.jdt.core.dom.ArrayAccess;
+import org.eclipse.jdt.core.dom.ArrayInitializer;
 import org.eclipse.jdt.core.dom.ClassInstanceCreation;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
@@ -292,13 +294,12 @@ public final class FieldParameters {
                                       JavaParameter parameter, VariableDeclarationFragment fragment,
                                       Map<Path, String> groups, Map<Path, String> starting) {
         Expression initializer = fragment.getInitializer();
-        String text = index.sources().get(parameter.file().toAbsolutePath().normalize())
-                .substring(initializer.getStartPosition(), initializer.getStartPosition() + initializer.getLength());
-        Optional<JavaValue> parsed = JavaValue.parse(text);
-        if (parsed.isEmpty()) return false;
+        // `int[] slots = {1, 2}` is no expression a method can return.
+        if (initializer instanceof ArrayInitializer) return false;
+        SourceNode written = new SourceNode(initializer, index.sources().get(parameter.file().toAbsolutePath().normalize()));
         // Only its imports are wanted here: whyItStays has already refused a value that cannot follow it.
         List<String> imports = importsOf(initializer, "", Set.of()).orElse(List.of());
-        JavaValue value = new JavaValue(parsed.get().node(), imports, text);
+        JavaValue value = new JavaValue(initializer, imports, written.source());
         String className = parameter.className();
         Path file = JavaParameters.ownGroupFile(config, className).toAbsolutePath().normalize();
         Optional<Path> startingFile = JavaParameters.startingFile(config, file);
