@@ -1,10 +1,10 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.SourceNames;
-import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.SourceNames;
+import com.botmaker.plugin.host.grammar.SourceNode;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.source.BotParser;

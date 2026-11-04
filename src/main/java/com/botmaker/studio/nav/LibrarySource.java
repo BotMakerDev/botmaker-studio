@@ -1,6 +1,6 @@
 package com.botmaker.studio.nav;
 
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.FieldInfo;

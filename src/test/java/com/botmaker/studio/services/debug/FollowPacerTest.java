@@ -1,6 +1,6 @@
 package com.botmaker.studio.services.debug;
 
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;

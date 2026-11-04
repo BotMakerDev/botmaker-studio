@@ -76,7 +76,7 @@ class EditFunctionSignatureTest {
             updates++;
         });
 
-        state.setCompilationUnit(com.botmaker.studio.parser.helpers.SourceParser.parse(SOURCE));
+        state.setCompilationUnit(com.botmaker.plugin.host.grammar.SourceParser.parse(SOURCE));
         editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
     }
 
@@ -84,7 +84,7 @@ class EditFunctionSignatureTest {
     private void reopen(String source) {
         state.addFile(new ProjectFile(path, source));
         state.setCurrentCode(source);
-        state.setCompilationUnit(com.botmaker.studio.parser.helpers.SourceParser.parse(source));
+        state.setCompilationUnit(com.botmaker.plugin.host.grammar.SourceParser.parse(source));
     }
 
     private TypeDeclaration subject() {

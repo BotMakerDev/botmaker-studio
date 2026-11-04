@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.studio.project.source.BotIndex;
 import org.junit.jupiter.api.Test;
 

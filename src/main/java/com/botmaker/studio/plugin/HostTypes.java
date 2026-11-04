@@ -1,7 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.slot.TypeRef;
-import com.botmaker.studio.plugin.grammar.JdkLiterals;
+import com.botmaker.plugin.host.grammar.JdkLiterals;
 import com.botmaker.studio.types.ResolvedType;
 import com.botmaker.studio.index.LibraryType;
 import org.eclipse.jdt.core.dom.IMethodBinding;

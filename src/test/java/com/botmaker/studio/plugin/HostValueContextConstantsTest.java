@@ -1,8 +1,8 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.value.ComponentType;
-import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.JavaNames;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import org.junit.jupiter.api.Test;
 

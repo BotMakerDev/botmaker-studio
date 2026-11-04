@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;

@@ -1,8 +1,8 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.palette.BlockCatalog;
-import com.botmaker.studio.parser.helpers.SourceFormatter;
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceFormatter;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

@@ -2,9 +2,9 @@ package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.project.params.ParameterRow;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
@@ -109,7 +109,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         Type table = ValueTypes.mapOf(TEXT, ValueTypes.listOf(WHOLE_NUMBER));
         JavaValue numbers = grammar.compose(ValueTypes.listOf(WHOLE_NUMBER), List.of(
                 grammar.spell(int.class, 1).orElseThrow(), grammar.spell(int.class, 2).orElseThrow())).orElseThrow();
-        Type entry = ValueTypes.of(com.botmaker.studio.plugin.grammar.ValueContainer.ENTRY,
+        Type entry = ValueTypes.of(com.botmaker.plugin.host.grammar.ValueContainer.ENTRY,
                 List.of(TEXT, ValueTypes.listOf(WHOLE_NUMBER)));
         JavaValue pair = grammar.compose(entry, List.of(grammar.spell(String.class, "a").orElseThrow(), numbers))
                 .orElseThrow();

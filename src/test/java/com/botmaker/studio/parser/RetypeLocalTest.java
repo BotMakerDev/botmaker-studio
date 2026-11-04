@@ -3,7 +3,7 @@ package com.botmaker.studio.parser;
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
@@ -43,7 +43,7 @@ class RetypeLocalTest {
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
         EventBus bus = new EventBus(false);
         bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
-        state.setCompilationUnit(com.botmaker.studio.parser.helpers.SourceParser.parse(SOURCE));
+        state.setCompilationUnit(com.botmaker.plugin.host.grammar.SourceParser.parse(SOURCE));
         CodeEditor editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
 
         TypeDeclaration subject = (TypeDeclaration) state.getCompilationUnit().orElseThrow().types().getFirst();

@@ -5,7 +5,7 @@ import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.MethodReferences;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
 import com.botmaker.studio.project.ProjectFile;

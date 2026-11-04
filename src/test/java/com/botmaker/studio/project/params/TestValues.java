@@ -2,7 +2,7 @@ package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.plugin.api.value.PluginType;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 
 import java.lang.reflect.Type;
 import java.time.Duration;

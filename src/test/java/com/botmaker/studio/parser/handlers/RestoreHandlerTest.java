@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser.handlers;
 
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser.helpers;
 
+import com.botmaker.plugin.host.grammar.SourceFormatter;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.nav.Usages;
 import org.eclipse.jdt.core.dom.*;
@@ -11,7 +12,6 @@ import org.eclipse.text.edits.MalformedTreeException;
 import org.eclipse.text.edits.RangeMarker;
 import org.eclipse.text.edits.TextEdit;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**

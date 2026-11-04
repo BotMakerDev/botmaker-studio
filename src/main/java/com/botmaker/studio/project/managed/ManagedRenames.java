@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.source.BotIndex;
 
 import java.nio.file.Path;

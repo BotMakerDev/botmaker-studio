@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -44,7 +44,7 @@ class JavaParameterSourceTest {
                     public static int tries = Limits.TRIES;
                 """);
         org.eclipse.jdt.core.dom.CompilationUnit unit = com.botmaker.studio.project.source.BotParser.syntax(source);
-        com.botmaker.studio.plugin.grammar.BotNames names = new com.botmaker.studio.plugin.grammar.BotNames() {
+        com.botmaker.plugin.host.grammar.BotNames names = new com.botmaker.plugin.host.grammar.BotNames() {
             @Override
             public java.util.Optional<Object> named(org.eclipse.jdt.core.dom.QualifiedName written) {
                 return written.getFullyQualifiedName().equals("Limits.TRIES") ? java.util.Optional.of(3)

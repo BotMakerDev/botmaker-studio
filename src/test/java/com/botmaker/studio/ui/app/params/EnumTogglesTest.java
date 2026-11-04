@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.value.PluginType;
-import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.SourceNode;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
@@ -79,7 +79,7 @@ class EnumTogglesTest extends FxHeadlessTest {
 
     @Test
     void aSetOfDaysIsTogglesToo() {
-        ValueEditors.Editor editor = editorFor(ValueTypes.of(com.botmaker.studio.plugin.grammar.ValueContainer.SET,
+        ValueEditors.Editor editor = editorFor(ValueTypes.of(com.botmaker.plugin.host.grammar.ValueContainer.SET,
                 List.of(DayOfWeek.class)), "Set.of()");
         assertEquals(7, toggles(editor.node()).size());
         assertEquals(Optional.of(false), Optional.of(toggles(editor.node()).getFirst().isSelected()));

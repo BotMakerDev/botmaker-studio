@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.project.vcs.BlockDiff;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;

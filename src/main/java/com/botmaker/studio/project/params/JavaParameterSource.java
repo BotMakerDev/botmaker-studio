@@ -1,11 +1,11 @@
 package com.botmaker.studio.project.params;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.plugin.grammar.BotNames;
-import com.botmaker.studio.plugin.grammar.JavaExpressions;
-import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.BotNames;
+import com.botmaker.plugin.host.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.SourceNode;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.source.BotAnnotation;
 import com.botmaker.studio.project.source.BotParser;

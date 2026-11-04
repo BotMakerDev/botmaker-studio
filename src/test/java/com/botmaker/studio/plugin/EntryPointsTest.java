@@ -1,6 +1,6 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.junit.jupiter.api.Test;

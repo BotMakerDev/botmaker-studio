@@ -6,6 +6,7 @@ import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
+import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.studio.palette.BlockType;
 import com.botmaker.studio.palette.EnumDraft;
 import com.botmaker.studio.palette.FunctionDraft;
@@ -550,7 +551,7 @@ public class StatementFactory {
      */
     private static Expression freshValue(EditContext ctx, ManagedParam<?> field) {
         var grammar = PluginHost.grammar();
-        Optional<com.botmaker.studio.plugin.grammar.JavaValue> fresh = field.initial() != null
+        Optional<JavaValue> fresh = field.initial() != null
                 ? grammar.spell(field.form(), field.initial()) : grammar.freshSpelling(field.form());
         if (fresh.isEmpty()) return ctx.ast().newNullLiteral();
         fresh.get().imports().forEach(ctx::addImport);

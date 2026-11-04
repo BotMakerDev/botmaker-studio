@@ -2,7 +2,7 @@ package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.studio.nav.Refactor;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationTypes.Frame;
 import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
 import com.botmaker.studio.project.managed.MigrationTypes.OldPaint;
@@ -237,7 +237,7 @@ class ManagedMigrationsTest {
     @Test
     void aBodyDeclaringAParameterNameIsNotFilledIn() {
         Map<String, org.eclipse.jdt.core.dom.Expression> bound = Map.of("file",
-                com.botmaker.studio.plugin.grammar.JavaExpressions.parse("\"a.png\""));
+                com.botmaker.plugin.host.grammar.JavaExpressions.parse("\"a.png\""));
         assertTrue(ManagedMigrations.substituted("java.util.List.of(1).stream().map(file -> file)", bound).isEmpty());
         assertEquals("new Shot(\"a.png\",1)", ManagedMigrations.substituted("new Shot(file, 1)", bound)
                 .orElseThrow().toString());

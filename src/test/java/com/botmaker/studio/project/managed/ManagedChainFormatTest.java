@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.JavaValue;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

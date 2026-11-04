@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Type;

@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.value.ComponentType;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import org.junit.jupiter.api.Test;
 

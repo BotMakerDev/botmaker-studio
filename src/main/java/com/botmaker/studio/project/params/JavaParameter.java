@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.params;
 
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 
 import java.lang.reflect.Type;
 

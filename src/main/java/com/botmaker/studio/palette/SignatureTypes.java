@@ -1,10 +1,10 @@
 package com.botmaker.studio.palette;
 
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.JavaNames;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 
 import java.lang.reflect.Type;
 import java.util.Map;

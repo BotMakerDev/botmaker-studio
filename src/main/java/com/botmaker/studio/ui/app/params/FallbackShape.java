@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.value.ComponentType;
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.JdkLiterals;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.JdkLiterals;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;

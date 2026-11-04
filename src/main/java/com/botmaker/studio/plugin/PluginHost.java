@@ -20,9 +20,9 @@ import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.Palettes;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.plugin.host.PluginLoader;
-import com.botmaker.studio.plugin.grammar.JavaNames;
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.JavaNames;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.PluginFiles;
 
 import java.nio.file.Path;

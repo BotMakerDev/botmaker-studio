@@ -2,7 +2,7 @@ package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.studio.parser.EditContext;
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.Checkpoints;

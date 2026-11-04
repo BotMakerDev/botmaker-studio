@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.render.components.types;
 
 import com.botmaker.studio.palette.TypeNames;
-import com.botmaker.studio.plugin.grammar.ValueContainer;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.ValueContainer;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;

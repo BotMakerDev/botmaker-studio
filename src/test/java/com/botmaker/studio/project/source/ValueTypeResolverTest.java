@@ -1,6 +1,6 @@
 package com.botmaker.studio.project.source;
 
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.params.TestValues;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;

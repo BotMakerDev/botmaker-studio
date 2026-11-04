@@ -3,7 +3,7 @@ package com.botmaker.studio.services.trial;
 import com.botmaker.plugin.api.assist.TrialEntry;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.JavaValue;
 import com.botmaker.studio.project.managed.ManagedIds;
 import com.botmaker.studio.project.source.BotIndex;
 import org.eclipse.jdt.core.dom.ASTVisitor;

@@ -3,8 +3,8 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.value.DeclaredCallType;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.plugin.host.FilledTypes;
-import com.botmaker.studio.plugin.grammar.JavaValue;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;

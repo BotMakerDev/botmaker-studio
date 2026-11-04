@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.dev;
 
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

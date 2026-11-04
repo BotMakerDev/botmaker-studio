@@ -1,7 +1,7 @@
 package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.studio.palette.SignatureType;
-import com.botmaker.studio.parser.helpers.SourceParser;
+import com.botmaker.plugin.host.grammar.SourceParser;
 import com.botmaker.studio.parser.refactor.MethodReferences.CallSite;
 import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
 import com.botmaker.studio.parser.refactor.SignatureMigration.CallChange;

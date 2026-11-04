@@ -1,9 +1,9 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.SourceNode;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.SourceNode;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.project.source.ValueTypeResolver;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.project.params.JavaParameterSource;

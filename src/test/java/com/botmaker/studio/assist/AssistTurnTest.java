@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.value.Drawn;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.guard.RefusalJournal;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;

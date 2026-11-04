@@ -1,6 +1,6 @@
 package com.botmaker.studio.migrate;
 
-import com.botmaker.studio.plugin.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.JavaExpressions;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;

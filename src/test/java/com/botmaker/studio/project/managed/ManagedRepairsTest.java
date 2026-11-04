@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.source.BotIndex;
 import org.junit.jupiter.api.Test;

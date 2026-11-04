@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.studio.parser.helpers.JavaSnippets;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
 import com.botmaker.studio.types.PrimitiveKind;

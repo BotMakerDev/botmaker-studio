@@ -10,7 +10,8 @@ import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.studio.palette.SignatureTypes;
 import com.botmaker.studio.plugin.ValueWire;
-import com.botmaker.studio.plugin.grammar.ValueTypes;
+import com.botmaker.plugin.host.grammar.JavaValue;
+import com.botmaker.plugin.host.grammar.ValueTypes;
 import com.botmaker.studio.parser.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
@@ -483,7 +484,7 @@ public class MethodHandler {
      * forces: a primitive's zero, else {@code null}.
      */
     public static Expression defaultValueFor(EditContext ctx, java.lang.reflect.Type type) {
-        Optional<com.botmaker.studio.plugin.grammar.JavaValue> fresh = SignatureTypes.freshValue(type);
+        Optional<JavaValue> fresh = SignatureTypes.freshValue(type);
         if (fresh.isPresent()) {
             fresh.get().imports().forEach(ctx::addImport);
             return fresh.get().copyInto(ctx.ast());

@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ValueGrammar;
+import com.botmaker.plugin.host.grammar.ValueGrammar;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.services.ProgressReporter;
 

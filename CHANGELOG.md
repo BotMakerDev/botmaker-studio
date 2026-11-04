@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (value grammar)
+
+- **The value grammar lives in `botmaker-plugin-host`** (`com.botmaker.plugin.host.grammar`, 2026-11-04):
+  `plugin/grammar/*`, `parser/helpers/SourceParser` and `SourceFormatter` moved there unchanged, with their tests;
+  Studio imports them. No behaviour change.
+
 ### Added (plugin state)
 
 - **A plugin's state of the bot** (`StudioServices.stateDir()`): each plugin gets

@@ -9,7 +9,7 @@ import com.botmaker.studio.parser.guard.CompileGuard;
 import com.botmaker.studio.parser.guard.CompileGuard.Problem;
 import com.botmaker.studio.parser.helpers.AstRewriteHelper;
 import com.botmaker.studio.parser.refactor.ReviewMarks;
-import com.botmaker.studio.plugin.grammar.JavaExpressions;
+import com.botmaker.plugin.host.grammar.JavaExpressions;
 import com.botmaker.studio.project.source.BotIndex;
 import com.botmaker.studio.project.source.BotParser;
 import org.eclipse.jdt.core.dom.AST;

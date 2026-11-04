@@ -6,7 +6,7 @@ import com.botmaker.studio.parser.handlers.EnumManipulationHandler;
 import com.botmaker.studio.parser.handlers.LambdaCallHandler;
 import com.botmaker.studio.parser.helpers.DefaultValueHelper;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.grammar.ShortNames;
+import com.botmaker.plugin.host.grammar.ShortNames;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.suggestions.ProjectAnalyzer;
