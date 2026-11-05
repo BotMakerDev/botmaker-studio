@@ -7,9 +7,7 @@ import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.services.PluginsOnBus;
-import com.botmaker.studio.services.RunOnBus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
@@ -79,47 +77,37 @@ class HostRunsTest {
                 new TelemetryEvent.Target("Diablo IV", 0, 0, 1920, 1080), 640, 480, 1, 12);
         byte[] frame = encode(original);
         EventBus bus = new EventBus();
-        CodeExecutionService execution = RunOnBus.service(null, null, null, bus);
-        try {
-            PluginsOnBus.runs(bus, execution, null);
-            List<byte[]> first = new ArrayList<>();
-            List<byte[]> second = new ArrayList<>();
-            HostRuns.live().onTelemetry(bytes -> {
-                first.add(bytes);
-                bytes[0] = 99;
-            });
-            HostRuns.live().onTelemetry(second::add);
+        PluginsOnBus.runs(bus, OptionalLong::empty, null);
+        List<byte[]> first = new ArrayList<>();
+        List<byte[]> second = new ArrayList<>();
+        HostRuns.live().onTelemetry(bytes -> {
+            first.add(bytes);
+            bytes[0] = 99;
+        });
+        HostRuns.live().onTelemetry(second::add);
 
-            bus.publish(new CoreApplicationEvents.TelemetryFrameEvent(frame));
+        bus.publish(new CoreApplicationEvents.TelemetryFrameEvent(frame));
 
-            assertEquals(1, first.size());
-            assertEquals(original, TelemetryFrame.decode(second.getFirst()),
-                    "a plugin decodes the frame whatever another plugin did to its copy");
-        } finally {
-            execution.close();
-        }
+        assertEquals(1, first.size());
+        assertEquals(original, TelemetryFrame.decode(second.getFirst()),
+                "a plugin decodes the frame whatever another plugin did to its copy");
     }
 
     /** A debug line reaches onTrace as the contract's shape, and a closed handle stops it arriving. */
     @Test
     void a_trace_line_reaches_its_listeners_until_they_unregister() throws Exception {
         EventBus bus = new EventBus();
-        CodeExecutionService execution = RunOnBus.service(null, null, null, bus);
-        try {
-            PluginsOnBus.runs(bus, execution, null);
-            List<TraceLine> heard = new ArrayList<>();
-            AutoCloseable handle = HostRuns.live().onTrace(heard::add);
-            TraceLine line = new TraceLine(Instant.EPOCH, TraceLine.Level.WARN, "Game", "slow", 1,
-                    "com.example.Bot", "run", "com.example.Bot", OptionalInt.of(3), Optional.empty());
+        PluginsOnBus.runs(bus, OptionalLong::empty, null);
+        List<TraceLine> heard = new ArrayList<>();
+        AutoCloseable handle = HostRuns.live().onTrace(heard::add);
+        TraceLine line = new TraceLine(Instant.EPOCH, TraceLine.Level.WARN, "Game", "slow", 1,
+                "com.example.Bot", "run", "com.example.Bot", OptionalInt.of(3), Optional.empty());
 
-            bus.publish(new CoreApplicationEvents.TraceLineEvent(line));
-            handle.close();
-            bus.publish(new CoreApplicationEvents.TraceLineEvent(line));
+        bus.publish(new CoreApplicationEvents.TraceLineEvent(line));
+        handle.close();
+        bus.publish(new CoreApplicationEvents.TraceLineEvent(line));
 
-            assertEquals(List.of(line), heard);
-        } finally {
-            execution.close();
-        }
+        assertEquals(List.of(line), heard);
     }
 
     private static byte[] encode(TelemetryEvent event) throws IOException {

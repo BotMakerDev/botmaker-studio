@@ -6,10 +6,8 @@ import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
-import com.botmaker.studio.services.RunOnBus;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
@@ -24,7 +22,6 @@ import javafx.scene.control.MenuBar;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TabPane;
 import javafx.stage.Stage;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
@@ -73,7 +70,6 @@ class UIManagerSceneTest extends FxHeadlessTest {
 
     private UIManager uiManager;
     private Scene scene;
-    private CodeExecutionService execution;
 
     /**
      * The scene is built here — {@code start} runs on the FX thread with the toolkit up, which is exactly
@@ -96,26 +92,17 @@ class UIManagerSceneTest extends FxHeadlessTest {
         DiagnosticsManager diagnostics = new DiagnosticsManager();
         BlockDragAndDropManager dnd = new BlockDragAndDropManager(bus);
         ProjectAnalyzer analyzer = new ProjectAnalyzer(new TypeSummaryManager(Set.of()), state);
-        execution = RunOnBus.service(diagnostics, config, state, bus);
-
         StudioContext ctx = new StudioContext(config, state, bus, diagnostics, dnd, analyzer,
                 new LibraryService(config, state, new TypeSummaryManager(Set.of()), bus),
                 new ProjectSettingsService(config, state, bus),
                 fixture.context(),
-                execution);
+                null);
         uiManager = new UIManager(ctx, stage);
         scene = uiManager.createScene();
         // Controls build their children in a skin, which is only created once CSS has been applied and the
         // scene laid out. Without this the traversal below sees a BorderPane and nothing inside it.
         scene.getRoot().applyCss();
         scene.getRoot().layout();
-    }
-
-    @AfterAll
-    void releaseTheExecutionService() {
-        // It registers a JVM shutdown hook in its constructor; close() removes it, so a suite that builds
-        // several of these does not accumulate them.
-        if (execution != null) execution.close();
     }
 
     /** Every node under {@code root}, depth first. */

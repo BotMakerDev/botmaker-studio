@@ -3,8 +3,8 @@ package com.botmaker.studio.project;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.CoreRuns;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.java.types.ProjectAnalyzer;
@@ -39,5 +39,5 @@ public record StudioContext(ProjectConfig config,
                             LibraryService libraryService,
                             ProjectSettingsService projectSettingsService,
                             CodeEditorService codeEditorService,
-                            CodeExecutionService codeExecutionService) {
+                            CoreRuns runs) {
 }

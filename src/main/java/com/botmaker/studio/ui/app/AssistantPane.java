@@ -304,7 +304,7 @@ final class AssistantPane {
         mcpStatus.setText("Starting…");
         McpConfig starting = mcpConfig;
         RunLog log = RunLogOnBus.listen(ctx.eventBus(),
-                new RunLog(Clock.systemUTC(), ctx.codeExecutionService()::isRunning));
+                new RunLog(Clock.systemUTC(), ctx.runs()::isRunning));
         StudioBridge driver = new StudioBridge(ctx, trials, log,
                 () -> root.getScene() == null ? null : root.getScene().getWindow());
         Thread starter = new Thread(() -> {

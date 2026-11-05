@@ -15,17 +15,14 @@ import com.botmaker.core.plugin.HostPluginValues;
 import com.botmaker.core.plugin.HostRuns;
 import com.botmaker.core.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
-import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.core.runtime.JavacRelease;
 import com.botmaker.studio.runtime.StopKey;
 import com.botmaker.studio.ui.app.reports.RunEndReports;
 import com.botmaker.studio.ui.app.run.RunOverlay;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ApiDocsService;
-import com.botmaker.studio.services.DebugOnBus;
-import com.botmaker.core.run.DebuggingService;
+import com.botmaker.studio.services.CoreRuns;
 import com.botmaker.studio.services.PluginsOnBus;
-import com.botmaker.studio.services.RunOnBus;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.services.MavenService;
 import com.botmaker.core.services.OpenStep;
@@ -68,8 +65,7 @@ public class BotProject {
 
     // --- Lazy-initialized services ---
     private CodeEditorService codeEditorService;
-    private CodeExecutionService codeExecutionService;
-    private DebuggingService debuggingService;
+    private CoreRuns runs;
     private StopKey stopKey;
     private RunOverlay runOverlay;
     private RunEndReports runEndReports;
@@ -295,13 +291,8 @@ public class BotProject {
                 apiDocsService, coreEdits::heardBy
         );
 
-        // Execution, its compile/run/stop requests and its events on the bus (RunOnBus)
-        CodeExecutionService codeExec = RunOnBus.service(diagnosticsManager, config, state, eventBus);
-        this.codeExecutionService = codeExec;
-        // On open, params/ is fitted to starting-params/: a fresh copy gets its starting values (2026-11-04).
-        codeExec.fitParams();
-
-        this.debuggingService = DebugOnBus.service(state, config, codeExec, eventBus);
+        // The bot's runs, in the core: compile, run, debug and stop asked from the bus, what it tells told on the bus.
+        this.runs = CoreRuns.attach(coreEdits, diagnosticsManager, state, config, eventBus);
 
         // A key that stops the run from anywhere on the desktop, listening only while something runs.
         this.stopKey = StopKey.install(eventBus);
@@ -310,10 +301,9 @@ public class BotProject {
         // A run's problems, reported to the bot's author as its consent says.
         this.runEndReports = RunEndReports.install(eventBus, config.projectPath(), projectSettingsService);
 
-        // The bot, as a plugin is allowed to see it. After CodeExecutionService, since that is what owns the
-        // process; cleared in close(), so a plugin between projects reaches Runs.NONE rather than a channel
-        // into the project the user just left.
-        PluginsOnBus.runs(eventBus, codeExec, projectSettingsService);
+        // The bot, as a plugin is allowed to see it. Cleared in close(), so a plugin between projects reaches
+        // Runs.NONE rather than a channel into the project the user just left.
+        PluginsOnBus.runs(eventBus, runs::pid, projectSettingsService);
 
         // The plugin's own values, which live in the bot's Java beside everything else here. Same lifetime
         // for the same reason, and the services handed over are this project's: a value written or a
@@ -343,7 +333,7 @@ public class BotProject {
     public StudioContext context() {
         return new StudioContext(config, state, eventBus, diagnosticsManager, dragAndDropManager,
                 projectAnalyzer, libraryService, projectSettingsService,
-                codeEditorService, codeExecutionService);
+                codeEditorService, runs);
     }
 
     public ProjectConfig getConfig() { return config; }
@@ -355,8 +345,6 @@ public class BotProject {
     public LibraryService getLibraryService() { return libraryService; }
     public ProjectSettingsService getProjectSettingsService() { return projectSettingsService; }
     public CodeEditorService getCodeEditorService() { return codeEditorService; }
-    public CodeExecutionService getCodeExecutionService() { return codeExecutionService; }
-    public DebuggingService getDebuggingService() { return debuggingService; }
     public BlockConverter getBlockConverter() { return blockConverter; }
 
     // =========================================================================
@@ -381,12 +369,7 @@ public class BotProject {
             if (javafx.application.Platform.isFxApplicationThread()) overlay.close();
             else javafx.application.Platform.runLater(overlay::close);
         }
-        if (debuggingService != null) {
-            debuggingService.stopDebugging();
-        }
-        if (codeExecutionService != null) {
-            codeExecutionService.close();
-        }
+        if (runs != null) runs.close();
         // Before unbind, so a pom written while the project closes rebinds nothing after it.
         if (libraryService != null) libraryService.close();
         // Before unbind, which is what tells each plugin its project is over: a plugin releasing something

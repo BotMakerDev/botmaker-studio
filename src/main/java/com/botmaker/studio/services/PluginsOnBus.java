@@ -2,17 +2,18 @@ package com.botmaker.studio.services;
 
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.events.FileEdit;
-import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.plugin.HostHistory;
 import com.botmaker.core.plugin.HostPluginValues;
 import com.botmaker.core.plugin.HostRuns;
 
 import java.util.List;
+import java.util.OptionalLong;
+import java.util.function.Supplier;
 
 /**
  * Studio's bridge between its bus and what a plugin reaches of the project ({@link HostRuns}, {@link HostHistory},
- * {@link HostPluginValues}), as {@link RunOnBus} is for the run (2026-11-05): those ask through ports and are told
+ * {@link HostPluginValues}), as {@link CoreRuns} is for the run (2026-11-05): those ask through ports and are told
  * through methods, and this turns the ports' requests into the bus events Studio's listeners already take, and the
  * bus's events into what they are told. Each subscription is made off the FX thread ({@code false}), as the classes
  * made them themselves before.
@@ -23,7 +24,7 @@ public final class PluginsOnBus {
     }
 
     /** Installs the project's bot for plugins, its start, stop and status on {@code bus}, its properties in {@code settings}. */
-    public static HostRuns runs(EventBus bus, CodeExecutionService execution, ProjectSettingsService settings) {
+    public static HostRuns runs(EventBus bus, Supplier<OptionalLong> pid, ProjectSettingsService settings) {
         if (bus == null) {
             HostRuns.clear();
             return null;
@@ -43,7 +44,7 @@ public final class PluginsOnBus {
             public void status(String message) {
                 bus.publish(new CoreApplicationEvents.StatusMessageEvent(message));
             }
-        }, execution, settings == null ? null : new HostRuns.Properties() {
+        }, pid, settings == null ? null : new HostRuns.Properties() {
             @Override
             public String get(String name) {
                 return settings.current().runProperties().get(name);

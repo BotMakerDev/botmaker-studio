@@ -1,14 +1,11 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.core.run.DebuggingService;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.core.run.debug.DebugSnapshot;
 import com.botmaker.core.run.debug.DebugView;
 import com.botmaker.core.run.debug.FollowPacer;
@@ -25,10 +22,10 @@ import java.util.Optional;
 import java.util.function.BooleanSupplier;
 
 /**
- * A debug session on Studio's canvas and bus (plan phase 7): the menu's debug controls reach {@link DebuggingService},
- * and a stop the debugger names by file and line becomes the block the canvas shows for it, looked up on the FX thread
- * in whatever is drawn at that moment. Blocks resolved once at the start went stale the first time the file was
- * re-drawn, and a highlight on a detached block is a highlight nobody sees.
+ * The core's debug session on Studio's canvas and bus (plan phase 10b, told through {@link CoreRuns}): a stop the
+ * debugger names by file and line becomes the block the canvas shows for it, looked up on the FX thread in whatever is
+ * drawn at that moment. Blocks resolved once at the start went stale the first time the file was re-drawn, and a
+ * highlight on a detached block is a highlight nobody sees.
  */
 public final class DebugOnBus implements DebugView {
 
@@ -46,27 +43,9 @@ public final class DebugOnBus implements DebugView {
     private Map<ASTNode, CodeBlock> indexedMap;
     private Map<Integer, CodeBlock> lineIndex = Map.of();
 
-    private DebugOnBus(EditorState state, EventBus bus) {
+    DebugOnBus(EditorState state, EventBus bus) {
         this.state = state;
         this.bus = bus;
-    }
-
-    /** The project's debugger, its controls taken from {@code bus} and its stops shown on the canvas. */
-    public static DebuggingService service(EditorState state, ProjectConfig config, CodeExecutionService execution,
-                                           EventBus bus) {
-        DebuggingService debugger = new DebuggingService(state, config, execution, FxThread.INSTANCE,
-                new DebugOnBus(state, bus), RunOnBus.events(bus), RunOnBus.telemetry(bus));
-        bus.subscribe(CoreApplicationEvents.DebugControlRequest.class, e -> {
-            switch (e) {
-                case CoreApplicationEvents.DebugStartRequestedEvent ignored -> debugger.startDebugging(false);
-                case CoreApplicationEvents.FollowStartRequestedEvent ignored -> debugger.startDebugging(true);
-                case CoreApplicationEvents.DebugStepOverRequestedEvent ignored -> debugger.stepOver();
-                case CoreApplicationEvents.DebugContinueRequestedEvent ignored -> debugger.continueExecution();
-                case CoreApplicationEvents.DebugStopRequestedEvent ignored -> debugger.stopDebugging();
-            }
-        }, false);
-        bus.subscribe(CoreApplicationEvents.InputAnsweredEvent.class, e -> debugger.answer(e.id(), e.value()), false);
-        return debugger;
     }
 
     @Override

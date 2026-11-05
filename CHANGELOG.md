@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The bot compiles, runs, is tried and debugged in BotMaker's core (2026-11-05): `CoreRuns` asks from the bus and tells
+  what it hears on the bus, on a thread of its own so a bot's trace does not queue on the FX thread. The bot now ends when
+  the project's last client leaves, including when Studio crashes. A window of Studio's sees a file's new text when the
+  core tells of it (`SourcesChanged`). `RunOnBus` and the Studio side of the debugger's service are gone; `DebugOnBus` is
+  the view of the core's session.
 - Studio edits a bot through BotMaker's core, its own process (2026-11-05): the core saves each change as it lands, so
   a crash of Studio loses no edit. One core serves one project at a time, so a second Studio cannot open another bot
   until the first closes its own.

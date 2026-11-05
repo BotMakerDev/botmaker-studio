@@ -4,8 +4,9 @@ import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.services.RunOnBus;
+import com.botmaker.studio.services.CoreRuns;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -20,6 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,9 +71,10 @@ class RunTelemetryTest {
         assertFalse(RunTelemetry.answer(null, 3, "true"), "no run, nowhere to send it");
     }
 
-    /** A frame as a run hands it on: its events and listener are Studio's bridges onto {@code bus}. */
+    /** A frame as a run hands it on, told as the core tells it and heard as Studio hears it. */
     private static void publish(EventBus bus, byte[] frame) {
-        RunTelemetry.publish(RunOnBus.events(bus), RunOnBus.telemetry(bus), frame);
+        Consumer<CoreEvent> told = CoreRuns.onBus(bus);
+        RunTelemetry.publish(told, RunTelemetry.told(told), frame);
     }
 
     /**
