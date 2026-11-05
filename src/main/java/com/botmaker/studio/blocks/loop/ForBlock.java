@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.loop;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BodyBlock;
@@ -77,7 +78,7 @@ public class ForBlock extends AbstractStatementBlock implements BlockWithChildre
             if (variable != null && variable.getAstNode() instanceof SimpleName) {
                 // Rename the declaration AND its references in the loop body — a plain replaceSimpleName renames
                 // only the declaration, leaving the body on the old name so the code stops compiling.
-                context.getCodeEditor().renameLocal((SimpleName) variable.getAstNode(), newName);
+                context.edit(variable.getAstNode(), id -> new CanvasEdit.RenameLocal(id, newName));
             }
         });
     }

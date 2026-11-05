@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.vars;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.java.edit.palette.TypeNames;
 import com.botmaker.core.project.params.BotRecords;
@@ -46,7 +47,8 @@ public final class DeclareVariableDialog {
         BotRecords records = BotRecords.scan(context.getConfig(), context.getState(),
                 com.botmaker.core.plugin.PluginHost.grammar());
         ask(owner, records, EditVariableDialog.declaredNames(context)).ifPresent(declared ->
-                context.getCodeEditor().declareLocal(body.getId(), index, declared.name(), declared.type()));
+                context.edit(new CanvasEdit.DeclareLocal(body.getId(), index, declared.name(), declared.type()),
+                        body.getAstNode()));
     }
 
     /**

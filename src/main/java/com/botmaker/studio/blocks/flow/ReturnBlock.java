@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.flow;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
@@ -70,7 +71,7 @@ public class ReturnBlock extends AbstractStatementBlock {
             spec.picker("add", () -> createAddButton(e ->
                     ExpressionMenu.create(
                             returned, false, context, this.astNode, x -> true,
-                            selection -> context.getCodeEditor().setReturnExpression((ReturnStatement) this.astNode, selection)
+                            selection -> context.edit(this.astNode, id -> new CanvasEdit.SetReturn(id, CanvasEdit.Pick.of(selection)))
                     ).show((Button) e.getSource(), javafx.geometry.Side.BOTTOM, 0, 0)));
         } else {
             spec.label("void", () -> new Label("(void)"));

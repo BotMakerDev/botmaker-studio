@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -65,7 +66,7 @@ public class BinaryExpressionBlock extends AbstractExpressionBlock {
                     operator,
                     newOp -> {
                         this.operator = newOp;
-                        context.getCodeEditor().updateBinaryOperator((InfixExpression) this.astNode, newOp);
+                        context.edit(this.astNode, id -> new CanvasEdit.SetBinaryOperator(id, newOp));
                     }
             );
             expressionBox.getChildren().add(selector);

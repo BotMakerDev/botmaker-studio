@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.geometry.Pos;
@@ -7,7 +8,6 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
 import org.eclipse.jdt.core.dom.BooleanLiteral;
-import org.eclipse.jdt.core.dom.Expression;
 
 /**
  * Block for true/false values with toggle switch style UI.
@@ -55,10 +55,7 @@ public class BooleanLiteralBlock extends AbstractExpressionBlock {
             updateLabelStyle(displayLabel, newValue);
 
             // Update AST
-            context.getCodeEditor().replaceLiteralValue(
-                    (Expression) this.astNode,
-                    String.valueOf(newValue)
-            );
+            context.edit(this.astNode, id -> new CanvasEdit.SetLiteral(id, String.valueOf(newValue)));
         });
 
         root.getChildren().add(displayLabel);

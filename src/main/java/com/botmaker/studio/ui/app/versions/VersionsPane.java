@@ -1,5 +1,7 @@
 package com.botmaker.studio.ui.app.versions;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.core.edit.EditResult;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
@@ -1141,8 +1143,9 @@ public final class VersionsPane {
         public void restoreFunction(BlockDiff.MethodChange change) {
             String source = source(change);
             if (source == null || ctx.codeEditorService() == null) return;
-            ctx.codeEditorService().getCodeEditor().replaceMethod(source, change.signature());
-            status("Put " + change.name() + "() back — ↶ undoes it.");
+            EditResult result = ctx.codeEditorService().edit(new CanvasEdit.RestoreMethod(source, change.signature()));
+            status(result instanceof EditResult.Refused refused ? refused.reason()
+                    : "Put " + change.name() + "() back — ↶ undoes it.");
             Platform.runLater(VersionsPane.this::refresh);
         }
     }
@@ -1163,8 +1166,9 @@ public final class VersionsPane {
         byte[] bytes = in.sides().after() != null ? in.sides().after() : in.sides().before();
         if (bytes == null) return;
         if (isOpen(in.path()) && DiffCards.isJava(in.path()) && ctx.codeEditorService() != null) {
-            ctx.codeEditorService().getCodeEditor().replaceFile(new String(bytes, StandardCharsets.UTF_8));
-            status("Restored " + in.path() + " — ↶ undoes it.");
+            EditResult result = ctx.codeEditorService().edit(new CanvasEdit.RestoreFile(new String(bytes, StandardCharsets.UTF_8)));
+            status(result instanceof EditResult.Refused refused ? refused.reason()
+                    : "Restored " + in.path() + " — ↶ undoes it.");
             Platform.runLater(this::refresh);
             return;
         }

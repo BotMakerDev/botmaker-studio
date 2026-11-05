@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.flow;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BlockWithChildren;
@@ -19,7 +20,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Expression;
-import org.eclipse.jdt.core.dom.Statement;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -155,7 +155,7 @@ public class BranchChainBlock extends AbstractStatementBlock implements BlockWit
                     .picker(id + "-add", () -> addBranchButton(context, index))
                     .picker(id + "-delete", () -> isReadOnly() || links.size() <= 1 ? null
                             : BlockUIComponents.createDeleteButton(
-                                    () -> context.getCodeEditor().removeBranchLink((Statement) this.astNode, index)))
+                                    () -> context.edit(this.astNode, chain -> new CanvasEdit.RemoveBranchLink(chain, index))))
                     .body(id + "-body", () -> createIndentedBody(link.body, context, "branch-chain-body"));
         }
 
@@ -186,7 +186,7 @@ public class BranchChainBlock extends AbstractStatementBlock implements BlockWit
     private Button addBranchButton(CodeEditorService context, int index) {
         if (isReadOnly() || links.get(index).isTerminal()) return null;
         Button button = createAddButton(e ->
-                context.getCodeEditor().addBranchLink((Statement) this.astNode, index));
+                context.edit(this.astNode, chain -> new CanvasEdit.AddBranchLink(chain, index)));
         if (button != null) button.setTooltip(new Tooltip("Add another branch after this one"));
         return button;
     }

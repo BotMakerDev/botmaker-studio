@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.func;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.java.edit.palette.SignatureType;
@@ -328,7 +329,7 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
                 if (!newVal) {
                     String val = nameField.getText().trim();
                     if (!val.isEmpty() && !val.equals(currentName)) {
-                        context.getCodeEditor().renameMethodParameter((MethodDeclaration) this.astNode, index, val);
+                        context.edit(this.astNode, id -> new CanvasEdit.RenameParameter(id, index, val));
                     } else {
                         nameField.setText(currentName);
                     }

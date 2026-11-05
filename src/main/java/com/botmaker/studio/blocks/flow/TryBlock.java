@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.flow;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -89,16 +90,16 @@ public class TryBlock extends AbstractStatementBlock implements BlockWithChildre
             spec.label("catch-kw" + i, () -> SentenceLayoutBuilder.keywordNode("catch"))
                     .custom("catch-type" + i, () -> TypePicker.chip(clause.getException().getType(),
                             CATCH_TYPES, !isReadOnly(), context, clause,
-                            typeText -> context.getCodeEditor().setCatchType(clause, typeText)))
+                            typeText -> context.edit(clause, id -> new CanvasEdit.SetCatchType(id, typeText))))
                     .picker("catch-or" + i, () -> alsoCatchButton(clause, context))
                     .label("catch-as" + i, () -> SentenceLayoutBuilder.labelNode("as"))
                     .custom("catch-name" + i, () -> TextFieldComponents.createVariableName(
                             clause.getException().getName().getIdentifier(), !isReadOnly(),
-                            newName -> context.getCodeEditor()
-                                    .renameLocal(clause.getException().getName(), newName)))
+                            newName -> context.edit(clause.getException().getName(),
+                                    id -> new CanvasEdit.RenameLocal(id, newName))))
                     .custom("catch-spacer" + i, BlockUIComponents::createSpacer)
                     .picker("catch-delete" + i, () -> isReadOnly() ? null : BlockUIComponents.createDeleteButton(
-                            () -> context.getCodeEditor().deleteCatchClause(tryStmt, index)))
+                            () -> context.edit(tryStmt, id -> new CanvasEdit.DeleteCatch(id, index))))
                     .body("catch-body" + i, () -> createIndentedBody(catchBody, context, "if-body"));
         }
 
@@ -106,15 +107,15 @@ public class TryBlock extends AbstractStatementBlock implements BlockWithChildre
             spec.label("finally-kw", () -> SentenceLayoutBuilder.keywordNode("finally"))
                     .custom("finally-spacer", BlockUIComponents::createSpacer)
                     .picker("finally-delete", () -> isReadOnly() ? null : BlockUIComponents.createDeleteButton(
-                            () -> context.getCodeEditor().deleteFinallyClause(tryStmt)))
+                            () -> context.edit(tryStmt, CanvasEdit.DeleteFinally::new)))
                     .body("finally-body", () -> createIndentedBody(finallyBody, context, "if-body"));
         }
 
         spec.picker("add-catch", () -> addButton("catch", "Add a catch clause",
-                () -> context.getCodeEditor().addCatchClause(tryStmt)));
+                () -> context.edit(tryStmt, CanvasEdit.AddCatch::new)));
         if (finallyBody == null) {
             spec.picker("add-finally", () -> addButton("finally", "Add a finally clause",
-                    () -> context.getCodeEditor().addFinallyClause(tryStmt)));
+                    () -> context.edit(tryStmt, CanvasEdit.AddFinally::new)));
         }
         return spec.build();
     }
@@ -142,8 +143,8 @@ public class TryBlock extends AbstractStatementBlock implements BlockWithChildre
         Button button = new Button("+ or");
         button.getStyleClass().addAll("block-action-button", "block-action-button--mini");
         button.setOnAction(e -> TypePicker.show(button, CATCH_TYPES, null, context, clause,
-                choice -> context.getCodeEditor().setCatchType(clause,
-                        TryHandler.catchTypeText(clause) + " | " + choice.text())));
+                choice -> context.edit(clause, id -> new CanvasEdit.SetCatchType(id,
+                        TryHandler.catchTypeText(clause) + " | " + choice.text()))));
         Tooltip.install(button, new Tooltip("Catch another exception too"));
         return button;
     }

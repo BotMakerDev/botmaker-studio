@@ -1,5 +1,6 @@
 package com.botmaker.studio.core;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.ui.render.menu.StatementMenu;
 
 import com.botmaker.studio.services.CodeEditorService;
@@ -197,7 +198,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             com.botmaker.studio.ui.app.vars.DeclareVariableDialog.declareInto(context, owner, body, index);
             return;
         }
-        Runnable insert = () -> context.getCoreEditor().userInsert(body.getId(), type, index);
+        Runnable insert = () -> context.edit(new CanvasEdit.InsertBlock(body.getId(), index, type), body.getAstNode());
         if (!com.botmaker.studio.ui.app.vars.NamingPreference.ask()) {
             insert.run();
             return;
@@ -207,7 +208,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             ASTNode at = body.getAstNode();
             com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
                             StatementFactory.uniqueTypeName(at, "MyEnum"), StatementFactory.declaredTypeNames(at))
-                    .ifPresent(draft -> context.getCodeEditor().addEnumStatement(body.getId(), index, draft));
+                    .ifPresent(draft -> context.edit(new CanvasEdit.AddEnumStatement(body.getId(), index, draft), at));
             return;
         }
         // The insert is handed over rather than done here: identifying the new variable means reading the file

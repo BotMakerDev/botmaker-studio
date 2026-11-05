@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -62,7 +63,7 @@ public class LambdaBlock extends AbstractExpressionBlock implements BlockWithChi
                 spec.label("type" + i, () -> SentenceLayoutBuilder.labelNode(typed.getType().toString()));
             }
             spec.custom("param" + i, () -> TextFieldComponents.createVariableName(name.getIdentifier(),
-                    !isReadOnly(), newName -> context.getCodeEditor().renameLocal(name, newName)));
+                    !isReadOnly(), newName -> context.edit(name, id -> new CanvasEdit.RenameLocal(id, newName))));
         }
         spec.label("arrow", () -> SentenceLayoutBuilder.keywordNode("→"));
         if (blockBody != null) {

@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.vars;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.UseFix;
 import com.botmaker.java.edit.factories.InitializerFactory;
@@ -69,11 +70,11 @@ public final class DeleteVariableDialog {
         List<RefusalDialog.Choice> fixes = new ArrayList<>();
         for (String other : sameTypedInScope(method, decl, fragment, uses)) {
             fixes.add(new RefusalDialog.Choice("Use " + other + " instead",
-                    () -> context.getCodeEditor().deleteVariable(decl, new UseFix.Rename(other))));
+                    () -> context.edit(decl, id -> new CanvasEdit.DeleteVariable(id, new UseFix.Rename(other)))));
         }
         ResolvedType type = ProjectAnalyzer.resolveType(decl.getType());
         fixes.add(new RefusalDialog.Choice("Replace with " + defaultValueSource(context, decl, type),
-                () -> context.getCodeEditor().deleteVariable(decl, UseFix.DEFAULT)));
+                () -> context.edit(decl, id -> new CanvasEdit.DeleteVariable(id, UseFix.DEFAULT))));
 
         RefusalDialog.show(owner, name + " wasn't deleted", stillRead(name, uses.size(), method),
                 usagesOf(context, uses), fixes, Refactors.reveal(context));

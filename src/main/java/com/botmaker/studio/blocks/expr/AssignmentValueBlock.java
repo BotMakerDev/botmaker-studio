@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.blocks.var.AssignmentBlock;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.BlockWithChildren;
@@ -51,7 +52,7 @@ public class AssignmentValueBlock extends AbstractExpressionBlock implements Blo
                         ? SentenceLayoutBuilder.keywordNode(AssignmentBlock.operatorName(operator))
                         : SelectorComponents.createOperatorSelector(AssignmentBlock.ASSIGN_NAMES,
                                 AssignmentBlock.ASSIGN_SYMBOLS, operator,
-                                symbol -> context.getCodeEditor().updateAssignmentOperator(assignment, symbol)));
+                                symbol -> context.edit(assignment, id -> new CanvasEdit.SetAssignmentOperator(id, symbol))));
         ResolvedType targetType = assignment.getLeftHandSide().resolveTypeBinding() == null
                 ? ResolvedType.UNKNOWN : ResolvedType.of(assignment.getLeftHandSide().resolveTypeBinding());
         addOperand(spec, "value", value, context, targetType);

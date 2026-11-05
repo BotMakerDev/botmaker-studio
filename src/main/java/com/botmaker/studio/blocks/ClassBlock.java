@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.parser.factories.StatementFactory;
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.core.CodeBlock;
@@ -123,7 +124,7 @@ public class ClassBlock extends TypeBlock {
         com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
                         StatementFactory.uniqueTypeName(typeDecl, "MyEnum"),
                         StatementFactory.declaredTypeNames(typeDecl))
-                .ifPresent(draft -> context.getCodeEditor().addEnumToClass(typeDecl, draft, insertIndex));
+                .ifPresent(draft -> context.edit(typeDecl, id -> new CanvasEdit.AddEnumDraft(id, draft, insertIndex)));
     }
 
     /**
@@ -139,7 +140,7 @@ public class ClassBlock extends TypeBlock {
                 .withProject(com.botmaker.core.project.params.BotRecords.scan(context.getConfig(),
                         context.getState(), com.botmaker.core.plugin.PluginHost.grammar()))
                 .showAndWait().ifPresent(draft ->
-                context.getCodeEditor().addFunctionToClass(typeDecl, draft, insertIndex));
+                context.edit(typeDecl, id -> new CanvasEdit.AddFunction(id, draft, insertIndex)));
     }
 
     private Region createClassMemberSeparator(CodeEditorService context, int insertIndex) {

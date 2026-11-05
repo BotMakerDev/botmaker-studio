@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.menu;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.index.LibraryType;
 import com.botmaker.java.edit.palette.BotType;
 import com.botmaker.java.edit.handlers.EnumManipulationHandler;
@@ -129,28 +130,7 @@ public final class ExpressionMenu {
      */
     public static void applySelection(CodeEditorService context, org.eclipse.jdt.core.dom.Expression toReplace, Object selection) {
         if (toReplace == null || selection == null) return;
-        if (selection instanceof ExpressionType expr) {
-            context.getCodeEditor().replaceExpression(toReplace, expr);
-            return;
-        }
-        if (selection instanceof ExpressionChoice choice) {
-            switch (choice) {
-                case ExpressionChoice.Method m -> context.getCodeEditor().replaceWithMethodCall(toReplace, m);
-                case ExpressionChoice.Constructor c ->
-                        context.getCodeEditor().replaceWithInstantiation(toReplace, c.typeName(), c.paramTypes());
-                case ExpressionChoice.EnumConstant en ->
-                        context.getCodeEditor().replaceWithEnumConstant(toReplace, en.typeName(), en.constantName());
-                case ExpressionChoice.Variable v -> context.getCodeEditor().replaceWithVariable(toReplace, v.variableName());
-                case ExpressionChoice.Field f ->
-                        context.getCodeEditor().replaceWithFieldReference(toReplace, f.scope(), f.fieldName());
-                case ExpressionChoice.NewVariable nv ->
-                        context.getCodeEditor().declareVariableBeforeAndReference(toReplace, nv.type(), nv.name());
-                case ExpressionChoice.RawExpression rx ->
-                        context.getCodeEditor().replaceWithRawExpression(toReplace, rx.code());
-                case ExpressionChoice.ArrayItem item ->
-                        context.getCodeEditor().replaceWithArrayItem(toReplace, item.arrayName());
-            }
-        }
+        context.edit(toReplace, id -> new CanvasEdit.Replace(id, CanvasEdit.Pick.of(selection)));
     }
 
     /**

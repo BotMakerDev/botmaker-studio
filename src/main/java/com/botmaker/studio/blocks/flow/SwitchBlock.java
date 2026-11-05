@@ -1,5 +1,7 @@
 package com.botmaker.studio.blocks.flow;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
@@ -101,7 +103,7 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
         if (!isReadOnly()) {
             spec.picker("add-case", () -> {
                 Button addCase = new Button("+ Add Case");
-                addCase.setOnAction(e -> context.getCodeEditor().addCaseToSwitch((SwitchStatement) this.astNode));
+                addCase.setOnAction(e -> context.edit(this.astNode, CanvasEdit.AddCase::new));
                 return addCase;
             });
         }
@@ -226,11 +228,11 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
 
             if (index >= 0 && !isReadOnly()) {
                 Button upBtn = BlockUIComponents.createMoveUpButton(
-                        () -> context.getCodeEditor().moveSwitchCase((SwitchCase) this.astNode, true));
+                        () -> context.edit(this.astNode, id -> new CanvasEdit.MoveCase(id, true)));
                 upBtn.setDisable(index == 0);
 
                 Button downBtn = BlockUIComponents.createMoveDownButton(
-                        () -> context.getCodeEditor().moveSwitchCase((SwitchCase) this.astNode, false));
+                        () -> context.edit(this.astNode, id -> new CanvasEdit.MoveCase(id, false)));
                 downBtn.setDisable(index == totalCases - 1);
 
                 caseHeaderBuilder
@@ -281,16 +283,16 @@ public class SwitchBlock extends AbstractStatementBlock implements BlockWithChil
 
             for (String constant : remaining) {
                 MenuItem item = new MenuItem(constant);
-                item.setOnAction(e -> context.getCodeEditor().replaceWithEnumConstant(
-                        (Expression) caseExpression.getAstNode(),
-                        EnumManipulationHandler.referableName(enumType), constant));
+                item.setOnAction(e -> context.edit(caseExpression.getAstNode(),
+                        id -> new CanvasEdit.Replace(id, CanvasEdit.Pick.of(new ExpressionChoice.EnumConstant(
+                                EnumManipulationHandler.referableName(enumType), constant)))));
                 menu.getItems().add(item);
             }
 
             if (parentSwitch != null && remaining.size() > 1) {
                 menu.getItems().add(new SeparatorMenuItem());
                 MenuItem all = new MenuItem("Add all remaining cases (" + remaining.size() + ")");
-                all.setOnAction(e -> context.getCodeEditor().addCasesToSwitch(parentSwitch, remaining));
+                all.setOnAction(e -> context.edit(parentSwitch, id -> new CanvasEdit.AddCases(id, remaining)));
                 menu.getItems().add(all);
             }
 

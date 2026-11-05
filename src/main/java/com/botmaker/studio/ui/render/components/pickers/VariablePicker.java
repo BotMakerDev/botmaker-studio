@@ -1,5 +1,7 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.plugin.HostParameters;
 import com.botmaker.studio.services.CodeEditorService;
@@ -81,7 +83,8 @@ public final class VariablePicker {
             // between two classes, and keeping the old qualifier would write Activities.REST.
             String qualifier = HostParameters.qualifierOf(context.getConfig(), context.getState(), picked);
             if (qualifier == null) return;   // the name left the declaration between opening and picking
-            context.getCodeEditor().replaceWithFieldReference(arg.node(), qualifier, picked);
+            context.edit(arg.node(), id -> new CanvasEdit.Replace(id,
+                    CanvasEdit.Pick.of(new ExpressionChoice.Field(qualifier, picked))));
         });
         return combo;
     }

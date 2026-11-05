@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -73,7 +74,7 @@ public class InstantiationBlock extends AbstractExpressionBlock {
                         .min(java.util.Comparator.comparingInt(sig -> sig.paramTypes().size()))
                         .map(MethodSignature::paramTypes)
                         .orElse(List.of());
-                context.getCodeEditor().updateInstantiation((ClassInstanceCreation) this.astNode, selected, seed);
+                context.edit(this.astNode, id -> new CanvasEdit.SetInstantiation(id, selected, seed));
             }
         });
 
@@ -89,11 +90,7 @@ public class InstantiationBlock extends AbstractExpressionBlock {
                 MenuItem item = new MenuItem(sig.toString());
                 item.setOnAction(ev -> {
                     // Pass ResolvedType list directly
-                    context.getCodeEditor().updateInstantiation(
-                            (ClassInstanceCreation) this.astNode,
-                            className,
-                            sig.paramTypes()
-                    );
+                    context.edit(this.astNode, id -> new CanvasEdit.SetInstantiation(id, className, sig.paramTypes()));
                 });
                 constructorBtn.getItems().add(item);
             }

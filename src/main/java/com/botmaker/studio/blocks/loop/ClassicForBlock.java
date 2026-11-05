@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.loop;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -86,7 +87,7 @@ public class ClassicForBlock extends AbstractStatementBlock implements BlockWith
             spec.custom("type", () -> TypePicker.chip(declaration.getType(),
                             TypePicker.Options.of(TypePicker.Filter.ANY).withTypeArguments(), !isReadOnly(),
                             context, declaration,
-                            text -> context.getCodeEditor().setExpressionType(declaration, text)))
+                            text -> context.edit(declaration, id -> new CanvasEdit.SetExpressionType(id, text))))
                     .custom("name", () -> nameField(counter.getName(), context));
             if (counter.getInitializer() != null) {
                 spec.label("from", () -> SentenceLayoutBuilder.labelNode("from"))
@@ -122,7 +123,7 @@ public class ClassicForBlock extends AbstractStatementBlock implements BlockWith
 
     private Node nameField(SimpleName name, CodeEditorService context) {
         return TextFieldComponents.createVariableName(name.getIdentifier(), !isReadOnly(),
-                newName -> context.getCodeEditor().renameLocal(name, newName));
+                newName -> context.edit(name, id -> new CanvasEdit.RenameLocal(id, newName)));
     }
 
     @Override

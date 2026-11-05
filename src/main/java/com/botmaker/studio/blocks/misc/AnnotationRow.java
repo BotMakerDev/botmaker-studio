@@ -1,5 +1,7 @@
 package com.botmaker.studio.blocks.misc;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.java.edit.BlockId;
 import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.managed.ManagedIds;
@@ -97,7 +99,8 @@ public final class AnnotationRow {
             Button remove = new Button("×");
             remove.getStyleClass().add("annotation-pill-remove");
             remove.setTooltip(new Tooltip("Remove this annotation"));
-            remove.setOnAction(e -> context.getCodeEditor().removeAnnotation(owner, annotation));
+            remove.setOnAction(e -> context.edit(
+                    new CanvasEdit.RemoveAnnotation(BlockId.of(owner), BlockId.of(annotation)), owner, annotation));
             pill.getChildren().add(remove);
         }
         return pill;

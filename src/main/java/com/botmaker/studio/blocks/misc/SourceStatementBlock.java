@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.misc;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.java.edit.palette.BlockCategory;
@@ -99,7 +100,7 @@ public class SourceStatementBlock extends AbstractStatementBlock {
         TextArea editor = TextFieldComponents.createCommentEditArea(source, "Java statement", newText -> {
             if (!newText.strip().equals(source)) {
                 Platform.runLater(() ->
-                        context.getCodeEditor().replaceStatementSource((Statement) astNode, newText));
+                        context.edit(astNode, id -> new CanvasEdit.SetStatementSource(id, newText)));
             }
             Platform.runLater(() -> showSource(row, context));
         });

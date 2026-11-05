@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
@@ -63,7 +64,7 @@ public class DeclarationExpressionBlock extends AbstractExpressionBlock implemen
             if (i > 0) spec.label("and" + i, () -> SentenceLayoutBuilder.keywordNode("and"));
             spec.custom("name" + i, () -> TextFieldComponents.createVariableName(
                     fragment.getName().getIdentifier(), !isReadOnly(),
-                    name -> context.getCodeEditor().renameLocal(fragment.getName(), name)));
+                    name -> context.edit(fragment.getName(), id -> new CanvasEdit.RenameLocal(id, name))));
             ExpressionBlock initializer = initializers.get(fragment);
             if (initializer != null) {
                 spec.label("eq" + i, () -> SentenceLayoutBuilder.keywordNode("="));

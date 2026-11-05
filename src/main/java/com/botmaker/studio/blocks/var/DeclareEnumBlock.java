@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.var;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.blocks.TypeClauses;
 import com.botmaker.studio.blocks.TypeHeader;
@@ -110,7 +111,7 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
     private Button addConstantButton(CodeEditorService context) {
         Button addConstant = new Button("+ Add Value");
         addConstant.getStyleClass().addAll("block-action-button", "block-action-button--mini");
-        addConstant.setOnAction(e -> context.getCodeEditor().addEnumConstant(enumDeclaration, "NEW_VALUE"));
+        addConstant.setOnAction(e -> context.edit(enumDeclaration, id -> new CanvasEdit.AddEnumConstant(id, "NEW_VALUE")));
         return addConstant;
     }
 
@@ -128,7 +129,7 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
             if (isStatement) {
                 context.deleteStatement((Statement) this.astNode);
             } else {
-                context.getCodeEditor().deleteEnumFromClass(enumDeclaration);
+                context.edit(enumDeclaration, CanvasEdit.DeleteEnum::new);
             }
         });
 
@@ -164,7 +165,7 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
                 if (!isReadOnly()) {
                     deleteBtn = new Button("×");
                     deleteBtn.getStyleClass().add("block-icon-button");
-                    deleteBtn.setOnAction(e -> context.getCodeEditor().deleteEnumConstant(enumDeclaration, index));
+                    deleteBtn.setOnAction(e -> context.edit(enumDeclaration, id -> new CanvasEdit.DeleteEnumConstant(id, index)));
                 }
 
                 HBox row = BlockLayout.sentence()

@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.var;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ExpressionBlock;
@@ -116,7 +117,7 @@ public class AssignmentBlock extends AbstractStatementBlock {
                     this.operator = newOperator;
                     if (this.astNode instanceof ExpressionStatement) {
                         Expression expr = ((ExpressionStatement) this.astNode).getExpression();
-                        context.getCodeEditor().updateAssignmentOperator(expr, newOperator);
+                        context.edit(expr, id -> new CanvasEdit.SetAssignmentOperator(id, newOperator));
                     }
                 });
     }

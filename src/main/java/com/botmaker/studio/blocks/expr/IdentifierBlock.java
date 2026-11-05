@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ResolvedType;
@@ -57,7 +58,7 @@ public class IdentifierBlock extends AbstractExpressionBlock {
         MenuComponents.showListMenu(uiNode, variables,
                 var -> var.name() + (var.isField() ? " (Field)" : ""),
                 var -> {
-                    context.getCodeEditor().replaceSimpleName((SimpleName) this.astNode, var.name());
+                    context.edit(this.astNode, id -> new CanvasEdit.SetSimpleName(id, var.name()));
                     markAsEdited();
                 },
                 "(No variables found)");

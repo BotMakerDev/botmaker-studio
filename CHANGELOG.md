@@ -16,6 +16,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 - Nothing the user means to see (2026-11-05). Inserting, moving and deleting a block, and the assistant's `edit_code`,
   now reach the file through `botmaker-core`'s `CoreEditor`, which finds its target in the source, not on the canvas.
+- Every other canvas gesture goes the same way (2026-11-05): no block holds the editor any more, each sends a
+  `CanvasEdit`. A gesture on a block that is being redrawn is dropped and asks to try again, where it could land on a
+  stale node before.
 
 ### Changed (the edit engine lives in botmaker-core)
 

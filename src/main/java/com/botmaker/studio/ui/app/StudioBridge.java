@@ -1,5 +1,7 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.core.edit.EditResult;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.overlay.Area;
@@ -15,7 +17,6 @@ import com.botmaker.studio.assist.PluginMove;
 import com.botmaker.studio.assist.RunLog;
 import com.botmaker.studio.assist.StudioDriver;
 import com.botmaker.studio.assist.SymbolNames;
-import com.botmaker.core.events.EventBus;
 import com.botmaker.core.migrate.Broken;
 import com.botmaker.core.migrate.Migration;
 import com.botmaker.core.migrate.Rewrite;
@@ -396,13 +397,9 @@ final class StudioBridge implements StudioDriver {
             CompilationUnit unit = ctx.state().getCompilationUnit().orElseThrow(() ->
                     new IllegalArgumentException("Studio has not drawn " + at.file().getFileName() + " yet."));
             ASTNode target = NodeFinder.perform(unit, at.start(), 0);
-            List<String> said = new ArrayList<>();
-            try (EventBus.Subscription heard = ctx.eventBus().subscribe(CoreApplicationEvents.StatusMessageEvent.class,
-                    e -> said.add(e.message()))) {
-                if (!ctx.codeEditorService().getCodeEditor().applyRefactor(plan, target)) {
-                    throw new IllegalArgumentException("Studio did not rename it"
-                            + (said.isEmpty() ? "." : ": " + said.getLast()));
-                }
+            if (ctx.codeEditorService().edit(target, id -> CanvasEdit.ApplyRefactor.of(id, plan))
+                    instanceof EditResult.Refused refused) {
+                throw new IllegalArgumentException("Studio did not rename it: " + refused.reason());
             }
             return plan.summary() + " — " + plan.rewrites().size() + " file(s), one undo step.";
         });

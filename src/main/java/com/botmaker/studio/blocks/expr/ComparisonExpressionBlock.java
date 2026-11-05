@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -72,7 +73,7 @@ public class ComparisonExpressionBlock extends AbstractExpressionBlock {
             sentence.addOperatorSelector(OPERATOR_NAMES, OPERATOR_SYMBOLS, operator, newOp -> {
                 this.operator = newOp;
                 if (this.astNode instanceof InfixExpression) {
-                    context.getCodeEditor().updateBinaryOperator((InfixExpression) this.astNode, newOp);
+                    context.edit(this.astNode, id -> new CanvasEdit.SetBinaryOperator(id, newOp));
                 }
             });
         }

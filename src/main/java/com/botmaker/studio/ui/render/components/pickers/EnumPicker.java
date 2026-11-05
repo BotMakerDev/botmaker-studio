@@ -1,5 +1,7 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.services.CodeEditorService;
@@ -51,8 +53,8 @@ public final class EnumPicker {
         combo.setOnAction(e -> {
             String constant = combo.getValue();
             if (constant == null) return;
-            context.getCodeEditor().replaceWithEnumConstant(
-                    arg.node(), EnumManipulationHandler.referableName(enumType), constant);
+            context.edit(arg.node(), id -> new CanvasEdit.Replace(id, CanvasEdit.Pick.of(
+                    new ExpressionChoice.EnumConstant(EnumManipulationHandler.referableName(enumType), constant))));
         });
         return combo;
     }

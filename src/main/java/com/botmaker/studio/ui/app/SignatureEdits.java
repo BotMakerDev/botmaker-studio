@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.palette.FunctionDraft;
@@ -76,12 +77,8 @@ public final class SignatureEdits {
             return;
         }
         SignatureMigration.Plan plan = SignatureMigration.of(before, after, method, references.calls());
-        if (plan.isEmpty()) {
-            context.getCodeEditor().applyFunctionSignature(method, after);
-            return;
-        }
-        if (!SignatureMigrationDialog.confirm(owner, method.getName().getIdentifier(), plan)) return;
-        context.getCodeEditor().applyFunctionSignature(method, after, plan);
+        if (!plan.isEmpty() && !SignatureMigrationDialog.confirm(owner, method.getName().getIdentifier(), plan)) return;
+        context.edit(method, id -> new CanvasEdit.SetSignature(id, before, after));
     }
 
     /**
@@ -120,11 +117,11 @@ public final class SignatureEdits {
             List<RefusalDialog.Choice> fixes = new ArrayList<>();
             withCalls(context, method, references).ifPresent(plan -> fixes.add(new RefusalDialog.Choice(
                     "Delete it and its " + countOf(references.calls().size(), "call"),
-                    () -> context.getCodeEditor().applyRefactor(plan, method))));
+                    () -> context.edit(method, id -> CanvasEdit.ApplyRefactor.of(id, plan)))));
             explainRefused(context, owner, method, stillUsed(method, references), references.usages(), fixes);
             return;
         }
-        context.getCodeEditor().deleteMethod(method);
+        context.edit(method, CanvasEdit.DeleteMethod::new);
     }
 
     /** Why a delete cannot happen yet: the count, and what would let it through. */

@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.render.BlockShape;
@@ -72,9 +73,9 @@ public class TokenLiteralBlock extends AbstractExpressionBlock {
             field.focusedProperty().addListener((obs, was, focused) -> {
                 if (focused) return;
                 if (astNode instanceof CharacterLiteral literal) {
-                    context.getCodeEditor().setCharacter(literal, field.getText());
+                    context.edit(literal, id -> new CanvasEdit.SetCharacter(id, field.getText()));
                 } else {
-                    context.getCodeEditor().setNumberToken((NumberLiteral) astNode, field.getText());
+                    context.edit(astNode, id -> new CanvasEdit.SetNumberToken(id, field.getText()));
                 }
             });
         }
@@ -94,7 +95,7 @@ public class TokenLiteralBlock extends AbstractExpressionBlock {
         area.setEditable(!isReadOnly());
         if (!isReadOnly()) {
             area.focusedProperty().addListener((obs, was, focused) -> {
-                if (!focused) context.getCodeEditor().setTextBlock(block, area.getText());
+                if (!focused) context.edit(block, id -> new CanvasEdit.SetTextBlock(id, area.getText()));
             });
         }
         Tooltip.install(area, new Tooltip("A text block: several lines of text, kept as written."));

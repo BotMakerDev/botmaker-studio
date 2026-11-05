@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
@@ -100,11 +101,11 @@ public class ListBlock extends AbstractExpressionBlock {
         if (isReadOnly()) return row;
 
         Button upButton = BlockUIComponents.createMoveUpButton(
-                () -> context.getCodeEditor().moveListElement(this.astNode, index, index - 1));
+                () -> context.edit(this.astNode, id -> new CanvasEdit.MoveListElement(id, index, index - 1)));
         upButton.setDisable(index == 0);
 
         Button downButton = BlockUIComponents.createMoveDownButton(
-                () -> context.getCodeEditor().moveListElement(this.astNode, index, index + 1));
+                () -> context.edit(this.astNode, id -> new CanvasEdit.MoveListElement(id, index, index + 1)));
         downButton.setDisable(index == elements.size() - 1);
 
         Button deleteButton = new Button("✕");
@@ -128,7 +129,7 @@ public class ListBlock extends AbstractExpressionBlock {
         // something else — and the question it was really asking is the one a plugin's declared type answers
         // for everybody: whether a fresh one exists.
         if (PluginHost.freshInitializer(targetType == null ? null : targetType.qualifiedName()) != null) {
-            context.getCodeEditor().addSeededElementToList(this.astNode, insertIndex, targetType);
+            context.edit(this.astNode, id -> new CanvasEdit.AddSeededListElement(id, insertIndex, targetType));
             return;
         }
         // Reuse the same type-aware menu the "change" path uses (variable / method / constructor / enum
@@ -139,7 +140,8 @@ public class ListBlock extends AbstractExpressionBlock {
                 context,
                 this.astNode,
                 x -> true,
-                selection -> context.getCodeEditor().insertIntoList(this.astNode, insertIndex, selection, targetType)
+                selection -> context.edit(this.astNode,
+                        id -> new CanvasEdit.InsertIntoList(id, insertIndex, CanvasEdit.Pick.of(selection), targetType))
         );
         menu.show(button, javafx.geometry.Side.BOTTOM, 0, 0);
     }
@@ -155,7 +157,7 @@ public class ListBlock extends AbstractExpressionBlock {
 
     private void deleteElement(int index, CodeEditorService context) {
         if (index >= 0 && index < elements.size()) {
-            context.getCodeEditor().deleteElementFromList(this.astNode, index);
+            context.edit(this.astNode, id -> new CanvasEdit.DeleteListElement(id, index));
         }
     }
 

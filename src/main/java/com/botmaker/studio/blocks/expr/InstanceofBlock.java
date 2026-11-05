@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
@@ -56,7 +57,7 @@ public class InstanceofBlock extends AbstractExpressionBlock implements BlockWit
                         .label("called", () -> SentenceLayoutBuilder.keywordNode("called"))
                         .custom("name", () -> TextFieldComponents.createVariableName(
                                 variable.getName().getIdentifier(), !isReadOnly(),
-                                name -> context.getCodeEditor().renameLocal(variable.getName(), name)));
+                                name -> context.edit(variable.getName(), id -> new CanvasEdit.RenameLocal(id, name))));
             } else {
                 spec.label("pattern", () -> SentenceLayoutBuilder.labelNode(String.valueOf(check.getPattern())));
             }

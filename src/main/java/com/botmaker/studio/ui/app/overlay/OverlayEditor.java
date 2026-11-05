@@ -1,6 +1,8 @@
 package com.botmaker.studio.ui.app.overlay;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.edit.Edit;
+import com.botmaker.core.edit.EditResult;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayContext;
@@ -876,7 +878,7 @@ public final class OverlayEditor {
     private void insertBlock(BlockType type) {
         InsertionCursor c = insertionPoint();
         if (type == null || c == null) return;
-        context.getCoreEditor().userInsert(c.body().getId(), type, armBelow(c, Landed.ADDED));
+        context.edit(new CanvasEdit.InsertBlock(c.body().getId(), armBelow(c, Landed.ADDED), type), c.body().getAstNode());
     }
 
     /**
@@ -896,11 +898,11 @@ public final class OverlayEditor {
         }
         String before = activeText();
         lastMessage = null;
-        context.getCodeEditor().insertStatement(c.body().getId(), armBelow(c, Landed.PLACED), statement.node(),
-                statement.imports());
+        EditResult result = context.edit(new CanvasEdit.InsertStatement(c.body().getId(), armBelow(c, Landed.PLACED),
+                statement.source(), statement.imports()), c.body().getAstNode());
         if (java.util.Objects.equals(before, activeText())) {
             pendingInsert = null;
-            String why = lastMessage;
+            String why = result instanceof EditResult.Refused refused ? refused.reason() : lastMessage;
             return Optional.of("Studio refused to insert " + statement.source() + " here — "
                     + (why == null || why.isBlank() ? "it would not compile." : why));
         }
@@ -990,7 +992,8 @@ public final class OverlayEditor {
             return;
         }
         pendingInsert = new PendingFocus(new BlockTree.Position(index().ordinalOf(body), destination), Landed.MOVED);
-        context.getCoreEditor().userEdit(new Edit.Move(stmt.getId(), body.getId(), delta < 0 ? destination : destination + 1));
+        context.edit(new Edit.Move(stmt.getId(), body.getId(), delta < 0 ? destination : destination + 1),
+                stmt.getAstNode(), body.getAstNode());
     }
 
     /** ▸/▾: hides or re-shows a control-flow block's branches. See {@link #collapsed}. */

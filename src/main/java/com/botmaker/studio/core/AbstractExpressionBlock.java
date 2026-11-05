@@ -1,5 +1,6 @@
 package com.botmaker.studio.core;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.java.edit.handlers.ExpressionFormHandler;
@@ -115,7 +116,7 @@ public abstract class AbstractExpressionBlock extends AbstractCodeBlock implemen
      */
     protected Node typeField(ASTNode owner, CodeEditorService context) {
         return TypePicker.chip(ExpressionFormHandler.typeNode(owner), typeOptions(owner), !isReadOnly(), context,
-                owner, text -> context.getCodeEditor().setExpressionType(owner, text));
+                owner, text -> context.edit(owner, id -> new CanvasEdit.SetExpressionType(id, text)));
     }
 
     /** What each owner's type may be: a check names no primitive, an array creation names its element. */

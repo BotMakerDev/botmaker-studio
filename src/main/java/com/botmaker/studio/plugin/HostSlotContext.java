@@ -1,5 +1,7 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.slot.SlotContext;
@@ -149,8 +151,8 @@ public final class HostSlotContext implements SlotContext {
         if (slot.node() == null) return Optional.of("This slot is no longer in the file; nothing was written.");
         Optional<JavaValue> written = write(context, form(), value);
         if (written.isEmpty()) return Optional.of(ConstantValues.refusal(grammar(), form(), value));
-        context.getCodeEditor().replaceWithValue(slot.node(), written.get());
-        return Optional.empty();
+        return context.edit(slot.node(), id -> new CanvasEdit.SetValue(id, written.get())) instanceof EditResult.Refused refused
+                ? Optional.of(refused.reason()) : Optional.empty();
     }
 
     /**

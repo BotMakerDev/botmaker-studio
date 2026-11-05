@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.Usages;
@@ -57,10 +58,10 @@ public final class Refactors {
         }
         Refactor.Outcome outcome = Refactor.rename(index, active.getPath(), name.getStartPosition(), newName);
         switch (outcome) {
-            case Refactor.Planned plan -> context.getCodeEditor().applyRefactor(plan, name);
+            case Refactor.Planned plan -> context.edit(name, id -> CanvasEdit.ApplyRefactor.of(id, plan));
             case Refactor.Refused refused -> RefusalDialog.show(windowOf(anchor),
                     name.getIdentifier() + " wasn't renamed", refused, reveal(context),
-                    fix -> context.getCodeEditor().applyRefactor(fix, name));
+                    fix -> context.edit(name, id -> CanvasEdit.ApplyRefactor.of(id, fix)));
         }
     }
 

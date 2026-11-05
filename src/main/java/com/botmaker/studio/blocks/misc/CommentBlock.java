@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.misc;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -60,7 +61,7 @@ public class CommentBlock extends AbstractStatementBlock {
         return BlockLayout.header()
                 .withGrowingNode(row)
                 .withDeleteButton(whenEditable(() ->
-                        context.getCodeEditor().deleteComment((Comment) this.astNode)))
+                        context.edit(this.astNode, CanvasEdit.DeleteComment::new)))
                 .build();
     }
 
@@ -91,7 +92,7 @@ public class CommentBlock extends AbstractStatementBlock {
             if (!newText.equals(commentText)) {
                 this.commentText = newText;
                 javafx.application.Platform.runLater(() ->
-                        context.getCodeEditor().updateComment((Comment) this.astNode, this.commentText));
+                        context.edit(this.astNode, id -> new CanvasEdit.UpdateComment(id, this.commentText)));
             }
             javafx.application.Platform.runLater(() -> showReadOnly(row, context));
         });

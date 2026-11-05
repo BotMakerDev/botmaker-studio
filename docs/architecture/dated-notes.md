@@ -1,5 +1,10 @@
 # Dated notes — read these before the other files here
 
+> **Every canvas gesture is a `CanvasEdit` since 2026-11-05** (phase 6d of the same plan). No block reaches a
+> `CodeEditor`: a block calls `CodeEditorService.edit`, naming nodes by `BlockId`, and the core's `CanvasEditor` finds them
+> in the live tree. A node no longer in that tree while a parse awaits its render is dropped there (`isStale`). Studio
+> still redraws from `CodeUpdatedEvent` and undoes through `EditorHistory`, until phase 6e.
+
 > **Five edits go through `CoreEditor` since 2026-11-05** (phase 6c of the same plan). `edit_code` and the canvas's
 > insert, move and delete name their target by `BlockId`; `AssistTurn` wraps the core's `EditSession`, keeping only what
 > needs Studio: `tree`, and the edits that choose from a dialog's offer. `BlockValidator` is gone for the core's

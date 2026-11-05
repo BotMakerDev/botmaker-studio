@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
@@ -104,6 +105,6 @@ public final class HostSlotRun implements SlotRun {
             if (written.isEmpty()) return;
             values.add(written.get());
         }
-        context.getCodeEditor().setTrailingArguments(node, fromIndex, values);
+        context.edit(node, id -> new CanvasEdit.SetTrailingArguments(id, fromIndex, values));
     }
 }

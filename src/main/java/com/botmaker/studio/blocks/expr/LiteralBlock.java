@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -95,9 +96,9 @@ public class LiteralBlock<T> extends AbstractExpressionBlock {
                     // raw text would rewrite the file every time the field merely lost focus.
                     if (!textToSave.equals(normalizeNumberSuffix(oldText))) {
                         if (this.astNode instanceof MethodInvocation mi) {
-                            context.getCodeEditor().addStringArgumentToMethodInvocation(mi, textToSave);
+                            context.edit(mi, id -> new CanvasEdit.AddStringArgument(id, textToSave));
                         } else {
-                            context.getCodeEditor().replaceLiteralValue((Expression) this.astNode, textToSave);
+                            context.edit(this.astNode, id -> new CanvasEdit.SetLiteral(id, textToSave));
                         }
                     }
                 }

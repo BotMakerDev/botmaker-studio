@@ -1,7 +1,9 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.edit.CoreEditor;
 import com.botmaker.core.edit.Edit;
+import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.core.AbstractCodeBlock;
@@ -13,7 +15,6 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.parser.BlockReuse;
-import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.core.parser.SlotVacancy;
 import com.botmaker.java.edit.StatementPlacement;
 import com.botmaker.core.parser.factories.StatementFactory;
@@ -39,6 +40,7 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.BodyDeclaration;
+import org.eclipse.jdt.core.dom.Comment;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
@@ -57,6 +59,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 public class CodeEditorService {
@@ -66,7 +69,6 @@ public class CodeEditorService {
     private Path firstFile;
     private final EventBus eventBus;
     private final BlockConverter blockConverter;
-    private final CodeEditor codeEditor;
     private final CoreEditor coreEditor;
     private final BlockDragAndDropManager dragAndDropManager;
     private final DiagnosticsManager diagnosticsManager;
@@ -114,6 +116,19 @@ public class CodeEditorService {
     private String lastRenderedSource;
 
     /**
+     * The tree an edit adopted whose redraw is still to come. Until it runs, a block on screen holds a node of the
+     * older tree, whose path may name another line now; {@link #edit} drops what such a node asks for. A block the
+     * redraw keeps holds an older tree too, but one whose path still names it ({@link BlockReuse} keeps a block only
+     * at the same id with the same text), so outside this window any drawn node's path is good. It is
+     * {@link #ADOPTING} from before {@code adopt} swaps the tree, so a click between the swap and the parsed tree's
+     * arrival here is judged too.
+     */
+    private volatile Object awaitingRender;
+
+    /** {@link #awaitingRender} while a new text is being adopted, its tree not known yet. */
+    private static final Object ADOPTING = new Object();
+
+    /**
      * A file's last render: its registry, the source it was parsed from and the lock verdict it was parsed
      * under, as {@link BlockReuse#of} takes them, and the text every <em>other</em> file had then. A block
      * may compute something at render time from outside its own subtree ({@code 30-block-reuse.md} §6), and
@@ -142,8 +157,7 @@ public class CodeEditorService {
         this.projectAnalyzer = projectAnalyzer;
         this.apiDocsService = apiDocsService;
         this.history = new EditorHistory(state, eventBus);
-        this.codeEditor = new CodeEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer);
-        // Studio redraws from CodeUpdatedEvent, which the output publishes, until plan phase 6d: no events are read yet.
+        // Studio redraws from CodeUpdatedEvent, which the output publishes, until plan phase 6e: no events are read yet.
         this.coreEditor = new CoreEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer, event -> {});
         setupEventHandlers();
     }
@@ -168,7 +182,9 @@ public class CodeEditorService {
         // the block rebuild — see adopt(). The deferral is what keeps a burst of writes from re-rendering the
         // canvas on the publishing call; it was never meant to hold back what the file says.
         eventBus.subscribe(CoreApplicationEvents.UIRefreshRequestedEvent.class, event -> {
+            awaitingRender = ADOPTING;
             CompilationUnit parsed = adopt(event.code());
+            awaitingRender = parsed;
             // No reuse here, and deliberately so: LibrariesChangedEvent rebuilds through this event, and its
             // whole job is to throw the cached widgets away so a newly bound plugin's pickers are drawn. A
             // kept node is exactly the restart this event exists to avoid needing. The files switched away
@@ -200,7 +216,9 @@ public class CodeEditorService {
             // state's source: BlockReuse slices the outgoing nodes' offsets out of the source they were
             // parsed from, and against the new text that is two different files.
             BlockReuse reuse = reuseForThisEdit();
+            awaitingRender = ADOPTING;
             CompilationUnit parsed = adopt(event.newCode());
+            awaitingRender = parsed;
             Platform.runLater(() ->
                     render(parsed, event.newCode(), event.markNewIdentifiersAsUnedited(), reuse));
         }, false);
@@ -222,7 +240,7 @@ public class CodeEditorService {
         eventBus.subscribe(CoreApplicationEvents.FileOpenRequestedEvent.class, e -> switchToFile(e.path()), true);
     }
 
-    /** Resolves a palette drop into the matching CodeEditor "add" call. */
+    /** Resolves a palette drop into the matching typed edit. */
     private void handleBlockDrop(DropInfo info) {
         BlockType type = info.type();
         if (info.targetBody() != null && type.isStatement()) {
@@ -231,19 +249,17 @@ public class CodeEditorService {
                 rejectJumpPlacement(jump);
                 return;
             }
-            coreEditor.userInsert(info.bodyId(), type, info.insertionIndex());
+            edit(new CanvasEdit.InsertBlock(info.bodyId(), info.insertionIndex(), type), info.targetBody().getAstNode());
         } else if (info.targetClass() != null && type.isClassMember()) {
             TypeDeclaration typeDecl = (TypeDeclaration) info.targetClass().getAstNode();
             switch (type) {
                 // No dialog on this path — a drop has nowhere to ask — so the name is made free rather than
                 // refused. See FunctionDraft.freeName; the ClassBlock button does open the dialog.
-                case BlockType.MethodMember ignored ->
-                        codeEditor.addMethodToClass(typeDecl,
-                                FunctionDraft.freeName("newMethod", declaredMethodNames(typeDecl)),
-                                "void", info.insertionIndex());
-                case BlockType.EnumDecl ignored ->
-                        codeEditor.addEnumToClass(typeDecl,
-                                StatementFactory.uniqueTypeName(typeDecl, "NewEnum"), info.insertionIndex());
+                case BlockType.MethodMember ignored -> edit(typeDecl, id -> new CanvasEdit.AddMethod(id,
+                        FunctionDraft.freeName("newMethod", declaredMethodNames(typeDecl)),
+                        "void", info.insertionIndex()));
+                case BlockType.EnumDecl ignored -> edit(typeDecl, id -> new CanvasEdit.AddEnum(id,
+                        StatementFactory.uniqueTypeName(typeDecl, "NewEnum"), info.insertionIndex()));
                 default -> { /* no other block type reports isClassMember() */ }
             }
         }
@@ -261,7 +277,7 @@ public class CodeEditorService {
         eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(jump.rejectionMessage()));
     }
 
-    /** Resolves an existing-block drop (by id) into the matching CodeEditor "move" call. */
+    /** Resolves an existing-block drop (by id) into the matching typed edit. */
     private void handleBlockMove(MoveBlockInfo info) {
         CodeBlock block = findBlockById(info.blockId());
         if (block == null) return;
@@ -275,11 +291,13 @@ public class CodeEditorService {
                     rejectJumpPlacement(jump);
                     return;
                 }
-                coreEditor.userEdit(new Edit.Move(stmt.getId(), info.bodyId(), info.insertionIndex()));
+                edit(new Edit.Move(stmt.getId(), info.bodyId(), info.insertionIndex()), stmt.getAstNode(),
+                        info.targetBody().getAstNode());
             }
         } else if (info.targetClass() != null) {
             if (block.getAstNode() instanceof BodyDeclaration decl) {
-                codeEditor.moveBodyDeclaration(decl, (TypeDeclaration) info.targetClass().getAstNode(), info.insertionIndex());
+                ASTNode type = info.targetClass().getAstNode();
+                edit(new CanvasEdit.MoveMember(BlockId.of(decl), BlockId.of(type), info.insertionIndex()), decl, type);
             }
         }
     }
@@ -298,11 +316,12 @@ public class CodeEditorService {
             refuseDrop(SlotFit.NOT_A_STATEMENT);
             return;
         }
-        codeEditor.moveExpressionToStatement(source, info.bodyId(), info.insertionIndex());
+        edit(new CanvasEdit.MoveExpressionToLine(BlockId.of(source), info.bodyId(), info.insertionIndex()), source,
+                info.targetBody().getAstNode());
     }
 
     /**
-     * Resolves a drop onto an expression slot into the matching {@code CodeEditor} call. The drag layer knows
+     * Resolves a drop onto an expression slot into the matching typed edit. The drag layer knows
      * only ids; the AST nodes they name live here, which is the same split {@link #handleBlockMove} makes.
      */
     private void handleExpressionDrop(ExpressionDropInfo info) {
@@ -321,12 +340,12 @@ public class CodeEditorService {
         }
 
         if (info.paletteType() != null) {
-            codeEditor.fillSlotFromPalette(slot, info.paletteType());
+            edit(slot, id -> new CanvasEdit.FillSlotFromBlock(id, info.paletteType()));
             return;
         }
         if (info.sourceIsExpression()) {
             Expression source = droppedExpression(info.sourceBlockId(), slot);
-            if (source != null) codeEditor.moveExpressionBetweenSlots(slot, source);
+            if (source != null) edit(new CanvasEdit.MoveBetweenSlots(BlockId.of(slot), BlockId.of(source)), slot, source);
             return;
         }
         ExpressionStatement stmt = droppedStatement(info.sourceBlockId());
@@ -347,7 +366,7 @@ public class CodeEditorService {
             refuseDrop(refusal);
             return;
         }
-        codeEditor.moveExpressionIntoSlot(slot, stmt);
+        edit(new CanvasEdit.MoveLineIntoSlot(BlockId.of(slot), BlockId.of(stmt)), slot, stmt);
     }
 
     /**
@@ -417,12 +436,14 @@ public class CodeEditorService {
         ExpressionStatement asStatement = BlockNodes.expressionStatementOf(node);
         ASTNode owner = asStatement != null ? asStatement : node;
         if (info.paletteType() != null) {
-            codeEditor.fillEmptySlotFromPalette(owner, info.paletteType());
+            edit(owner, id -> new CanvasEdit.FillEmptySlotFromBlock(id, info.paletteType()));
             return;
         }
         if (info.sourceIsExpression()) {
             Expression source = droppedExpression(info.sourceBlockId(), owner);
-            if (source != null) codeEditor.fillEmptySlotFromExpression(owner, source);
+            if (source != null) {
+                edit(new CanvasEdit.FillEmptySlotFromExpression(BlockId.of(owner), BlockId.of(source)), owner, source);
+            }
             return;
         }
         ExpressionStatement stmt = droppedStatement(info.sourceBlockId());
@@ -443,7 +464,7 @@ public class CodeEditorService {
             refuseDrop(refusal);
             return;
         }
-        codeEditor.fillEmptySlot(owner, stmt);
+        edit(new CanvasEdit.FillEmptySlotFromLine(BlockId.of(owner), BlockId.of(stmt)), owner, stmt);
     }
 
     /** Whether {@code ancestor} contains {@code node} — including being it. */
@@ -618,7 +639,7 @@ public class CodeEditorService {
         // the branch is somewhere a block can actually be dropped. Skipped for files the user can't edit
         // anyway (generated scaffolding), and a no-op when both are already true.
         if (!resolver.suppressesInteraction()) {
-            codeEditor.normalizeSwitches();
+            coreEditor.userEdit(new CanvasEdit.NormalizeSwitches());
         }
     }
 
@@ -790,6 +811,7 @@ public class CodeEditorService {
 
     private void render(CompilationUnit parsed, String javaCode, boolean markNewIdentifiersAsUnedited,
                         BlockReuse reuse) {
+        if (awaitingRender == parsed) awaitingRender = null;
         // The registry is rebuilt into a fresh map and published once, at the end. Clearing the live one and
         // refilling it in place is what let a background reader walk a half-built registry (bugs.md B10).
         Map<ASTNode, CodeBlock> rebuilt = new HashMap<>();
@@ -884,7 +906,7 @@ public class CodeEditorService {
                 if (parentBody != null) {
                     int index = parentBody.getStatements().indexOf(stmtBlock);
                     // Paste AFTER the selected block
-                    codeEditor.pasteCode(parentBody.getId(), index + 1, codeToPaste);
+                    edit(new CanvasEdit.Paste(parentBody.getId(), index + 1, codeToPaste), parentBody.getAstNode());
                 }
             }
         }, () -> {
@@ -894,16 +916,35 @@ public class CodeEditorService {
     /** The most recently rendered block tree root (published via {@code UIBlocksUpdatedEvent}), or empty. */
     public Optional<CodeBlock> getRootBlock() { return Optional.ofNullable(lastRootBlock); }
 
-    public CodeEditor getCodeEditor() { return codeEditor; }
-
-    /** The core's editor: every edit that has a typed form goes through it, by {@code BlockId}. */
+    /** The core's editor: every edit goes through it, by {@code BlockId}. */
     public CoreEditor getCoreEditor() { return coreEditor; }
+
+    /** A gesture on {@code target}, a node drawn on the canvas: it reaches the core by the node's path. */
+    public EditResult edit(ASTNode target, Function<String, Edit> edit) {
+        return isStale(target) ? DROPPED : coreEditor.userEdit(edit.apply(BlockId.of(target)));
+    }
+
+    /** A gesture naming its places by id, each drawn as one of {@code drawn}; {@code edit} with no node names none. */
+    public EditResult edit(Edit edit, ASTNode... drawn) {
+        for (ASTNode node : drawn) {
+            if (isStale(node)) return DROPPED;
+        }
+        return coreEditor.userEdit(edit);
+    }
+
+    private static final EditResult DROPPED = new EditResult.Refused("That block was being redrawn. Try again.");
+
+    /** Whether {@code node} is gone, or held from before the tree a redraw has yet to draw. See {@link #awaitingRender}. */
+    private boolean isStale(ASTNode node) {
+        if (node == null) return true;
+        if (awaitingRender == null) return false;
+        ASTNode root = node instanceof Comment comment ? comment.getAlternateRoot() : node.getRoot();
+        return state.getCompilationUnit().filter(live -> live == root).isEmpty();
+    }
 
     /** The ✕ of a statement, however it is drawn. */
     public void deleteStatement(Statement statement) {
-        // Between an edit's parse and its redraw a block still holds the older tree, where this path may name another line.
-        if (state.getCompilationUnit().filter(statement.getRoot()::equals).isEmpty()) return;
-        coreEditor.userEdit(new Edit.Delete(BlockId.of(statement)));
+        edit(statement, Edit.Delete::new);
     }
     public EditorState getState() { return state; }
 

@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -71,7 +72,7 @@ public class SourceExpressionBlock extends AbstractExpressionBlock {
         TextArea editor = TextFieldComponents.createCommentEditArea(source, "Java expression", newText -> {
             if (!newText.strip().equals(source)) {
                 Platform.runLater(() ->
-                        context.getCodeEditor().replaceExpressionSource((Expression) astNode, newText));
+                        context.edit(astNode, id -> new CanvasEdit.SetExpressionSource(id, newText)));
             }
             Platform.runLater(() -> showSource(row, context));
         });

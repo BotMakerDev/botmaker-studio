@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.components.pickers;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
@@ -131,7 +132,7 @@ public final class ContainerPicker {
             popup.hide();
             Expression target = written.map(w -> (Expression) w.node()).orElse(null);
             if (value.isPresent() && target != null && context != null) {
-                context.getCodeEditor().replaceWithValue(target, value.get());
+                context.edit(target, id -> new CanvasEdit.SetValue(id, value.get()));
             }
         });
         HBox spacer = new HBox();

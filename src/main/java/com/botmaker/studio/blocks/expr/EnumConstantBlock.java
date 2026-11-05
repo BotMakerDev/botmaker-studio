@@ -1,5 +1,7 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
@@ -54,11 +56,9 @@ public class EnumConstantBlock extends AbstractExpressionBlock {
                                 defaultConst = consts.getFirst();
                             }
                         }
-                        context.getCodeEditor().replaceWithEnumConstant(
-                                (Expression) this.astNode,
-                                EnumManipulationHandler.referableName(newType),
-                                defaultConst
-                        );
+                        ExpressionChoice constant = new ExpressionChoice.EnumConstant(
+                                EnumManipulationHandler.referableName(newType), defaultConst);
+                        context.edit(this.astNode, id -> new CanvasEdit.Replace(id, CanvasEdit.Pick.of(constant)));
                     });
         }
         // --- INTERACTIVITY END ---
@@ -119,9 +119,9 @@ public class EnumConstantBlock extends AbstractExpressionBlock {
         Expression oldExpr = (Expression) this.astNode;
         if (oldExpr instanceof QualifiedName) {
             QualifiedName qn = (QualifiedName) oldExpr;
-            context.getCodeEditor().replaceSimpleName(qn.getName(), newConstant);
+            context.edit(qn.getName(), id -> new CanvasEdit.SetSimpleName(id, newConstant));
         } else if (oldExpr instanceof SimpleName) {
-            context.getCodeEditor().replaceSimpleName((SimpleName) oldExpr, newConstant);
+            context.edit(oldExpr, id -> new CanvasEdit.SetSimpleName(id, newConstant));
         }
     }
 }

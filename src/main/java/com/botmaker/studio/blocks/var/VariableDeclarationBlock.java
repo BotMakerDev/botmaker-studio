@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.var;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 import com.botmaker.studio.blocks.expr.ListBlock;
@@ -138,8 +139,8 @@ public class VariableDeclarationBlock extends AbstractStatementBlock {
                 varType, false, context, this.astNode, x -> true,
                 selection -> {
                     if (current != null) applyExpressionSelection(context, current, selection);
-                    else context.getCodeEditor()
-                            .setVariableInitializer((VariableDeclarationStatement) this.astNode, selection);
+                    else context.edit(this.astNode,
+                            id -> new CanvasEdit.SetVariableInitializer(id, CanvasEdit.Pick.of(selection)));
                 });
         menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);
     }

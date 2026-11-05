@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.var;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.ui.app.Refactors;
@@ -101,7 +102,7 @@ public class DeclareClassVariableBlock extends AbstractStatementBlock {
         if (!isReadOnly()) {
             ExpressionMenu.installTypeSelector(typeLabel, "Click to change type", () -> fieldType,
                     context, this.astNode,
-                    newTypeName -> context.getCodeEditor().replaceFieldType((FieldDeclaration) this.astNode, newTypeName.simpleName()));
+                    newTypeName -> context.edit(this.astNode, id -> new CanvasEdit.SetFieldType(id, newTypeName.simpleName())));
         }
         return typeLabel;
     }
@@ -126,7 +127,7 @@ public class DeclareClassVariableBlock extends AbstractStatementBlock {
         Button setValue = new Button("Set Value");
         setValue.getStyleClass().add("block-action-button");
         setValue.setOnAction(e ->
-                context.getCodeEditor().setFieldInitializerToDefault((FieldDeclaration) this.astNode, fieldType));
+                context.edit(this.astNode, id -> new CanvasEdit.SetFieldDefault(id, fieldType)));
         return setValue;
     }
 

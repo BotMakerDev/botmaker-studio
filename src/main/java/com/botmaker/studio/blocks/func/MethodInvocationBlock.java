@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.func;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
@@ -158,8 +159,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
                 ? context.getState().getActiveFile().getClassName() : "";
         String scopeForAST = (fixedScopeName != null) ? fixedScopeName
                 : (scope.equals(currentFileClass) && !isVariableScope(context, scope) ? "" : scope);
-        context.getCodeEditor().updateMethodInvocation(
-                (MethodInvocation) this.astNode, scopeForAST, sig.name(), sig.paramTypes());
+        context.edit(this.astNode, id -> new CanvasEdit.SetCall(id, scopeForAST, sig.name(), sig.paramTypes()));
     }
 
     /**
@@ -367,12 +367,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
             // rewrite then smart-merges arguments (keeps compatible ones, fills/drops the rest).
             List<ResolvedType> paramTypes = bestOverloadParams(context, targetTypeForValidation, newMethodName, arguments.size());
 
-            context.getCodeEditor().updateMethodInvocation(
-                    (MethodInvocation) this.astNode,
-                    scopeForAST,
-                    newMethodName,
-                    paramTypes
-            );
+            context.edit(this.astNode, id -> new CanvasEdit.SetCall(id, scopeForAST, newMethodName, paramTypes));
         });
 
         return new Controls(scopeNode, methodSelector, currentScopeGetter, finalCurrentFileClass);
@@ -624,7 +619,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
                 : methods.stream().map(MethodSignature::name).sorted().findFirst().orElseThrow();
 
         List<ResolvedType> paramTypes = bestOverloadParams(context, newClass, targetMethod, arguments.size());
-        context.getCodeEditor().updateMethodInvocation((MethodInvocation) this.astNode, newClass, targetMethod, paramTypes);
+        context.edit(this.astNode, id -> new CanvasEdit.SetCall(id, newClass, targetMethod, paramTypes));
     }
 
     /** Explicit overload picker (⚙): lets the user choose a specific overload; arg sync is automatic. */
@@ -657,7 +652,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
             MenuComponents.populate(signatureBtn.getItems(), signatures, MethodSignature::toString,
                     sig -> {
                         String scopeForAST = (fixedScopeName != null) ? fixedScopeName : (currentScope.equals(currentFileClass) && !isVariableScope(context, currentScope) ? "" : currentScope);
-                        context.getCodeEditor().updateMethodInvocation((MethodInvocation) this.astNode, scopeForAST, currentMethod, sig.paramTypes());
+                        context.edit(this.astNode, id -> new CanvasEdit.SetCall(id, scopeForAST, currentMethod, sig.paramTypes()));
                     },
                     "No signatures found");
 
@@ -796,7 +791,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         remove.getStyleClass().add(StyleClasses.ICON_BUTTON);
         remove.setTooltip(new Tooltip("Remove this argument"));
         remove.setOnAction(e ->
-                context.getCodeEditor().deleteArgumentFromMethodInvocation((MethodInvocation) this.astNode, index));
+                context.edit(this.astNode, id -> new CanvasEdit.DeleteArgument(id, index)));
         return remove;
     }
 
@@ -813,7 +808,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
         add.getStyleClass().addAll(StyleClasses.ICON_BUTTON, "expression-add-button");
         add.setTooltip(new Tooltip("Add another " + (element != null ? element.simpleName() : "argument")));
         add.setOnAction(e ->
-                context.getCodeEditor().addVarargsArgument((MethodInvocation) this.astNode, element));
+                context.edit(this.astNode, id -> new CanvasEdit.AddVarargsArgument(id, element)));
         return add;
     }
 

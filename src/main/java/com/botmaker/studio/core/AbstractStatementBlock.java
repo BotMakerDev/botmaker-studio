@@ -1,5 +1,6 @@
 package com.botmaker.studio.core;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.render.BlockShape;
 import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 
@@ -161,7 +162,8 @@ public abstract class AbstractStatementBlock extends AbstractCodeBlock implement
                     // none, so every pick in this menu did nothing at all: the argument could be put back by a
                     // drop and by no other means. An empty slot is written to, not replaced.
                     if (toReplace != null) applyExpressionSelection(context, toReplace, selection);
-                    else context.getCodeEditor().fillEmptySlotFromSelection(this.astNode, selection, targetType);
+                    else context.edit(this.astNode,
+                            id -> new CanvasEdit.FillEmptySlot(id, CanvasEdit.Pick.of(selection), targetType));
                 }
         );
         menu.show(anchor, javafx.geometry.Side.BOTTOM, 0, 0);

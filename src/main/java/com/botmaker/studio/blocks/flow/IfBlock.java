@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.flow;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.BlockWithChildren;
@@ -114,16 +115,16 @@ public class IfBlock extends AbstractStatementBlock implements BlockWithChildren
         } else if (elseStatement instanceof BodyBlock elseBody) {
             spec.label("else-kw", () -> SentenceLayoutBuilder.keywordNode("Else"))
                     .picker("else-to-else-if", () -> createAddButton(e ->
-                            context.getCodeEditor().convertElseToElseIf((IfStatement) this.astNode)))
+                            context.edit(this.astNode, CanvasEdit.ConvertElseToElseIf::new)))
                     .custom("else-spacer", BlockUIComponents::createSpacer)
                     // Removing the else is an edit like any other: no control on a locked block.
                     .picker("else-delete", () -> isReadOnly() ? null
                             : BlockUIComponents.createDeleteButton(() ->
-                                    context.getCodeEditor().deleteElseFromIfStatement((IfStatement) this.astNode)))
+                                    context.edit(this.astNode, CanvasEdit.DeleteElse::new)))
                     .body("else-body", () -> createIndentedBody(elseBody, context, "if-body"));
         } else {
             spec.picker("add-else", () -> createAddButton(e ->
-                    context.getCodeEditor().addElseToIfStatement((IfStatement) this.astNode)));
+                    context.edit(this.astNode, CanvasEdit.AddElse::new)));
         }
 
         return spec.build();

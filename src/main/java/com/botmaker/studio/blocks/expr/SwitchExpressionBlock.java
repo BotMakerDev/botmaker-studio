@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.expr;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -90,8 +91,8 @@ public class SwitchExpressionBlock extends AbstractExpressionBlock implements Bl
         }
         spec.body("add-case", () -> {
             if (isReadOnly()) return null;
-            Button add = BlockUIComponents.createAddButton(e -> context.getCodeEditor()
-                    .addCaseToSwitchExpression((SwitchExpression) getAstNode()));
+            Button add = BlockUIComponents.createAddButton(e ->
+                    context.edit(getAstNode(), CanvasEdit.AddSwitchExpressionCase::new));
             add.setText("+ case");
             add.getStyleClass().add("switch-add-case");
             javafx.scene.control.Tooltip.install(add, new javafx.scene.control.Tooltip(
@@ -123,8 +124,8 @@ public class SwitchExpressionBlock extends AbstractExpressionBlock implements Bl
             row.addNode(changeButton(c.value, valueType, context));
         }
         if (!isReadOnly() && cases.size() > 1) {
-            Button remove = BlockUIComponents.createDeleteButton(() -> context.getCodeEditor()
-                    .removeCaseFromSwitchExpression((SwitchExpression) getAstNode(), index));
+            Button remove = BlockUIComponents.createDeleteButton(() ->
+                    context.edit(getAstNode(), id -> new CanvasEdit.RemoveSwitchExpressionCase(id, index)));
             javafx.scene.control.Tooltip.install(remove, new javafx.scene.control.Tooltip("Remove this case"));
             row.addNode(remove);
         }

@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.vars;
 
+import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -280,7 +281,7 @@ public final class EditVariableDialog {
         prefilling = false;
         picker.typeProperty().addListener((obs, old, now) -> {
             if (prefilling || now == null) return;
-            find().ifPresent(fresh -> context.getCodeEditor().replaceVariableType(fresh.statement(), now));
+            find().ifPresent(fresh -> context.edit(fresh.statement(), id -> new CanvasEdit.SetVariableType(id, now)));
             // A rewrite CodeEditor refuses publishes no event, so the CodeUpdatedEvent rebuild never ran and
             // this screen is still claiming a type the file does not have. Ask the file; if it disagrees, put
             // the whole screen back to what it says — the picker included. Reverted rather than retried:
@@ -359,7 +360,8 @@ public final class EditVariableDialog {
         set.setOnAction(e -> {
             Optional<JavaValue> value = editor.read().get();
             if (value.isEmpty()) return;
-            find().map(Local::initializer).ifPresent(node -> context.getCodeEditor().replaceWithValue(node, value.get()));
+            find().map(Local::initializer).ifPresent(node ->
+                    context.edit(node, id -> new CanvasEdit.SetValue(id, value.get())));
         });
         HBox box = new HBox(6, editor.node(), set);
         box.setAlignment(Pos.CENTER_LEFT);
@@ -391,7 +393,8 @@ public final class EditVariableDialog {
             ContextMenu menu = ExpressionMenu.create(type, false, context, local.statement(), x -> true,
                     selection -> {
                         if (initializer != null) ExpressionMenu.applySelection(context, initializer, selection);
-                        else context.getCodeEditor().setVariableInitializer(local.statement(), selection);
+                        else context.edit(local.statement(),
+                                id -> new CanvasEdit.SetVariableInitializer(id, CanvasEdit.Pick.of(selection)));
                     });
             menu.show(change, Side.BOTTOM, 0, 0);
         }));
@@ -424,7 +427,7 @@ public final class EditVariableDialog {
         if (wanted.equals(current)) return;
         renamedFrom = current;
         variableName = wanted;
-        context.getCodeEditor().renameLocal(local.name(), wanted);
+        context.edit(local.name(), id -> new CanvasEdit.RenameLocal(id, wanted));
     }
 
     /** Every name {@code method} already binds: its parameters and each local it declares, at any depth. */
