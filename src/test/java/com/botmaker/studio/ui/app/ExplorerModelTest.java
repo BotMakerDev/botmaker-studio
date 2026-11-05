@@ -54,22 +54,45 @@ class ExplorerModelTest {
         assertEquals(3, count(ExplorerModel.tree(java, ExplorerModel.matching("  "))), "blank keeps everything");
     }
 
+    /** A parameter group as a bot writes one. */
+    private static final String PARAMS = """
+            import com.botmaker.plugin.api.params.Param;
+
+            @Param
+            public class Parameters {
+                public static int x() { return 2; }
+            }
+            """;
+
+    @Test
+    void onlyTheContractsAnnotationMakesAFileParameters() {
+        Path pkg = Path.of("/p/src/main/java/com/mybot");
+        Path main = pkg.resolve("MyBot.java");
+        for (String source : List.of(
+                "// @Param\nclass Notes {}",
+                "class Notes { String how = \"@Param\"; }",
+                "import other.lib.Param;\n@Param class Notes {}",
+                "import com.botmaker.plugin.api.params.Param;\n@Parameter class Notes {}")) {
+            assertEquals(ExplorerModel.Kind.JAVA, ExplorerModel.kindOf(pkg.resolve("Notes.java"), source, main), source);
+        }
+    }
+
     @Test
     void eachFileSaysWhatItIs() {
         Path pkg = Path.of("/p/src/main/java/com/mybot");
         Path main = pkg.resolve("MyBot.java");
         assertEquals(ExplorerModel.Kind.ENTRY_POINT, ExplorerModel.kindOf(main, "class MyBot {}", main));
         assertEquals(ExplorerModel.Kind.PARAMETERS,
-                ExplorerModel.kindOf(pkg.resolve("Parameters.java"), "@Param(min = 1) static int x = 2;", main));
+                ExplorerModel.kindOf(pkg.resolve("Parameters.java"), PARAMS, main));
         List<PluginFiles.Holder> sdk = List.of(new PluginFiles.Holder(TestPlugins.coordinate("botmaker-sdk"),"SDK", "com_github_botmakerdev.botmaker_sdk", "Sdk"));
         assertEquals(ExplorerModel.Kind.PLUGIN_FILE,
-                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), "@Param int x;", main, sdk),
+                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), PARAMS, main, sdk),
                 "a plugin's file is that before it is anything else");
         assertEquals(ExplorerModel.Kind.PARAMETERS,
-                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Mine.java"), "@Param int x;", main, sdk),
+                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Mine.java"), PARAMS, main, sdk),
                 "a file the user put beside it is theirs: no loaded plugin declares it");
         assertEquals(ExplorerModel.Kind.PARAMETERS,
-                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), "@Param int x;", main, List.of()),
+                ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/Sdk.java"), PARAMS, main, List.of()),
                 "with its plugin not loaded, it is an ordinary file");
         assertEquals(ExplorerModel.Kind.JAVA,
                 ExplorerModel.kindOf(pkg.resolve("plugins/com_github_botmakerdev/botmaker_sdk/deep/Sdk.java"), "class Sdk {}", main, sdk),

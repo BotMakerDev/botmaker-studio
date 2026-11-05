@@ -10,8 +10,11 @@ import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.parse.BotParser;
 import com.botmaker.core.project.vcs.ProjectVcs;
 import com.botmaker.core.project.vcs.VersionReader;
+import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.SimpleName;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -189,6 +192,19 @@ public final class ReviewService {
         return List.copyOf(types);
     }
 
+    /** Whether {@code method}'s code says {@code simple}: a comment or a string says nothing. */
+    private static boolean names(MethodDeclaration method, String simple) {
+        boolean[] found = {false};
+        method.accept(new ASTVisitor() {
+            @Override
+            public boolean visit(SimpleName name) {
+                found[0] |= name.getIdentifier().equals(simple);
+                return false;
+            }
+        });
+        return found[0];
+    }
+
     /** {@code item}'s function in {@code source} when it carries none of the item's entries, else null. */
     private static Earlier unmarkedDeclaration(String source, Item item, List<String> parameters, String version) {
         CompilationUnit unit = BotParser.syntax(source);
@@ -203,14 +219,10 @@ public final class ReviewService {
                         method.getStartPosition() + method.getLength());
                 List<String> imports = new ArrayList<>();
                 for (Object each : unit.imports()) {
-                    var imported = (org.eclipse.jdt.core.dom.ImportDeclaration) each;
+                    ImportDeclaration imported = (ImportDeclaration) each;
                     if (imported.isStatic() || imported.isOnDemand()) continue;
                     String qualified = imported.getName().getFullyQualifiedName();
-                    String simple = qualified.substring(qualified.lastIndexOf('.') + 1);
-                    if (java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(simple) + "\\b")
-                            .matcher(text).find()) {
-                        imports.add(qualified);
-                    }
+                    if (names(method, qualified.substring(qualified.lastIndexOf('.') + 1))) imports.add(qualified);
                 }
                 return new Earlier(version, text, List.copyOf(imports));
             }

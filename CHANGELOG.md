@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The explorer shows a file as parameters only when it carries the contract's `@Param` (2026-11-05): a comment, a string
+  or another library's `@Param` no longer does it. *Undo* on a marked function brings back only the imports its code
+  uses, not one a comment or string mentions.
 - The Run window no longer keeps the runner's values in `<data>/runner-values/` (2026-11-05): they are the bot's
   `params/`, which an update keeps, so the window no longer says which kept values a newer version dropped. A value
   shown as the file holds it, whatever its spacing, is no edit.

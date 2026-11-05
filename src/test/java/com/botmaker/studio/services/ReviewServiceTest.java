@@ -223,6 +223,45 @@ class ReviewServiceTest {
     }
 
     @Test
+    void undoBringsBackOnlyTheImportsTheOldBodyUses(@TempDir Path root) throws IOException {
+        ProjectConfig config = project(root);
+        Path file = write(config, "Miner.java", """
+                package com.refbot;
+
+                import java.util.List;
+                import java.util.Set;
+
+                class Miner {
+                    void mine() {
+                        // a List would do
+                        Set.of("List");
+                    }
+
+                    Object kept = List.of();
+                }
+                """);
+        new ProjectVcs(config.projectPath()).checkpoint(VersionOrigin.SAFETY, "Before removing SDK");
+        Files.writeString(file, """
+                package com.refbot;
+
+                %s
+
+                class Miner {
+                    @Refactor("Set.of is gone.")
+                    void mine() {
+                    }
+                }
+                """.formatted(IMPORT));
+
+        ReviewService.Undo outcome = ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst());
+
+        assertTrue(outcome instanceof ReviewService.Undo.Done, outcome.toString());
+        String now = Files.readString(file);
+        assertTrue(now.contains("import java.util.Set;"), now);
+        assertFalse(now.contains("import java.util.List;"), "a comment and a string name no class: " + now);
+    }
+
+    @Test
     void undoBringsBackTheMarkedOverloadNotAnotherOfTheSameName(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
         Path file = write(config, "Miner.java", """

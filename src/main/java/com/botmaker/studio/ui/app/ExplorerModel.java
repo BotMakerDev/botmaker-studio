@@ -7,7 +7,12 @@ import com.botmaker.core.project.PluginFiles;
 import com.botmaker.core.project.ProjectState.SourceFile;
 import com.botmaker.core.project.vcs.ProjectVcs;
 import com.botmaker.core.project.vcs.VcsFileStatus;
+import com.botmaker.java.grammar.BotAnnotation;
+import com.botmaker.java.parse.BotParser;
 import com.botmaker.studio.ui.app.viewers.ResourceViewers;
+import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.ASTVisitor;
+import org.eclipse.jdt.core.dom.Annotation;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -148,13 +154,32 @@ final class ExplorerModel {
             if (FileRole.of(file) == FileRole.LIBRARY) return Kind.LIBRARY;
             if (file.equals(entryPoint)) return Kind.ENTRY_POINT;
             if (PluginFiles.owner(file, source, holders).isPresent()) return Kind.PLUGIN_FILE;
-            if (source != null && source.contains("@Param")) return Kind.PARAMETERS;
-            return Kind.JAVA;
+            return declaresParameters(source) ? Kind.PARAMETERS : Kind.JAVA;
         }
         // One list of extensions, the viewers': a row whose icon says "picture" is one the explorer can open.
         return ResourceViewers.Format.of(file)
                 .map(format -> format == ResourceViewers.Format.IMAGE ? Kind.PICTURE : Kind.DATA)
                 .orElse(Kind.OTHER);
+    }
+
+    /** {@code @Param}, or the same with its package written. */
+    private static final Pattern MAYBE_PARAM = Pattern.compile("@[\\s\\w.]*\\bParam\\b");
+
+    /**
+     * Whether {@code source} carries the contract's {@code @Param}. Every file in the explorer asks on each redraw,
+     * and most write nothing like it, so only those that do are parsed: {@link #MAYBE_PARAM} never decides.
+     */
+    private static boolean declaresParameters(String source) {
+        if (source == null || !MAYBE_PARAM.matcher(source).find()) return false;
+        boolean[] found = {false};
+        BotParser.syntax(source).accept(new ASTVisitor() {
+            @Override
+            public boolean preVisit2(ASTNode node) {
+                found[0] |= node instanceof Annotation annotation && BotAnnotation.PARAM.marks(annotation);
+                return !found[0];
+            }
+        });
+        return found[0];
     }
 
     /**
