@@ -571,11 +571,59 @@
     -fx-font-size: 11px;
 }
 
-/* One parameter in the Parameters dialog: a hairline separating it from the next, no box. */
+/* One parameter in the Parameters window (layout A, 2026-11-05): a small card in a grid, lit on hover and focus
+   like a field, since a click opens its editor. Theme colours only, so light and dark both follow. */
 .param-card {
-    -fx-border-color: transparent transparent -bm-divider transparent;
-    -fx-border-width: 0 0 1 0;
-    -fx-padding: 0 0 10 0;
+    -fx-background-color: -bm-field;
+    -fx-background-radius: 6;
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+    -fx-padding: 7 8 7 8;
+    -fx-cursor: hand;
+}
+
+.param-card:hover, .param-card:focused {
+    -fx-border-color: -bm-primary;
+}
+
+.param-card-name {
+    -fx-font-weight: bold;
+}
+
+/* The value's text, on a faint band so it reads as the card's content rather than another caption. */
+.param-card-value {
+    -fx-background-color: -bm-divider;
+    -fx-background-radius: 4;
+    -fx-padding: 3 6 3 6;
+}
+
+.param-card-grid {
+    -fx-padding: 4 0 6 0;
+}
+
+/* A group's heading inside a section: its class name, small and quiet, as the mockup's sub-headings. */
+.param-group-heading {
+    -fx-font-size: 11px;
+    -fx-text-fill: -bm-muted;
+    -fx-padding: 4 0 0 0;
+}
+
+/* A When / From chip: a pill, ringed in the theme's primary when it is the one chosen — a ring, not a fill, so
+   the text keeps the theme's own colour on every theme, the black one's yellow primary included. */
+.param-chip {
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-color: -bm-divider;
+    -fx-border-width: 1;
+    -fx-padding: 2 10 2 10;
+    -fx-font-size: 12px;
+}
+
+.param-chip:selected {
+    -fx-border-color: -bm-primary;
+    -fx-border-width: 2;
+    -fx-font-weight: bold;
 }
 
 /* A value picker that draws no outline of its own (a point, a thumbnail): framed like a field, so it reads as
@@ -3198,14 +3246,6 @@
     /* Left-aligned with the tag rows under it, indented by nothing: a heading that lines up with its group
        reads as a label for it, where a centred one reads as a row of its own. */
     -fx-padding: 6 0 2 4;
-}
-
-/* The rail row a variable is being dragged onto. An outline rather than a fill, so the row's own text and
-   count stay legible while the pointer is over it — the same reasoning as the template tile below. */
-.list-cell:rail-drop {
-    -fx-border-color: -bm-primary;
-    -fx-border-width: 2;
-    -fx-border-radius: 4;
 }
 
 .template-tile {

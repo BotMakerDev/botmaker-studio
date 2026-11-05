@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The Parameters window is a grid of small cards (2026-11-05, layout A). Each card shows a parameter's name, type and
+  value, whether it changes outside or during a run, and when a run last wrote it. The cards sit under a heading per
+  group class, in a section per plugin and one for the bot. *When* and *From* chips, each with its count, and a search
+  box narrow them. A click opens the parameter's editor in a popover: OK keeps what was done there, Cancel puts it
+  back as one undoable step, and *Open in code* lands on the declaration. A value the bot writes during a run stays
+  read-only there. *+ New group…* writes `params/bot/<Name>.java` and its starting copy. The category rail, its drag
+  and *Move parameters to…* are gone, and so is `VariableRailModel`.
 - The Parameters window shows a parameter's category, its class, read-only (2026-11-05): the card's category picker,
   *+ New category…* and *Move parameters here…* are gone, and a parameter it adds changes during a run.
 - JDT comes through `botmaker-java`, whose pom alone names its version (2026-11-05).
