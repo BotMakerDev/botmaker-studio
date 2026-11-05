@@ -2,7 +2,6 @@ package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
@@ -97,8 +96,7 @@ class BlockReuseRenderTest extends FxHeadlessTest {
 
     /** Publishes the edit the way {@code CodeEditor} does after a write, and waits for the render. */
     private void edit(EditorFixture fixture, String newSource) throws Exception {
-        onFx(() -> fixture.bus().publish(
-                new CoreApplicationEvents.CodeUpdatedEvent(newSource, fixture.state.getCurrentCode())));
+        onFx(() -> fixture.context().rewritten(newSource, fixture.state.getCurrentCode()));
     }
 
     /**

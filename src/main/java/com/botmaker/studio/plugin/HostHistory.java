@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Studio's own side of {@link History} — the editor's undo, {@code services/EditorHistory}, as a plugin's window
+ * Studio's own side of {@link History} — the editor's undo, the core's history on the bus ({@code services/HistoryOnBus}), as a plugin's window
  * and the assistant reach it.
  *
  * <p><b>Nothing here is new capability.</b> ↶ and ↷ are the events the menu publishes, the state is the one

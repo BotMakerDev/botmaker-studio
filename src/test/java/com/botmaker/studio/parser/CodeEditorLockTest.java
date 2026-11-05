@@ -2,7 +2,7 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
+import com.botmaker.studio.events.TestOutput;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -143,7 +143,6 @@ class CodeEditorLockTest {
             state.setCurrentCode(source);
 
             EventBus bus = new EventBus(false);
-            bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
             bus.subscribe(CoreApplicationEvents.StatusMessageEvent.class, e -> statusMessages.add(e.message()));
 
             BlockConverter converter = new BlockConverter(CONFIG, state);
@@ -153,7 +152,7 @@ class CodeEditorLockTest {
             root = result.root();
             assertNotNull(root, "converter should produce a root block");
 
-            editor = new CodeEditor(CONFIG, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
+            editor = new CodeEditor(CONFIG, state, TestOutput.of(bus, w -> lastCode = w.newCode()),new ProjectAnalyzer(null, state));
         }
 
         TypeDeclaration type() {
@@ -420,14 +419,13 @@ class CodeEditorLockTest {
 
         EventBus bus = new EventBus(false);
         String[] last = new String[1];
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> last[0] = e.newCode());
 
         BlockConverter converter = new BlockConverter(null, state);
         BlockConverter.ConvertResult result = TestSupport.convertAndPublish(
                 converter, state, FLOW_DRIVER, new BlockDragAndDropManager(bus), false, false);
         state.setCompilationUnit(result.cu());
 
-        CodeEditor editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
+        CodeEditor editor = new CodeEditor(null, state, TestOutput.of(bus, w -> last[0] = w.newCode()),new ProjectAnalyzer(null, state));
         TypeDeclaration type = (TypeDeclaration) result.root().getAstNode();
         renamed(editor, state, type.getMethods()[0], "renamed");
 

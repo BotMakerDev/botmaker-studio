@@ -20,25 +20,13 @@ public class CoreApplicationEvents {
     // --- Editing / UI ---
 
     /**
-     * One file's text changed — and, for a change that spanned files, what it wrote to the others.
-     *
-     * <p>{@code newCode}/{@code previousCode} are the <em>active</em> file, the one the canvas is showing.
-     * {@code alsoChanged} is every other file the same edit wrote, and it exists for one listener: history.
-     * A signature migration rewrites the declaration here and its calls in three other files, and an undo that
-     * only knows about this one puts back a call site that no longer matches. {@code label} is that change in
-     * the words the Undo menu can show.
+     * The <em>active</em> file's text changed, the one the canvas is showing: a notice for the window's listeners,
+     * published once the state holds {@code newCode}. The overlay re-probes on it and Edit Variable opens after a
+     * declaration's insert on it; it drives no redraw and no history: since 2026-11-05 (plan phase 6e) the canvas is
+     * redrawn from the core's {@code MethodsChanged} and history is the core's, which also took the label and the other
+     * files an edit wrote that this event carried until then.
      */
-    public record CodeUpdatedEvent(String newCode, String previousCode,
-                                   boolean markNewIdentifiersAsUnedited,
-                                   String label, List<FileEdit> alsoChanged) implements ApplicationEvent {
-        public CodeUpdatedEvent {
-            alsoChanged = alsoChanged != null ? List.copyOf(alsoChanged) : List.of();
-        }
-
-        /** A write nobody named, touching only the file it was published for — the open-migration path. */
-        public CodeUpdatedEvent(String newCode, String previousCode) {
-            this(newCode, previousCode, false, null, List.of());
-        }
+    public record CodeUpdatedEvent(String newCode, String previousCode) implements ApplicationEvent {
     }
 
     /**

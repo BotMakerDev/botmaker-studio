@@ -5,8 +5,7 @@ import com.botmaker.java.edit.EditContext;
 import com.botmaker.core.plugin.PluginHost;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
-import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.events.TestOutput;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.java.edit.palette.BotType;
 import com.botmaker.java.edit.palette.FunctionDraft;
@@ -64,10 +63,9 @@ class AddFunctionEditTest {
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
 
         EventBus bus = new EventBus(false);
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
 
         state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(LATEST, SOURCE));
-        editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, TestOutput.of(bus, w -> lastCode = w.newCode()),new ProjectAnalyzer(null, state));
     }
 
     private TypeDeclaration subject() {

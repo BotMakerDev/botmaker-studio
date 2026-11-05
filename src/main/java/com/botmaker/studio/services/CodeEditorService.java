@@ -4,6 +4,8 @@ import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.edit.CoreEditor;
 import com.botmaker.core.edit.Edit;
 import com.botmaker.core.edit.EditResult;
+import com.botmaker.core.event.CoreEvent;
+import com.botmaker.core.parser.EditorOutput;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.core.AbstractCodeBlock;
@@ -72,7 +74,6 @@ public class CodeEditorService {
     private final CoreEditor coreEditor;
     private final BlockDragAndDropManager dragAndDropManager;
     private final DiagnosticsManager diagnosticsManager;
-    private final EditorHistory history;
     private final ProjectAnalyzer projectAnalyzer;
     private final ApiDocsService apiDocsService;
 
@@ -156,10 +157,41 @@ public class CodeEditorService {
         this.diagnosticsManager = diagnosticsManager;
         this.projectAnalyzer = projectAnalyzer;
         this.apiDocsService = apiDocsService;
-        this.history = new EditorHistory(state, eventBus);
-        // Studio redraws from CodeUpdatedEvent, which the output publishes, until plan phase 6e: no events are read yet.
-        this.coreEditor = new CoreEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer, event -> {});
+        // Studio redraws from what the core announces, whoever made the change (plan phase 6e).
+        this.coreEditor = new CoreEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer, this::announced);
         setupEventHandlers();
+    }
+
+    /**
+     * What the core told its clients. A change of the open file is the one redraw path: its text is adopted now and its
+     * blocks rebuilt on the next pulse, offered back whatever of the last render the change kept. Then the window's
+     * listeners hear of it as a {@code CodeUpdatedEvent}, a notice that drives no redraw here. A history that moved is
+     * the Undo menu's to show.
+     */
+    private void announced(CoreEvent event) {
+        switch (event) {
+            case CoreEvent.MethodsChanged changed when coreEditor.openFile().filter(changed.file()::equals).isPresent() -> {
+                // Built before adopt(), which replaces the state's source: BlockReuse slices the outgoing nodes'
+                // offsets out of the source they were parsed from, and against the new text that is two different files.
+                BlockReuse reuse = reuseForThisEdit();
+                String previous = state.getCurrentCode();
+                awaitingRender = ADOPTING;
+                CompilationUnit parsed = adopt(changed.source());
+                awaitingRender = parsed;
+                eventBus.publish(new CoreApplicationEvents.CodeUpdatedEvent(changed.source(), previous));
+                Platform.runLater(() -> render(parsed, changed.source(), changed.newNamesUnchosen(), reuse));
+            }
+            case CoreEvent.HistoryChanged history -> HistoryOnBus.publish(eventBus, history);
+            default -> { /* a refusal is answered to whoever asked; the rest is phase 7's */ }
+        }
+    }
+
+    /**
+     * A write of the open file made outside an edit, an open-time migration: the core records it as one step and
+     * announces it, so it is drawn and undone as an edit is.
+     */
+    public void rewritten(String newCode, String previousCode) {
+        coreEditor.rewritten(new EditorOutput.Write(newCode, previousCode, false, null, List.of()));
     }
 
 
@@ -210,20 +242,9 @@ public class CodeEditorService {
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class,
                 event -> rerenderActiveFile(), false);
 
-        eventBus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, event -> {
-            history.recordEdit(event);
-            // The edit path, and the one place reuse is offered. Built before adopt(), which replaces the
-            // state's source: BlockReuse slices the outgoing nodes' offsets out of the source they were
-            // parsed from, and against the new text that is two different files.
-            BlockReuse reuse = reuseForThisEdit();
-            awaitingRender = ADOPTING;
-            CompilationUnit parsed = adopt(event.newCode());
-            awaitingRender = parsed;
-            Platform.runLater(() ->
-                    render(parsed, event.newCode(), event.markNewIdentifiersAsUnedited(), reuse));
-        }, false);
+        // The edit path, and the one place reuse is offered, is what the core announces: see announced().
 
-        // ↶ and ↷ are EditorHistory's own subscriptions.
+        HistoryOnBus.attach(eventBus, coreEditor);
         eventBus.subscribe(CoreApplicationEvents.CopyRequestedEvent.class, e -> copySelectedBlock(), true);
         eventBus.subscribe(CoreApplicationEvents.PasteRequestedEvent.class, e -> pasteFromClipboard(), true);
 
@@ -495,7 +516,8 @@ public class CodeEditorService {
         return null;
     }
 
-    // The undo history stood here until 2026-10-15 and is EditorHistory now, which plugin writes reach too.
+    // The undo history stood here until 2026-10-15, was EditorHistory until 2026-11-05, and is the core's now
+    // (CoreEditor.step, HistoryOnBus), which plugin writes reach too.
 
     private Path activePath() {
         ProjectFile file = state.getActiveFile();

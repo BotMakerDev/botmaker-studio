@@ -3,7 +3,6 @@ package com.botmaker.studio.ui.app.overlay;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.application.Platform;
@@ -93,8 +92,7 @@ class OverlayReuseTest extends FxHeadlessTest {
     }
 
     private static void edit(EditorFixture fixture, String newSource) throws Exception {
-        onFx(() -> fixture.bus().publish(
-                new CoreApplicationEvents.CodeUpdatedEvent(newSource, fixture.state.getCurrentCode())));
+        onFx(() -> fixture.context().rewritten(newSource, fixture.state.getCurrentCode()));
     }
 
     @Test

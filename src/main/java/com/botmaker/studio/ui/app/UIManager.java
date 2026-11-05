@@ -214,8 +214,7 @@ public class UIManager implements ProjectWindow {
 
         // Before the file explorer exists, which is the point: a migration can delete a file the tree would
         // otherwise go on listing.
-        this.openReport = ProjectOpenMigrations.run(config, state, (updated, previous) ->
-                eventBus.publish(new CoreApplicationEvents.CodeUpdatedEvent(updated, previous)));
+        this.openReport = ProjectOpenMigrations.run(config, state, codeEditorService::rewritten);
 
         this.fileExplorerManager = new FileExplorerManager(ctx);
         // ▶ Try a statement and ▶ Run a method on its own, from the canvas, the overlay editor and the assistant.

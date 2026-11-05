@@ -5,7 +5,10 @@ import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.services.BotSources;
-import com.botmaker.studio.services.EditorHistory;
+import com.botmaker.core.edit.CoreEditor;
+import com.botmaker.core.event.CoreEvent;
+import com.botmaker.studio.events.BusEditorOutput;
+import com.botmaker.studio.services.HistoryOnBus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -36,7 +39,11 @@ class HostHistoryTest {
         Path a = write(config, "A.java", "class A { int x = 1; }");
         Path b = write(config, "B.java", "class B { int y = 1; }");
         EventBus bus = new EventBus(false);
-        new EditorHistory(new ProjectState(), bus);
+        // The history is the core's; Studio's bus carries its steps and what it became.
+        CoreEditor core = new CoreEditor(config, new ProjectState(), new BusEditorOutput(bus), null, event -> {
+            if (event instanceof CoreEvent.HistoryChanged changed) HistoryOnBus.publish(bus, changed);
+        });
+        HistoryOnBus.attach(bus, core);
         HostHistory.install(bus);
         History history = HostHistory.live();
         int[] heard = {0};

@@ -2,8 +2,7 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
-import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.events.TestOutput;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
@@ -40,7 +39,6 @@ public class VarargsArgumentEditTest {
 
         EventBus bus = new EventBus(false);
         String[] lastCode = new String[1];
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode[0] = e.newCode());
 
         BlockConverter converter = new BlockConverter(null, state);
         BlockConverter.ConvertResult result = TestSupport.convertAndPublish(
@@ -50,7 +48,7 @@ public class VarargsArgumentEditTest {
         MethodInvocation target = findCall(result.cu(), call);
         assertNotNull(target, "test setup: no call named " + call);
 
-        edit.accept(new Edit(new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state)), target));
+        edit.accept(new Edit(new CodeEditor(null, state, TestOutput.of(bus, w -> lastCode[0] = w.newCode()),new ProjectAnalyzer(null, state)), target));
         assertNotNull(lastCode[0], "edit should have produced a code update");
         return lastCode[0].replace(" ", "");
     }

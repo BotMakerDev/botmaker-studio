@@ -1,8 +1,7 @@
 package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
-import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.events.TestOutput;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.core.parser.CodeEditor;
@@ -50,14 +49,13 @@ class EmptySlotDropTest {
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
 
         EventBus bus = new EventBus(false);
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> code = e.newCode());
 
         BlockConverter converter = new BlockConverter(null, state);
         BlockConverter.ConvertResult result = TestSupport.convertAndPublish(
                 converter, state, source, new BlockDragAndDropManager(bus), false, false);
         state.setCompilationUnit(result.cu());
         unit = result.cu();
-        editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, TestOutput.of(bus, w -> code = w.newCode()),new ProjectAnalyzer(null, state));
     }
 
     /** The statements of the first method, in source order. */

@@ -2,9 +2,8 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
+import com.botmaker.studio.events.TestOutput;
 import com.botmaker.core.plugin.PluginHost;
-import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.java.edit.palette.BotType;
 import com.botmaker.java.edit.palette.FunctionDraft;
@@ -75,13 +74,11 @@ class EditFunctionSignatureTest {
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
 
         EventBus bus = new EventBus(false);
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> {
-            lastCode = e.newCode();
-            updates++;
-        });
-
         state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(LATEST, SOURCE));
-        editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, TestOutput.of(bus, w -> {
+            lastCode = w.newCode();
+            updates++;
+        }),new ProjectAnalyzer(null, state));
     }
 
     /** Points the editor at a different source — the file, the current code and the parse, which must agree. */

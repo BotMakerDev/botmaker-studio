@@ -2,7 +2,7 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
+import com.botmaker.studio.events.TestOutput;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -87,6 +87,7 @@ public final class EditorFixture {
         state.setCurrentCode(source);
 
         bus = new EventBus(false);
+        // An edit through the service lands in the core, which announces it; the service's notice says what it became.
         bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
         bus.subscribe(CoreApplicationEvents.StatusMessageEvent.class, e -> statusMessages.add(e.message()));
 
@@ -99,7 +100,12 @@ public final class EditorFixture {
         root = result.root();
         assertNotNull(root, "converter should produce a root block");
 
-        editor = new CodeEditor(CONFIG, state, new BusEditorOutput(bus),analyzer, journal);
+        // A write of this bare editor reaches the service, once one is built, as a change the core announced would:
+        // that is how the canvas redraws from it (plan phase 6e).
+        editor = new CodeEditor(CONFIG, state, TestOutput.of(bus, write -> {
+            lastCode = write.newCode();
+            if (context != null) context.rewritten(write.newCode(), write.previousCode());
+        }), analyzer, journal);
     }
 
     /**

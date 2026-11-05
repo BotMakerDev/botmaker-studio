@@ -1,5 +1,12 @@
 # Dated notes — read these before the other files here
 
+> **Studio redraws from `MethodsChanged` and undoes through the core since 2026-11-05** (phase 6e of the same plan).
+> `CodeEditorService.announced` adopts the file text the event carries and renders it with reuse; `CodeUpdatedEvent` is
+> now a two-field notice published after that, which drives no redraw and no history (the overlay and Edit Variable
+> still listen to it). `EditorHistory` is gone: `HistoryOnBus` sends ↶, ↷
+> and a plugin's `FilesRewrittenEvent` to `CoreEditor` and turns its `HistoryChanged` into `HistoryStateChangedEvent`.
+> `BusEditorOutput.written` does nothing. A test that drives a bare `CodeEditor` gives it a `TestOutput`.
+
 > **Every canvas gesture is a `CanvasEdit` since 2026-11-05** (phase 6d of the same plan). No block reaches a
 > `CodeEditor`: a block calls `CodeEditorService.edit`, naming nodes by `BlockId`, and the core's `CanvasEditor` finds them
 > in the live tree. A node no longer in that tree while a parse awaits its render is dropped there (`isStale`). Studio

@@ -324,7 +324,7 @@ public class BotProject {
         // constant renamed through a window left open over the project the user just left would land in the
         // wrong file.
         HostPluginValues.install(config, state, HostServices.forProject(config), eventBus);
-        // And the undo those writes join, the editor's own (EditorHistory): a plugin window's ↶ is the menu's.
+        // And the undo those writes join, the core's (HistoryOnBus): a plugin window's ↶ is the menu's.
         HostHistory.install(eventBus);
 
         // Every bound plugin's managed holder the project lacks (Sdk.java, Pictures.java), written now so the

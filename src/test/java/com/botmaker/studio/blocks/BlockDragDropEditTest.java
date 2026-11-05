@@ -1,14 +1,13 @@
 package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
+import com.botmaker.studio.events.TestOutput;
 
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
-import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.core.parser.CodeEditor;
@@ -70,7 +69,6 @@ public class BlockDragDropEditTest {
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
 
         EventBus bus = new EventBus(false);
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
 
         BlockConverter converter = new BlockConverter(null, state);
         BlockConverter.ConvertResult result = TestSupport.convertAndPublish(
@@ -80,7 +78,7 @@ public class BlockDragDropEditTest {
         root = result.root();
         assertNotNull(root, "Converter should produce a root block for the class");
 
-        editor = new CodeEditor(null, state, new BusEditorOutput(bus),new com.botmaker.java.types.ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, TestOutput.of(bus, w -> lastCode = w.newCode()),new com.botmaker.java.types.ProjectAnalyzer(null, state));
     }
 
     @Test
@@ -207,13 +205,12 @@ public class BlockDragDropEditTest {
 
         EventBus bus = new EventBus(false);
         String[] captured = new String[1];
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> captured[0] = e.newCode());
 
         BlockConverter converter = new BlockConverter(null, s);
         BlockConverter.ConvertResult result = TestSupport.convertAndPublish(
                 converter, s, source, new BlockDragAndDropManager(bus), false, false);
         s.setCompilationUnit(result.cu());
-        CodeEditor ed = new CodeEditor(null, s, new BusEditorOutput(bus),new com.botmaker.java.types.ProjectAnalyzer(null, s));
+        CodeEditor ed = new CodeEditor(null, s, TestOutput.of(bus, w -> captured[0] = w.newCode()),new com.botmaker.java.types.ProjectAnalyzer(null, s));
 
         BodyBlock body = collect(result.root(), BodyBlock.class).stream()
                 .filter(b -> !b.getStatements().isEmpty()).findFirst().orElseThrow();

@@ -2,8 +2,7 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.BusEditorOutput;
-import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.events.TestOutput;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.core.project.ProjectFile;
@@ -45,9 +44,8 @@ class RetypeLocalTest {
         state.setSourcePath(Paths.get("src", "main", "java").toAbsolutePath());
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
         EventBus bus = new EventBus(false);
-        bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
         state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(LATEST, SOURCE));
-        CodeEditor editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
+        CodeEditor editor = new CodeEditor(null, state, TestOutput.of(bus, w -> lastCode = w.newCode()),new ProjectAnalyzer(null, state));
 
         TypeDeclaration subject = (TypeDeclaration) state.getCompilationUnit().orElseThrow().types().getFirst();
         MethodDeclaration run = subject.getMethods()[0];
