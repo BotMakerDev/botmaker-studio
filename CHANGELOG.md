@@ -12,6 +12,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (the edit engine lives in botmaker-core)
+
+- Nothing the user sees (2026-11-05). `CodeEditor`, its handlers and factories, undo, managed values, parameters,
+  migrations and the type index moved to `botmaker-core`. Studio still draws the blocks and drives the engine through
+  them, and turns what `CodeEditor` reports into its events (`BusEditorOutput`).
+- A bot's remote on a host other than GitHub no longer receives your GitHub token when Studio fetches from it, lists
+  its tags, clones it or links to it.
+
 ### Changed (the open project and the plugin host live in botmaker-core)
 
 - Nothing the user sees (2026-11-05). The project layer, the plugin host, Maven resolution, the app's paths and the

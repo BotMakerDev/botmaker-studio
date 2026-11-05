@@ -5,7 +5,7 @@ import com.botmaker.core.plugin.TestPlugins;
 import com.botmaker.plugin.api.overlay.ProbeResult;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import com.botmaker.core.services.BotSources;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;

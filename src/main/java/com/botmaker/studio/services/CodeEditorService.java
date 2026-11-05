@@ -2,6 +2,7 @@ package com.botmaker.studio.services;
 
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.core.AbstractCodeBlock;
+import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
@@ -9,10 +10,10 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.parser.BlockReuse;
-import com.botmaker.studio.parser.CodeEditor;
-import com.botmaker.studio.parser.SlotVacancy;
+import com.botmaker.core.parser.CodeEditor;
+import com.botmaker.core.parser.SlotVacancy;
 import com.botmaker.java.edit.StatementPlacement;
-import com.botmaker.studio.parser.factories.StatementFactory;
+import com.botmaker.core.parser.factories.StatementFactory;
 import com.botmaker.java.edit.helpers.BlockNodes;
 import com.botmaker.core.project.LockResolver;
 import com.botmaker.core.project.ProjectFile;
@@ -136,7 +137,7 @@ public class CodeEditorService {
         this.projectAnalyzer = projectAnalyzer;
         this.apiDocsService = apiDocsService;
         this.history = new EditorHistory(state, eventBus);
-        this.codeEditor = new CodeEditor(config, state, eventBus, projectAnalyzer);
+        this.codeEditor = new CodeEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer);
         setupEventHandlers();
     }
 

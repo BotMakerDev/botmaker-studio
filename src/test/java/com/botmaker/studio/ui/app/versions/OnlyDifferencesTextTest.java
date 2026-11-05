@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.versions;
 
-import com.botmaker.studio.project.vcs.BlockDiff;
+import com.botmaker.core.project.vcs.BlockDiff;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

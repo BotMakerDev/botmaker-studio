@@ -1,10 +1,11 @@
 package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.TestSupport;
+import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
-import com.botmaker.studio.parser.CodeEditor;
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.java.types.ProjectAnalyzer;
@@ -56,7 +57,7 @@ class EmptySlotDropTest {
                 converter, state, source, new BlockDragAndDropManager(bus), false, false);
         state.setCompilationUnit(result.cu());
         unit = result.cu();
-        editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
     }
 
     /** The statements of the first method, in source order. */

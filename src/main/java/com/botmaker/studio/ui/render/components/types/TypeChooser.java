@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.render.components.types;
 
 import com.botmaker.java.edit.palette.TypeNames;
-import com.botmaker.studio.plugin.ValueWire;
+import com.botmaker.core.plugin.ValueWire;
 import com.botmaker.java.grammar.ValueContainer;
 import com.botmaker.java.grammar.ValueTypes;
 import javafx.beans.binding.Bindings;

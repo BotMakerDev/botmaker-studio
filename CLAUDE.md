@@ -15,7 +15,7 @@ which older text in the other files is history now.
 | opening a project, `ProjectConfig`, `ProjectState` | `project-lifecycle.md` |
 | `CodeBlock`, statement/expression blocks | `block-system.md` |
 | `BlockFactory`, source ↔ blocks round trip | `ast-block-sync.md` |
-| `CodeEditor`, `parser/handlers`, `AstRewriteHelper` | `rewriting-pipeline.md` |
+| `CodeEditor`, `parser/handlers` (in `botmaker-core` since 2026-11-05), `AstRewriteHelper` | `rewriting-pipeline.md` |
 | `ProjectAnalyzer`, type index, suggestions | `suggestions.md` |
 | `EventBus`, `CoreApplicationEvents` | `event-bus.md` |
 | `ui/` packages, `UIManager`, windows and dialogs | `ui-structure.md` |
@@ -24,7 +24,7 @@ which older text in the other files is history now.
 | capture (`services/capture/`), value editors and pictures that moved to the SDK plugin | `capture-and-moved-editors.md` |
 | gallery, GitHub, publishing a bot | `sharing.md`, `tiers-and-publish.md` |
 | New Project (templates until 2026-10-23; history) | `templates.md` |
-| diagnostics, `ErrorTranslator` | `validation.md` |
+| diagnostics, `ErrorTranslator` (in `botmaker-core` since 2026-11-05) | `validation.md` |
 
 `docs/architecture/` holds history as well as rules; the umbrella `CLAUDE.md` and its `docs/refactor/` win
 where they disagree.

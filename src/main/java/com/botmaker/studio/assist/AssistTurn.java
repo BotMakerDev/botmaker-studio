@@ -2,6 +2,7 @@ package com.botmaker.studio.assist;
 
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.core.BlockWithChildren;
+import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.EditorState;
@@ -20,16 +21,16 @@ import com.botmaker.java.edit.refactor.MethodReferences;
 import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.java.edit.BlockId;
-import com.botmaker.studio.parser.CodeEditor;
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.java.edit.StatementPlacement;
 import com.botmaker.java.edit.guard.CompileGuard;
-import com.botmaker.studio.plugin.PaletteCuration;
+import com.botmaker.core.plugin.PaletteCuration;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.core.project.params.BotRecords;
 import com.botmaker.java.parse.BotParser;
@@ -706,8 +707,9 @@ public final class AssistTurn {
             state.setNodeToBlockMap(registry);
             analyzer = workspace.analyzer(state);
             editor = workspace.journal() != null
-                    ? new CodeEditor(workspace.config(), state, bus, analyzer, workspace.journal())
-                    : new CodeEditor(workspace.config(), state, bus, analyzer);
+                    ? new CodeEditor(workspace.config(), state, new BusEditorOutput(bus), analyzer,
+                            workspace.journal())
+                    : new CodeEditor(workspace.config(), state, new BusEditorOutput(bus), analyzer);
         }
 
         <T extends CodeBlock> Optional<T> find(String id, Class<T> kind) {

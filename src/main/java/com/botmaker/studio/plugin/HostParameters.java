@@ -1,9 +1,10 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.ValueWire;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.project.params.JavaParameter;
-import com.botmaker.studio.project.params.JavaParameters;
+import com.botmaker.core.project.params.JavaParameters;
 import com.botmaker.core.project.params.ParameterRow;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;

@@ -11,7 +11,7 @@ import javafx.scene.control.ContextMenu;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
-import com.botmaker.studio.parser.factories.StatementFactory;
+import com.botmaker.core.parser.factories.StatementFactory;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.Statement;
 

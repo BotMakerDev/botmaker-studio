@@ -3,7 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import org.eclipse.jdt.core.dom.QualifiedName;
 
 import java.lang.reflect.Type;

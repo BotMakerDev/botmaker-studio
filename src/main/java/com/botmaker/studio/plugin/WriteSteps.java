@@ -1,6 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.core.events.FileEdit;
 import com.botmaker.core.services.BotSources;
 
 import java.nio.file.Path;
@@ -75,11 +76,11 @@ final class WriteSteps {
         }
 
         /** The files that changed, as the history records them; a file written back to what it was is not one. */
-        List<CoreApplicationEvents.FileEdit> edits() {
-            List<CoreApplicationEvents.FileEdit> edits = new ArrayList<>();
+        List<FileEdit> edits() {
+            List<FileEdit> edits = new ArrayList<>();
             before.forEach((file, was) -> {
                 String now = after.get(file);
-                if (!was.equals(now)) edits.add(new CoreApplicationEvents.FileEdit(file, was, now));
+                if (!was.equals(now)) edits.add(new FileEdit(file, was, now));
             });
             return edits;
         }
@@ -104,7 +105,7 @@ final class WriteSteps {
         } finally {
             // Also after a write that threw: what it wrote before is on disk, so it is undoable too.
             OPEN.remove();
-            List<CoreApplicationEvents.FileEdit> edits = step.edits();
+            List<FileEdit> edits = step.edits();
             if (!edits.isEmpty() && recorded != null) {
                 try {
                     recorded.accept(new CoreApplicationEvents.FilesRewrittenEvent(step.label, edits));

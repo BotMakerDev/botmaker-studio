@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.core.project.params.ParameterRow;
 import com.botmaker.core.plugin.PluginHost;
-import com.botmaker.studio.plugin.ValueWire;
+import com.botmaker.core.plugin.ValueWire;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.java.grammar.ValueContainer;

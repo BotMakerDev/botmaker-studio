@@ -10,7 +10,7 @@ import javafx.scene.control.ComboBox;
 /**
  * A dropdown editor for any enum-typed argument (including SDK enums like {@code Direction}). Picking a
  * constant rewrites the backing expression to {@code EnumType.CONSTANT} via
- * {@link com.botmaker.studio.parser.CodeEditor#replaceWithEnumConstant}.
+ * {@link com.botmaker.core.parser.CodeEditor#replaceWithEnumConstant}.
  *
  * <p>(Formerly the inline {@code enumDropdown} in {@code ArgumentEditors}; now a first-class
  * {@link SpecialTypePicker}.)

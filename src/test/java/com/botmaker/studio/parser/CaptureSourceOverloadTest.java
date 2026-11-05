@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;

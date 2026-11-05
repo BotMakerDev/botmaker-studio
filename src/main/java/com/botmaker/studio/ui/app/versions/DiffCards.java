@@ -4,7 +4,7 @@ import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.studio.project.vcs.BlockDiff;
+import com.botmaker.core.project.vcs.BlockDiff;
 import com.botmaker.core.project.vcs.VersionReader;
 import com.botmaker.studio.ui.app.viewers.ResourceViewers;
 import com.botmaker.studio.ui.render.theme.BlockFontPreference;

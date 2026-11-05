@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.meta.Migrate;
-import com.botmaker.studio.migrate.Broken;
-import com.botmaker.studio.migrate.OldElement;
-import com.botmaker.studio.migrate.Sites;
+import com.botmaker.core.migrate.Broken;
+import com.botmaker.core.migrate.OldElement;
+import com.botmaker.core.migrate.Sites;
 import com.botmaker.java.index.nav.Uses;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;

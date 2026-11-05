@@ -4,7 +4,7 @@ import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.nav.LibrarySource;
+import com.botmaker.core.nav.LibrarySource;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.services.CodeEditorService;

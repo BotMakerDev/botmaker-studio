@@ -2,7 +2,7 @@ package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.TestSupport;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.index.TypeSummaryManager;
+import com.botmaker.core.index.TypeSummaryManager;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;

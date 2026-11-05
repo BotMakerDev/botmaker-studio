@@ -6,7 +6,7 @@ import com.botmaker.studio.events.CoreApplicationEvents.SwitchUsesRequestedEvent
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.core.project.managed.MigrationSteps;
 import com.botmaker.java.index.ValueTypeResolver;
 import javafx.scene.control.MenuItem;
 import org.eclipse.jdt.core.dom.FieldDeclaration;

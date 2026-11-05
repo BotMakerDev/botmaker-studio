@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.index.TypeSummaryManager;
+import com.botmaker.core.index.TypeSummaryManager;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.core.EditorState;

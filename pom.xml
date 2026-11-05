@@ -275,22 +275,10 @@
             <version>3.47.0</version>
         </dependency>
 
-        <!-- ClassGraph -->
-        <dependency>
-            <groupId>io.github.classgraph</groupId>
-            <artifactId>classgraph</artifactId>
-            <version>6.0.0</version>
-        </dependency>
-
         <!-- LSP4J -->
         <dependency>
             <groupId>org.eclipse.lsp4j</groupId>
             <artifactId>org.eclipse.lsp4j</artifactId>
-            <version>1.0.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.lsp4j</groupId>
-            <artifactId>org.eclipse.lsp4j.jsonrpc</artifactId>
             <version>1.0.0</version>
         </dependency>
 

@@ -18,7 +18,7 @@ import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.parser.guard.RefusalJournal;
+import com.botmaker.core.parser.guard.RefusalJournal;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;

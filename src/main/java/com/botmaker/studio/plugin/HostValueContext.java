@@ -11,7 +11,7 @@ import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 
 import java.lang.reflect.Type;
 import java.util.List;

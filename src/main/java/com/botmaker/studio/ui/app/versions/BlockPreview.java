@@ -7,7 +7,7 @@ import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.studio.project.vcs.BlockDiff;
+import com.botmaker.core.project.vcs.BlockDiff;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.FxThread;

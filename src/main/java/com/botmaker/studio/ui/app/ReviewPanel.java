@@ -1,14 +1,14 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.migrate.ApiCache;
-import com.botmaker.studio.migrate.PluginRules;
+import com.botmaker.core.migrate.ApiCache;
+import com.botmaker.core.migrate.PluginRules;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.studio.project.managed.ManagedMigrations;
-import com.botmaker.studio.project.managed.MigrationCleanup;
-import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.core.project.managed.ManagedMigrations;
+import com.botmaker.core.project.managed.MigrationCleanup;
+import com.botmaker.core.project.managed.MigrationSteps;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;

@@ -12,7 +12,7 @@ import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.project.ProjectWrites;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.managed.HolderMove;
+import com.botmaker.core.project.managed.HolderMove;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;

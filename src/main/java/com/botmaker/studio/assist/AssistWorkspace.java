@@ -3,7 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.java.index.LibraryIndex;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.core.EditorState;
-import com.botmaker.studio.parser.guard.RefusalJournal;
+import com.botmaker.core.parser.guard.RefusalJournal;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.core.project.ProjectConfig;
@@ -11,7 +11,7 @@ import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.project.ProjectTemplate;
 import com.botmaker.core.project.StudioProjectSettings;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import com.botmaker.java.types.ProjectAnalyzer;
 
 import java.nio.file.Path;

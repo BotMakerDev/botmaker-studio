@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.core.project.managed.MigrationSteps;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

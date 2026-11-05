@@ -6,7 +6,7 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.vcs.BlockDiff;
+import com.botmaker.core.project.vcs.BlockDiff;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.ProjectVcs;
 import com.botmaker.core.project.vcs.ProjectVcs.CommitInfo;

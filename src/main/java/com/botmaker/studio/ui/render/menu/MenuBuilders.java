@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
-import com.botmaker.studio.plugin.PaletteCuration;
+import com.botmaker.core.plugin.PaletteCuration;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;

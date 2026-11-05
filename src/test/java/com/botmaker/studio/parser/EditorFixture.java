@@ -1,6 +1,8 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
+import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -9,7 +11,7 @@ import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.services.ApiDocsService;
-import com.botmaker.studio.parser.guard.RefusalJournal;
+import com.botmaker.core.parser.guard.RefusalJournal;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectTemplate;
@@ -97,7 +99,7 @@ public final class EditorFixture {
         root = result.root();
         assertNotNull(root, "converter should produce a root block");
 
-        editor = new CodeEditor(CONFIG, state, bus, analyzer, journal);
+        editor = new CodeEditor(CONFIG, state, new BusEditorOutput(bus),analyzer, journal);
     }
 
     /**

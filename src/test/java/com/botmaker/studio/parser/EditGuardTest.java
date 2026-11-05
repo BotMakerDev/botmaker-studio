@@ -1,9 +1,10 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.parser.guard.RefusalJournal;
-import com.botmaker.studio.parser.guard.RefusedEdit;
+import com.botmaker.core.parser.guard.RefusalJournal;
+import com.botmaker.core.parser.guard.RefusedEdit;
 import org.eclipse.jdt.core.dom.Comment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

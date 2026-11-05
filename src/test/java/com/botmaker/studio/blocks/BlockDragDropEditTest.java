@@ -1,6 +1,7 @@
 package com.botmaker.studio.blocks;
 
 import com.botmaker.studio.TestSupport;
+import com.botmaker.studio.events.BusEditorOutput;
 
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
@@ -10,7 +11,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
-import com.botmaker.studio.parser.CodeEditor;
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.java.edit.palette.BlockCatalog;
@@ -79,7 +80,7 @@ public class BlockDragDropEditTest {
         root = result.root();
         assertNotNull(root, "Converter should produce a root block for the class");
 
-        editor = new CodeEditor(null, state, bus, new com.botmaker.java.types.ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, new BusEditorOutput(bus),new com.botmaker.java.types.ProjectAnalyzer(null, state));
     }
 
     @Test
@@ -212,7 +213,7 @@ public class BlockDragDropEditTest {
         BlockConverter.ConvertResult result = TestSupport.convertAndPublish(
                 converter, s, source, new BlockDragAndDropManager(bus), false, false);
         s.setCompilationUnit(result.cu());
-        CodeEditor ed = new CodeEditor(null, s, bus, new com.botmaker.java.types.ProjectAnalyzer(null, s));
+        CodeEditor ed = new CodeEditor(null, s, new BusEditorOutput(bus),new com.botmaker.java.types.ProjectAnalyzer(null, s));
 
         BodyBlock body = collect(result.root(), BodyBlock.class).stream()
                 .filter(b -> !b.getStatements().isEmpty()).findFirst().orElseThrow();

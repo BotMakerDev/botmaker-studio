@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.java.edit.ImportManager;
 
 import com.botmaker.studio.TestSupport;

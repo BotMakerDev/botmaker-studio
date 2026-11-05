@@ -1,6 +1,8 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
+import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.java.edit.palette.BotType;
@@ -98,7 +100,7 @@ class SignatureMigrationApplyTest {
             lastCode = e.newCode();
             updates++;
         });
-        editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
+        editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
     }
 
     // --- fixtures ------------------------------------------------------------------------------------------
@@ -230,7 +232,7 @@ class SignatureMigrationApplyTest {
         Files.createDirectories(config.mainPackageDir());
         EventBus bus = new EventBus(false);
         bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
-        CodeEditor marking = new CodeEditor(config, state, bus, new ProjectAnalyzer(null, state));
+        CodeEditor marking = new CodeEditor(config, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
 
         MethodDeclaration method = clickAt();
         MethodReferences.Result references = MethodReferences.find(state, method);

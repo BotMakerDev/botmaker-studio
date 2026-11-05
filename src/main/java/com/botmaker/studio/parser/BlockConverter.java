@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.SlotVacancy;
 import com.botmaker.java.edit.BodyChildren;
 import com.botmaker.java.edit.BlockId;
 
@@ -618,7 +619,7 @@ public class BlockConverter {
     private Optional<StatementBlock> parseExprStmt(ExpressionStatement stmt, ParseContext ctx) {
         Expression expr = stmt.getExpression();
 
-        if (isPrintStatement(expr)) {
+        if (SlotVacancy.isPrintStatement(expr)) {
             return parsePrint(stmt, ctx);
         }
         if (expr instanceof Assignment) {
@@ -1221,23 +1222,6 @@ public class BlockConverter {
     }
 
     // isWait went on 2026-09-13 with the WaitBlock it fed; see the TryStatement note in dispatchStatement.
-
-    public static boolean isPrintStatement(Expression expression) {
-        if (!(expression instanceof MethodInvocation method)) return false;
-        if (!method.getName().getIdentifier().equals("println")) return false;
-        // `System.out` is a QualifiedName here, not a FieldAccess: with no bindings resolved, JDT cannot tell
-        // a field selection from a package qualification, so it parses the whole dotted form as a name. The
-        // FieldAccess arm is kept because a `this`- or cast-qualified form does produce one, and because
-        // reading only the QualifiedName case would silently stop matching the day bindings are switched on.
-        Expression receiver = method.getExpression();
-        if (receiver instanceof QualifiedName qn) {
-            return qn.getFullyQualifiedName().equals("System.out");
-        }
-        return receiver instanceof FieldAccess fa
-                && fa.getName().getIdentifier().equals("out")
-                && fa.getExpression() instanceof SimpleName sn
-                && sn.getIdentifier().equals("System");
-    }
 
     // isReadInputStatement went on 2026-09-01 with the Read blocks. It matched `BotMaker.readX()`, which is
     // to say the editor recognised one library's facade by name — the same coupling as writing it. A bot

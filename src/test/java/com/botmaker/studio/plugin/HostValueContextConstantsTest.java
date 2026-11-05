@@ -3,7 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

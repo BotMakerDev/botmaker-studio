@@ -1,5 +1,6 @@
 package com.botmaker.studio.validation;
 
+import com.botmaker.core.validation.ErrorTranslator;
 import com.botmaker.studio.core.CodeBlock;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.lsp4j.Diagnostic;

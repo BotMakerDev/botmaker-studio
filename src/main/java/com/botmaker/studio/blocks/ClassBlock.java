@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks;
 
+import com.botmaker.core.parser.factories.StatementFactory;
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.services.CodeEditorService;
@@ -120,8 +121,8 @@ public class ClassBlock extends TypeBlock {
         TypeDeclaration typeDecl = (TypeDeclaration) this.astNode;
         Window owner = source.getScene() == null ? null : source.getScene().getWindow();
         com.botmaker.studio.ui.app.vars.DefineEnumDialog.ask(owner,
-                        com.botmaker.studio.parser.factories.StatementFactory.uniqueTypeName(typeDecl, "MyEnum"),
-                        com.botmaker.studio.parser.factories.StatementFactory.declaredTypeNames(typeDecl))
+                        StatementFactory.uniqueTypeName(typeDecl, "MyEnum"),
+                        StatementFactory.declaredTypeNames(typeDecl))
                 .ifPresent(draft -> context.getCodeEditor().addEnumToClass(typeDecl, draft, insertIndex));
     }
 

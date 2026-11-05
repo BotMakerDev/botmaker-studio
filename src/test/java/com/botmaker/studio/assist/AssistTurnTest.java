@@ -3,13 +3,13 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.value.Drawn;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.parser.guard.RefusalJournal;
+import com.botmaker.core.parser.guard.RefusalJournal;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.project.ProjectTemplate;
-import com.botmaker.studio.project.managed.ManagedConstants.Constant;
+import com.botmaker.core.project.managed.ManagedConstants.Constant;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;

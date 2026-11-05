@@ -1,6 +1,7 @@
 package com.botmaker.studio.events;
 
 import com.botmaker.core.events.ApplicationEvent;
+import com.botmaker.core.events.FileEdit;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.core.project.UserLibrary;
@@ -39,9 +40,6 @@ public class CoreApplicationEvents {
             this(newCode, previousCode, false, null, List.of());
         }
     }
-
-    /** One file another file's edit also rewrote: what it said, and what it says now. */
-    public record FileEdit(java.nio.file.Path path, String previousContent, String newContent) {}
 
     /**
      * Files a plugin's value writes rewrote underneath the editor, as one history step named {@code label} — a

@@ -1,6 +1,8 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
+import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.ProjectFile;
@@ -48,7 +50,7 @@ public class VarargsArgumentEditTest {
         MethodInvocation target = findCall(result.cu(), call);
         assertNotNull(target, "test setup: no call named " + call);
 
-        edit.accept(new Edit(new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state)), target));
+        edit.accept(new Edit(new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state)), target));
         assertNotNull(lastCode[0], "edit should have produced a code update");
         return lastCode[0].replace(" ", "");
     }

@@ -5,7 +5,7 @@ import com.botmaker.studio.core.AbstractExpressionBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
-import com.botmaker.studio.plugin.PaletteCuration;
+import com.botmaker.core.plugin.PaletteCuration;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.edit.palette.ApiDocs;
 import com.botmaker.studio.services.CodeEditorService;

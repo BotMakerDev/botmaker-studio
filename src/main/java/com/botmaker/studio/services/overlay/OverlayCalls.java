@@ -5,7 +5,7 @@ import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;

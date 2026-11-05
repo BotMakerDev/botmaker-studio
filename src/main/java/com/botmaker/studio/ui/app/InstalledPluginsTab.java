@@ -1,13 +1,13 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.migrate.Broken;
+import com.botmaker.core.migrate.Broken;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.plugin.ReleasedPlugins;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.project.UserLibrary;
-import com.botmaker.studio.project.managed.MigrationSteps;
+import com.botmaker.core.project.managed.MigrationSteps;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;

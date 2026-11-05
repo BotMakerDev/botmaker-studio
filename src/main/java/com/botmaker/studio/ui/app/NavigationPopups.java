@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.nav.LibrarySource;
+import com.botmaker.core.nav.LibrarySource;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.studio.nav.SourceNavigation.Declaration;
 import com.botmaker.studio.nav.SourceNavigation.Entry;

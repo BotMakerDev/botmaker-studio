@@ -12,7 +12,7 @@ import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
-import com.botmaker.studio.parser.guard.RefusalJournal;
+import com.botmaker.core.parser.guard.RefusalJournal;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectTemplate;

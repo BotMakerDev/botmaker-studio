@@ -31,7 +31,7 @@ import com.botmaker.studio.core.InsertionCursor;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.project.StudioProjectSettings;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.CodeEditorService;

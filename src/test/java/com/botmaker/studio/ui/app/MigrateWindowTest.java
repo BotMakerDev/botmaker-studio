@@ -2,12 +2,12 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.migrate.Broken;
-import com.botmaker.studio.migrate.OldElement;
-import com.botmaker.studio.migrate.PluginRules;
-import com.botmaker.studio.migrate.Rewrite;
-import com.botmaker.studio.migrate.Rule;
-import com.botmaker.studio.migrate.Sites;
+import com.botmaker.core.migrate.Broken;
+import com.botmaker.core.migrate.OldElement;
+import com.botmaker.core.migrate.PluginRules;
+import com.botmaker.core.migrate.Rewrite;
+import com.botmaker.core.migrate.Rule;
+import com.botmaker.core.migrate.Sites;
 import com.botmaker.java.index.nav.Uses;
 import org.junit.jupiter.api.Test;
 

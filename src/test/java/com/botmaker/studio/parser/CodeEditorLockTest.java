@@ -1,6 +1,8 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.TestSupport;
+import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
@@ -151,7 +153,7 @@ class CodeEditorLockTest {
             root = result.root();
             assertNotNull(root, "converter should produce a root block");
 
-            editor = new CodeEditor(CONFIG, state, bus, new ProjectAnalyzer(null, state));
+            editor = new CodeEditor(CONFIG, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
         }
 
         TypeDeclaration type() {
@@ -425,7 +427,7 @@ class CodeEditorLockTest {
                 converter, state, FLOW_DRIVER, new BlockDragAndDropManager(bus), false, false);
         state.setCompilationUnit(result.cu());
 
-        CodeEditor editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
+        CodeEditor editor = new CodeEditor(null, state, new BusEditorOutput(bus),new ProjectAnalyzer(null, state));
         TypeDeclaration type = (TypeDeclaration) result.root().getAstNode();
         renamed(editor, state, type.getMethods()[0], "renamed");
 

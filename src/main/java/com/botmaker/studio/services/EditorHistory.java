@@ -3,9 +3,10 @@ package com.botmaker.studio.services;
 import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
+import com.botmaker.core.events.FileEdit;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.studio.state.HistoryManager;
+import com.botmaker.core.state.HistoryManager;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -59,7 +60,7 @@ public final class EditorHistory {
             before.put(active, previousCode);
             after.put(active, event.newCode());
         }
-        for (CoreApplicationEvents.FileEdit edit : event.alsoChanged()) {
+        for (FileEdit edit : event.alsoChanged()) {
             before.put(normal(edit.path()), edit.previousContent());
             after.put(normal(edit.path()), edit.newContent());
         }
@@ -77,7 +78,7 @@ public final class EditorHistory {
     private synchronized void recordRewrite(CoreApplicationEvents.FilesRewrittenEvent event) {
         Map<Path, String> before = new LinkedHashMap<>();
         Map<Path, String> after = new LinkedHashMap<>();
-        for (CoreApplicationEvents.FileEdit edit : event.edits()) {
+        for (FileEdit edit : event.edits()) {
             before.put(normal(edit.path()), edit.previousContent());
             after.put(normal(edit.path()), edit.newContent());
         }

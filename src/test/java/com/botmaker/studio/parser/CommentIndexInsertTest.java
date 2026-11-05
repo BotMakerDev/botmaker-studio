@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser;
 
+import com.botmaker.core.parser.CodeEditor;
 import com.botmaker.studio.core.BodyBlock;
 import org.eclipse.jdt.core.dom.Comment;
 import org.junit.jupiter.api.Test;

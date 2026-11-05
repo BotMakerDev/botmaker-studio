@@ -2,10 +2,10 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.nav.LibrarySource;
-import com.botmaker.studio.nav.LibrarySource.Origin;
-import com.botmaker.studio.nav.LibrarySource.Target;
-import com.botmaker.studio.nav.LibrarySource.View;
+import com.botmaker.core.nav.LibrarySource;
+import com.botmaker.core.nav.LibrarySource.Origin;
+import com.botmaker.core.nav.LibrarySource.Target;
+import com.botmaker.core.nav.LibrarySource.View;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;

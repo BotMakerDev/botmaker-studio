@@ -3,7 +3,7 @@ package com.botmaker.studio.services.overlay;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.core.plugin.PluginHost;
-import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.core.project.managed.ManagedConstants;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AnonymousClassDeclaration;
 import org.eclipse.jdt.core.dom.DoStatement;

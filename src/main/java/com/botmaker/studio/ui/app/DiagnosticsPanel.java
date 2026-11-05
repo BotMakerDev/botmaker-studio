@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.validation.DiagnosticLevel;
+import com.botmaker.core.validation.DiagnosticLevel;
 import com.botmaker.studio.validation.DiagnosticsManager;
-import com.botmaker.studio.validation.ErrorTranslator;
+import com.botmaker.core.validation.ErrorTranslator;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.ContextMenu;

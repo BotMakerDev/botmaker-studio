@@ -1,5 +1,11 @@
 # Dated notes — read these before the other files here
 
+> **The edit engine is `botmaker-core`'s since 2026-11-05** (phase 6b of the same plan). `CodeEditor`, `NodeCreator`,
+> `SlotVacancy`, `parser/factories`, `parser/handlers`, `parser/guard`, `parser/refactor`, `state`, `project/managed`,
+> `project/params`, `migrate`, `index`, `nav.LibrarySource`, `validation`'s level and translator moved, each under
+> `com.botmaker.core`. `CodeEditor` reports through `EditorOutput`, not the bus; `BusEditorOutput` publishes Studio's
+> events. `BlockConverter`, `BlockReuse`, `CodeEditorService`, `SourceNavigation` and `BlockValidator` stay here.
+
 > **The open project and the plugin host are `botmaker-core`'s since 2026-11-05** (umbrella plan
 > `2026-11-04-java-and-core.md`, phase 6a). `ProjectState`, `ProjectConfig`, `ProjectCreator`, `ProjectRepair`,
 > `ProjectOpenMigrations`, `LockResolver`, the project's settings, `project/migration`, `PluginHost` and its gate,
