@@ -1,6 +1,7 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.core.events.EventBus;
+import com.botmaker.studio.services.RunLogOnBus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
@@ -41,10 +42,10 @@ class McpBudgetTest {
     @Test
     void studiosToolsStayWithinTheirBudget() throws Exception {
         EventBus bus = new EventBus(false);
-        RunLog log = new RunLog(bus, Clock.systemUTC(), () -> false);
+        RunLog log = RunLogOnBus.listen(bus, new RunLog(Clock.systemUTC(), () -> false));
         try {
             List<SyncToolSpecification> tools = McpTools.studio(new JacksonMcpJsonMapper(JSON), stub(LiveBot.class),
-                    stub(StudioDriver.class), log, () -> { });
+                    stub(StudioDriver.class), log, StudioToolGroup.INSTANCE, () -> { });
             List<Cost> costs = tools.stream().map(t -> cost(t.tool()))
                     .sorted(Comparator.comparingInt(Cost::chars).reversed()).toList();
             int instructions = McpTools.INSTRUCTIONS.length();
@@ -86,7 +87,7 @@ class McpBudgetTest {
      * {@code type}, answering nothing: listing the tools calls none of their handlers. A list is empty, an optional
      * empty, a default method its own body.
      */
-    private static <T> T stub(Class<T> type) {
+    static <T> T stub(Class<T> type) {
         InvocationHandler none = (proxy, method, args) -> {
             if (method.isDefault()) return InvocationHandler.invokeDefault(proxy, method, args);
             Class<?> returns = method.getReturnType();

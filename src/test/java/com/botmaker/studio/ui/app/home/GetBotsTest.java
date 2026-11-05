@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.core.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.HiddenBots;
+import com.botmaker.core.sharing.HiddenBots;
 import com.botmaker.core.sharing.PublisherRank;
-import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.core.sharing.ShowCommunity;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

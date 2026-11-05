@@ -261,8 +261,11 @@ final class UiTools {
         return set != null && (set.strip().equals("1") || set.strip().equalsIgnoreCase("true"));
     }
 
+    /** The tool's name. */
+    static final String NAME = "ui";
+
     AssistantTool<AssistantTool.OneOf<Ui>> tool() {
-        return AssistantTool.named("ui")
+        return AssistantTool.named(NAME)
                 .describedAs("Studio's own windows: list, read, press, type, key, scroll, drag, expand, choose, look, wait; "
                         + "answers say what changed, new errors and stalls. Dev Studio only.")
                 .takesOneOf(Ui.class)

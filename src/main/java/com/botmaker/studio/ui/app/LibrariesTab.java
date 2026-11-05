@@ -5,7 +5,7 @@ import com.botmaker.core.project.UserLibrary;
 import com.botmaker.core.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
-import com.botmaker.studio.sharing.PluginCatalog;
+import com.botmaker.core.sharing.PluginCatalog;
 import com.botmaker.core.sharing.PluginRegistry;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;

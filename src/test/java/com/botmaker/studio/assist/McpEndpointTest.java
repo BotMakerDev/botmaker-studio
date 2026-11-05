@@ -1,6 +1,7 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.core.edit.EditWorkspace;
+import com.botmaker.studio.services.RunLogOnBus;
 import com.botmaker.plugin.api.History;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
@@ -14,7 +15,7 @@ import com.botmaker.core.plugin.HostHistory;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectTemplate;
-import com.botmaker.studio.services.run.RunEntries;
+import com.botmaker.core.run.RunEntries;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -277,8 +278,8 @@ class McpEndpointTest {
     void start() throws Exception {
         bot = new FakeBot();
         driver = new FakeDriver();
-        log = new RunLog(bus, Clock.systemUTC(), () -> compiling);
-        endpoint = McpEndpoint.start(0, TOKEN, bot, driver, log);
+        log = RunLogOnBus.listen(bus, new RunLog(Clock.systemUTC(), () -> compiling));
+        endpoint = McpEndpoint.start(0, TOKEN, bot, driver, log, StudioToolGroup.INSTANCE);
     }
 
     @AfterEach

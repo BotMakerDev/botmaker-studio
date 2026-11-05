@@ -1,4 +1,4 @@
-package com.botmaker.studio.sharing;
+package com.botmaker.studio;
 
 import org.junit.jupiter.api.Test;
 

@@ -3,7 +3,6 @@ package com.botmaker.studio.nav;
 import com.botmaker.java.index.nav.TypeDelete;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.BotIndex;
-import com.botmaker.studio.services.ClassFiles;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -73,14 +72,6 @@ class TypeDeleteTest {
     void aClassOnlyItselfUsesGoes(@TempDir Path root) {
         Path unused = root.resolve("com/mybot/Unused.java");
         assertTrue(TypeDelete.refusal(index(root, BOT), unused).isEmpty());
-    }
-
-    @Test
-    void eachKindIsADeclarationOfItsName() {
-        assertEquals("package com.mybot.util;\n\npublic record Point() {\n}\n",
-                ClassFiles.source("com.mybot.util", ClassFiles.Kind.RECORD, "Point"));
-        assertEquals(ClassFiles.Kind.ENUM, ClassFiles.Kind.fromId(" Enum ").orElseThrow());
-        assertTrue(ClassFiles.Kind.fromId("annotation").isEmpty());
     }
 
     private static BotIndex index(Path root, String user) {

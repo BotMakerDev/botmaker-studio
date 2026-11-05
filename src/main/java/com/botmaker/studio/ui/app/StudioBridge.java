@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.core.edit.CanvasEdit;
+import com.botmaker.core.project.ClassKind;
 import com.botmaker.core.edit.EditResult;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
@@ -42,7 +43,7 @@ import com.botmaker.java.index.BotIndex;
 import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.services.overlay.OverlayTargets;
-import com.botmaker.studio.services.run.RunEntries;
+import com.botmaker.core.run.RunEntries;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.trial.TrialMenu;
@@ -68,7 +69,7 @@ import com.botmaker.core.services.upgrade.InstalledPlugin;
 import com.botmaker.core.services.upgrade.PluginHolders;
 import com.botmaker.core.services.upgrade.PluginUpgradeService;
 import com.botmaker.core.services.upgrade.ProjectUpgrade;
-import com.botmaker.studio.services.LocalBuilds;
+import com.botmaker.core.services.LocalBuilds;
 import com.botmaker.core.plugin.ReleasedPlugins;
 import com.botmaker.core.project.managed.ManagedMigrations;
 import com.botmaker.core.project.managed.MigrationCleanup;
@@ -301,8 +302,8 @@ final class StudioBridge implements StudioDriver {
     // ---- structure and navigation --------------------------------------------------------------------------
 
     @Override
-    public String addFile(String name, ClassFiles.Kind kind, String packageName) {
-        ClassFiles.Kind what = kind == null ? ClassFiles.Kind.CLASS : kind;
+    public String addFile(String name, ClassKind kind, String packageName) {
+        ClassKind what = kind == null ? ClassKind.CLASS : kind;
         notReading();
         String pkg = packageName == null ? "" : packageName.strip();
         if (!pkg.isEmpty() && !javax.lang.model.SourceVersion.isName(pkg)) {

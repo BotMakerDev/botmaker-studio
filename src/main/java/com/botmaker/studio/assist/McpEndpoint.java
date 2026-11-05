@@ -9,7 +9,6 @@ import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.servlet.DispatcherType;
-import javafx.application.Platform;
 import jakarta.servlet.Filter;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -60,12 +59,14 @@ public final class McpEndpoint implements AutoCloseable {
     private final Server jetty;
     private final McpSyncServer mcp;
     private final int port;
+    private final ToolGroup group;
     private final AtomicBoolean closed = new AtomicBoolean();
 
-    private McpEndpoint(Server jetty, McpSyncServer mcp, int port) {
+    private McpEndpoint(Server jetty, McpSyncServer mcp, int port, ToolGroup group) {
         this.jetty = jetty;
         this.mcp = mcp;
         this.port = port;
+        this.group = group;
     }
 
     /**
@@ -73,20 +74,21 @@ public final class McpEndpoint implements AutoCloseable {
      * tools are the ones {@code driver} offers now, and again each time a tool adds or removes a plugin; a plugin
      * changed another way (Plugins &amp; Libraries) is served on the endpoint's next start.
      *
-     * @param log what runs and what it printed; the caller closes it
+     * @param log   what runs and what it printed; the caller closes it
+     * @param group what the client with a screen attaches ({@link ToolGroup#NONE} for none)
      * @throws Exception when the port is taken or Jetty will not start; nothing is left running
      */
-    public static McpEndpoint start(int port, String token, LiveBot bot, StudioDriver driver, RunLog log)
-            throws Exception {
+    public static McpEndpoint start(int port, String token, LiveBot bot, StudioDriver driver, RunLog log,
+                                    ToolGroup group) throws Exception {
         Objects.requireNonNull(token, "token");
         McpJsonMapper json = new JacksonMcpJsonMapper(new ObjectMapper());
         HttpServletStreamableServerTransportProvider transport = HttpServletStreamableServerTransportProvider.builder()
                 .jsonMapper(json).mcpEndpoint(PATH).build();
         AtomicReference<Runnable> refresh = new AtomicReference<>(() -> { });
         List<McpServerFeatures.SyncToolSpecification> own =
-                McpTools.studio(json, bot, driver, log, () -> refresh.get().run());
+                McpTools.studio(json, bot, driver, log, group, () -> refresh.get().run());
         Set<String> ownNames = McpTools.names(own);
-        List<McpServerFeatures.SyncToolSpecification> theirs = McpTools.pluginTools(json, driver, ownNames);
+        List<McpServerFeatures.SyncToolSpecification> theirs = McpTools.pluginTools(json, driver, group, ownNames);
         List<McpServerFeatures.SyncToolSpecification> tools = new ArrayList<>(own);
         tools.addAll(theirs);
         McpSyncServer mcp = McpServer.sync(transport)
@@ -95,16 +97,17 @@ public final class McpEndpoint implements AutoCloseable {
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tools(tools)
                 .build();
-        refresh.set(new PluginToolRefresh(mcp, json, driver, ownNames, McpTools.names(theirs))::run);
-        return serve(port, token, transport, mcp);
+        refresh.set(new PluginToolRefresh(mcp, json, driver, group, ownNames,McpTools.names(theirs))::run);
+        return serve(port, token, transport, mcp, group);
     }
 
     /**
      * Serves only {@code tools} on {@code port}, with no project behind them: the bot list's endpoint in a dev
-     * Studio ({@link HomeEndpoint}), so the {@code ui} tool answers before any project opens.
+     * Studio ({@link HomeEndpoint}), so the {@code ui} tool answers before any project opens. {@code group} is what
+     * a close waits for.
      */
-    static McpEndpoint startHome(int port, String token, List<McpServerFeatures.SyncToolSpecification> tools)
-            throws Exception {
+    static McpEndpoint startHome(int port, String token, List<McpServerFeatures.SyncToolSpecification> tools,
+                                 ToolGroup group) throws Exception {
         Objects.requireNonNull(token, "token");
         HttpServletStreamableServerTransportProvider transport = HttpServletStreamableServerTransportProvider.builder()
                 .jsonMapper(new JacksonMcpJsonMapper(new ObjectMapper())).mcpEndpoint(PATH).build();
@@ -114,12 +117,12 @@ public final class McpEndpoint implements AutoCloseable {
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
                 .tools(tools)
                 .build();
-        return serve(port, token, transport, mcp);
+        return serve(port, token, transport, mcp, group);
     }
 
     /** {@code mcp} on {@code port} behind the token; nothing is left running when it cannot start. */
     private static McpEndpoint serve(int port, String token, HttpServletStreamableServerTransportProvider transport,
-                                     McpSyncServer mcp) throws Exception {
+                                     McpSyncServer mcp, ToolGroup group) throws Exception {
         Server jetty = new Server(new InetSocketAddress("127.0.0.1", port));
         ServletContextHandler context = new ServletContextHandler();
         context.setContextPath("/");
@@ -135,7 +138,7 @@ public final class McpEndpoint implements AutoCloseable {
             throw e;
         }
         int bound = ((ServerConnector) jetty.getConnectors()[0]).getLocalPort();
-        return new McpEndpoint(jetty, mcp, bound);
+        return new McpEndpoint(jetty, mcp, bound, group);
     }
 
     public int port() {
@@ -148,24 +151,14 @@ public final class McpEndpoint implements AutoCloseable {
     }
 
     /**
-     * Closes once a {@code ui} press in flight has answered: a press that opens or closes a project hands the port
-     * over mid-call, and its client would read the cut call as Studio being down. On the FX thread the close waits
-     * off it, since the press reads the windows there.
+     * Closes once the group's calls in flight have answered ({@link ToolGroup#whenQuiet}): a {@code ui} press that
+     * opens or closes a project hands the port over mid-call, and its client would read the cut call as Studio being
+     * down.
      */
     @Override
     public void close() {
         if (!closed.compareAndSet(false, true)) return;
-        if (!UiTools.pressing()) {
-            shut();
-        } else if (Platform.isFxApplicationThread()) {
-            Thread.ofVirtual().start(() -> {
-                UiTools.awaitPresses();
-                shut();
-            });
-        } else {
-            UiTools.awaitPresses();
-            shut();
-        }
+        group.whenQuiet(this::shut);
     }
 
     private void shut() {
@@ -189,21 +182,23 @@ public final class McpEndpoint implements AutoCloseable {
         private final McpSyncServer mcp;
         private final McpJsonMapper json;
         private final StudioDriver driver;
+        private final ToolGroup group;
         private final Set<String> own;
         private Set<String> served;
 
-        PluginToolRefresh(McpSyncServer mcp, McpJsonMapper json, StudioDriver driver, Set<String> own,
-                          Set<String> served) {
+        PluginToolRefresh(McpSyncServer mcp, McpJsonMapper json, StudioDriver driver, ToolGroup group,
+                          Set<String> own, Set<String> served) {
             this.mcp = mcp;
             this.json = json;
             this.driver = driver;
+            this.group = group;
             this.own = own;
             this.served = served;
         }
 
         synchronized void run() {
             try {
-                List<McpServerFeatures.SyncToolSpecification> now = McpTools.pluginTools(json, driver, own);
+                List<McpServerFeatures.SyncToolSpecification> now = McpTools.pluginTools(json, driver, group, own);
                 for (String name : served) mcp.removeTool(name);
                 now.forEach(mcp::addTool);
                 served = McpTools.names(now);

@@ -1,17 +1,6 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.plugin.api.TraceLine;
-import com.botmaker.studio.events.CoreApplicationEvents.DebugSessionFinishedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.DebugSessionStartedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.EntryRunRequestedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.ExecutionRequestedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.OutputAppendedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.OutputClearedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.ProgramStartedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.ProgramStoppedEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.TraceLineEvent;
-import com.botmaker.studio.events.CoreApplicationEvents.TrialRunRequestedEvent;
-import com.botmaker.core.events.EventBus;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -70,7 +59,9 @@ public final class RunLog implements AutoCloseable {
 
     private final Clock clock;
     private final BooleanSupplier launching;
-    private final List<EventBus.Subscription> subscriptions = new ArrayList<>();
+    /** What tells this log, closed with it: a client's subscriptions to its own events. */
+    private final List<AutoCloseable> sources = new ArrayList<>();
+    private boolean closed;
     private final Deque<Line> lines = new ArrayDeque<>();
     /** Output not yet ended by a newline. */
     private final StringBuilder partial = new StringBuilder();
@@ -97,22 +88,24 @@ public final class RunLog implements AutoCloseable {
 
     /**
      * @param launching whether a run has been asked for and has not ended, its compile included —
-     *                  {@code CodeExecutionService::isRunning}. The events say only when the bot itself starts,
-     *                  and a run asked for again during the compile would be a second bot on the game.
+     *                  {@code CodeExecutionService::isRunning}. What it is told says only when the bot itself
+     *                  starts, and a run asked for again during the compile would be a second bot on the game.
      */
-    public RunLog(EventBus bus, Clock clock, BooleanSupplier launching) {
+    public RunLog(Clock clock, BooleanSupplier launching) {
         this.clock = clock;
         this.launching = launching;
-        subscriptions.add(bus.subscribe(ExecutionRequestedEvent.class, e -> requested("the bot")));
-        subscriptions.add(bus.subscribe(EntryRunRequestedEvent.class, e -> requested(e.title())));
-        subscriptions.add(bus.subscribe(TrialRunRequestedEvent.class, e -> requested(e.label())));
-        subscriptions.add(bus.subscribe(ProgramStartedEvent.class, e -> started()));
-        subscriptions.add(bus.subscribe(ProgramStoppedEvent.class, e -> stopped()));
-        subscriptions.add(bus.subscribe(DebugSessionStartedEvent.class, e -> debugging(true)));
-        subscriptions.add(bus.subscribe(DebugSessionFinishedEvent.class, e -> debugging(false)));
-        subscriptions.add(bus.subscribe(OutputAppendedEvent.class, e -> output(e.text())));
-        subscriptions.add(bus.subscribe(OutputClearedEvent.class, e -> mark("── run output cleared ──")));
-        subscriptions.add(bus.subscribe(TraceLineEvent.class, e -> trace(e.line())));
+    }
+
+    /** Closes {@code source} when this log closes: what tells it, such as a client's bridge from its events. */
+    public void closeWith(AutoCloseable source) {
+        synchronized (this) {
+            if (!closed) {
+                sources.add(source);
+                return;
+            }
+        }
+        // Closed already: nothing would close it later.
+        closeQuietly(source);
     }
 
     /** Whether the bot, a try or a debug session is on the game now. */
@@ -226,15 +219,31 @@ public final class RunLog implements AutoCloseable {
 
     @Override
     public void close() {
-        subscriptions.forEach(EventBus.Subscription::close);
-        subscriptions.clear();
+        List<AutoCloseable> closing;
+        synchronized (this) {
+            closed = true;
+            closing = List.copyOf(sources);
+            sources.clear();
+        }
+        closing.forEach(RunLog::closeQuietly);
     }
 
-    private synchronized void requested(String what) {
+    private static void closeQuietly(AutoCloseable source) {
+        try {
+            source.close();
+        } catch (Exception e) {
+            // Closing is best-effort: a source that will not close only keeps telling a log nobody reads.
+            System.err.println("Warning: a run log's source would not close: " + e.getMessage());
+        }
+    }
+
+    /** A run of {@code what} was asked for: the bot, an entry's title or a try's label; the next start is it. */
+    public synchronized void requested(String what) {
         requested = what;
     }
 
-    private synchronized void started() {
+    /** The run asked for started. */
+    public synchronized void started() {
         running = requested == null ? "the bot" : requested;
         requested = null;
         since = clock.instant();
@@ -244,14 +253,16 @@ public final class RunLog implements AutoCloseable {
         mark("── started " + running + " ──");
     }
 
-    private synchronized void stopped() {
+    /** The run ended. */
+    public synchronized void stopped() {
         if (running != null) mark("── stopped " + running + " after " + seconds(since, clock.instant()) + " ──");
         running = null;
         ended = clock.instant();
         ends++;
     }
 
-    private synchronized void debugging(boolean on) {
+    /** A debug session started ({@code on}) or finished. */
+    public synchronized void debugging(boolean on) {
         debugging = on;
         if (on) {
             runStart = nextSeq;
@@ -262,7 +273,13 @@ public final class RunLog implements AutoCloseable {
         }
     }
 
-    private synchronized void output(String text) {
+    /** The user cleared the run's output: marked, not cleared here. */
+    public synchronized void cleared() {
+        mark("── run output cleared ──");
+    }
+
+    /** What the bot printed, any part of a line. */
+    public synchronized void output(String text) {
         if (text == null) return;
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
@@ -278,7 +295,7 @@ public final class RunLog implements AutoCloseable {
      * A trace line, as {@code [Source] text (×n) @Class:line} — its level named only when it is not debug detail,
      * which is what nearly every line is. Its printed copy, when that came first, is taken out.
      */
-    private synchronized void trace(TraceLine line) {
+    public synchronized void trace(TraceLine line) {
         String label = line.level() == TraceLine.Level.DEBUG ? line.source()
                 : line.source().isEmpty() ? line.level().displayName()
                 : line.level().displayName() + " " + line.source();

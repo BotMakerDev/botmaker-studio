@@ -7,7 +7,7 @@ import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
-import com.botmaker.studio.services.LocalBuilds;
+import com.botmaker.core.services.LocalBuilds;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.core.services.upgrade.InstalledPlugin;
 import com.botmaker.core.sharing.PluginRegistry;

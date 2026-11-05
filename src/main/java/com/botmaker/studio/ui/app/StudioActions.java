@@ -17,7 +17,7 @@ import com.botmaker.core.services.MavenService;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
-import com.botmaker.studio.sharing.BmkExport;
+import com.botmaker.core.sharing.BmkExport;
 import com.botmaker.core.sharing.BotSource;
 import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.java.types.ProjectAnalyzer;

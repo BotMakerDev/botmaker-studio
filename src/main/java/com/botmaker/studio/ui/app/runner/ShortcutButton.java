@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.runner;
 
-import com.botmaker.studio.sharing.ProgramEntries;
+import com.botmaker.core.sharing.ProgramEntries;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.scene.Node;

@@ -6,6 +6,7 @@ import com.botmaker.java.index.nav.TypeDelete;
 import com.botmaker.java.index.nav.TypeRename;
 import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.ClassKind;
 import com.botmaker.core.project.FileRole;
 import com.botmaker.core.project.LockResolver;
 import com.botmaker.core.project.ProjectConfig;
@@ -20,7 +21,6 @@ import com.botmaker.core.project.vcs.VersionOrigin;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -46,38 +46,6 @@ import java.util.Set;
  */
 public final class ClassFiles {
 
-    /** What a new file declares. */
-    public enum Kind {
-        CLASS("class", "Class", "public class %s {\n}\n"),
-        INTERFACE("interface", "Interface", "public interface %s {\n}\n"),
-        RECORD("record", "Record", "public record %s() {\n}\n"),
-        ENUM("enum", "Enum", "public enum %s {\n}\n");
-
-        private final String id;
-        private final String displayName;
-        private final String body;
-
-        Kind(String id, String displayName, String body) {
-            this.id = id;
-            this.displayName = displayName;
-            this.body = body;
-        }
-
-        public String id() {
-            return id;
-        }
-
-        public String displayName() {
-            return displayName;
-        }
-
-        /** The kind {@code id} names, ignoring case; empty for anything else. */
-        public static Optional<Kind> fromId(String id) {
-            String wanted = id == null ? "" : id.strip().toLowerCase(Locale.ROOT);
-            return Arrays.stream(values()).filter(kind -> kind.id.equals(wanted)).findFirst();
-        }
-    }
-
     private final ProjectConfig config;
     private final ProjectState state;
     private final StudioContext ctx;
@@ -86,11 +54,6 @@ public final class ClassFiles {
         this.ctx = ctx;
         this.config = ctx.config();
         this.state = ctx.state();
-    }
-
-    /** The source of a new {@code kind} named {@code name} in {@code packageName}. */
-    public static String source(String packageName, Kind kind, String name) {
-        return "package " + packageName + ";\n\n" + kind.body.formatted(name);
     }
 
     /**
@@ -129,7 +92,7 @@ public final class ClassFiles {
      * @throws IllegalArgumentException with the sentence that says why, when the name or the folder will not do
      *                                  or the file exists
      */
-    public Path create(Path folder, Kind kind, String name) {
+    public Path create(Path folder, ClassKind kind, String name) {
         String className = name == null ? "" : name.strip().replaceFirst("\\.java$", "");
         FunctionDraft.identifierProblem(className, kind.displayName().toLowerCase(Locale.ROOT)).ifPresent(problem -> {
             throw new IllegalArgumentException(problem);
@@ -139,7 +102,7 @@ public final class ClassFiles {
         });
         Path file = folder.toAbsolutePath().normalize().resolve(className + ".java");
         if (Files.exists(file)) throw new IllegalArgumentException(className + ".java already exists.");
-        String source = source(packageOf(folder), kind, className);
+        String source = kind.source(packageOf(folder), className);
         try {
             if (!ProjectWrites.create(config, file, source, "Create " + className)) {
                 throw new IllegalArgumentException("Studio could not write " + className + ".java.");

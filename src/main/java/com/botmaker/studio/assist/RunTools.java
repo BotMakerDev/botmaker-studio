@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.Describe;
 import com.botmaker.plugin.api.assist.Key;
 import com.botmaker.runlog.api.Level;
-import com.botmaker.studio.services.run.RunEntries;
+import com.botmaker.core.run.RunEntries;
 
 import java.nio.file.Path;
 import java.time.Duration;

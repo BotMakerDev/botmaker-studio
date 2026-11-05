@@ -6,11 +6,11 @@ import com.botmaker.studio.assist.OnScreen;
 import com.botmaker.core.config.Constants;
 import com.botmaker.core.project.ProjectCreator;
 import com.botmaker.core.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.GitHubGallery;
-import com.botmaker.studio.sharing.HiddenBots;
-import com.botmaker.studio.sharing.NewProjects;
+import com.botmaker.core.sharing.GitHubGallery;
+import com.botmaker.core.sharing.HiddenBots;
+import com.botmaker.core.sharing.NewProjects;
 import com.botmaker.core.sharing.PluginRegistry;
-import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.core.sharing.ShowCommunity;
 import javafx.stage.Window;
 
 import java.io.IOException;

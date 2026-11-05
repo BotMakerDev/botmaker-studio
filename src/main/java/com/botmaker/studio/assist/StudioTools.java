@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.Describe;
 import com.botmaker.plugin.api.assist.Key;
 import com.botmaker.plugin.api.overlay.Area;
-import com.botmaker.studio.services.ClassFiles;
+import com.botmaker.core.project.ClassKind;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +37,7 @@ final class StudioTools {
     }
 
     record NewFile(@Describe("the class's name: Helpers") String name,
-                   @Describe(value = "what it declares; a class when left out", optional = true) ClassFiles.Kind kind,
+                   @Describe(value = "what it declares; a class when left out", optional = true) ClassKind kind,
                    @Describe(value = "the package, com.mybot.util; the bot's main package when left out",
                            optional = true) @Key("package") String packageName) {
     }

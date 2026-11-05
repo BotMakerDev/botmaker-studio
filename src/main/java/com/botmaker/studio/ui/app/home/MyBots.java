@@ -7,9 +7,9 @@ import com.botmaker.core.project.vcs.ProjectVcs;
 import com.botmaker.core.project.vcs.Remote;
 import com.botmaker.core.project.vcs.SyncModel;
 import com.botmaker.cli.bmk.BotJson;
-import com.botmaker.studio.sharing.BotInstaller;
+import com.botmaker.core.sharing.BotInstaller;
 import com.botmaker.core.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.ProgramEntries;
+import com.botmaker.core.sharing.ProgramEntries;
 import com.botmaker.core.sharing.UnpackedBots;
 
 import com.botmaker.core.run.TreeCompile;

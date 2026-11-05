@@ -89,7 +89,7 @@ public final class HomeEndpoint {
             try {
                 synchronized (HomeEndpoint.class) {
                     if (generation != mine || running != null) return;
-                    running = McpEndpoint.startHome(config.port(), config.token(), tools);
+                    running = McpEndpoint.startHome(config.port(), config.token(), tools, StudioToolGroup.INSTANCE);
                     System.out.println("UI tools served on " + running.url());
                     return;
                 }
@@ -114,6 +114,6 @@ public final class HomeEndpoint {
             opens = shell;
         }
         if (opens != null) own.addAll(HomeTools.of(opens));
-        return own.stream().map(t -> McpTools.withNews(McpTools.served(json, t))).toList();
+        return own.stream().map(t -> McpTools.withNews(StudioToolGroup.INSTANCE, McpTools.served(json, t))).toList();
     }
 }

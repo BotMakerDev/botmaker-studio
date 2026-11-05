@@ -1,6 +1,7 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.plugin.api.TraceLine;
+import com.botmaker.studio.services.RunLogOnBus;
 import com.botmaker.studio.events.CoreApplicationEvents.OutputAppendedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.TraceLineEvent;
 import com.botmaker.core.events.EventBus;
@@ -17,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class RunLogTest {
 
     private final EventBus bus = new EventBus(false);
-    private final RunLog log = new RunLog(bus, Clock.systemUTC(), () -> false);
+    private final RunLog log = RunLogOnBus.listen(bus, new RunLog(Clock.systemUTC(), () -> false));
 
     @AfterEach
     void close() {

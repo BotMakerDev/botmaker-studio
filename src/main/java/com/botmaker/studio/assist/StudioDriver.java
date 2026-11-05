@@ -3,8 +3,8 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.overlay.Area;
-import com.botmaker.studio.services.ClassFiles;
-import com.botmaker.studio.services.run.RunEntries;
+import com.botmaker.core.project.ClassKind;
+import com.botmaker.core.run.RunEntries;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -94,7 +94,7 @@ public interface StudioDriver {
      * Writes an empty {@code kind} ({@code null} for a class) named {@code name} in {@code packageName} (empty
      * for the bot's main package), as one version the user can go back to.
      */
-    default String addFile(String name, ClassFiles.Kind kind, String packageName) {
+    default String addFile(String name, ClassKind kind, String packageName) {
         throw new IllegalArgumentException("Studio cannot add a file here.");
     }
 

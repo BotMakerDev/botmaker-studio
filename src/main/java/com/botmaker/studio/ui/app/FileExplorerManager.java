@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.core.project.ClassKind;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.nav.SourceNavigation;
@@ -557,7 +558,7 @@ public class FileExplorerManager {
     /** One item per kind, each made in the package of the folder {@code folder} answers when it is clicked. */
     private List<MenuItem> newItems(Supplier<Path> folder) {
         List<MenuItem> items = new ArrayList<>();
-        for (ClassFiles.Kind kind : ClassFiles.Kind.values()) {
+        for (ClassKind kind : ClassKind.values()) {
             MenuItem item = new MenuItem(kind.displayName() + "…");
             item.setOnAction(e -> create(folder.get(), kind));
             items.add(item);
@@ -576,7 +577,7 @@ public class FileExplorerManager {
         return config.mainPackageDir();
     }
 
-    private void create(Path folder, ClassFiles.Kind kind) {
+    private void create(Path folder, ClassKind kind) {
         String what = kind.displayName().toLowerCase(java.util.Locale.ROOT);
         TextInputDialog dialog = new TextInputDialog();
         ThemedWindows.apply(dialog);

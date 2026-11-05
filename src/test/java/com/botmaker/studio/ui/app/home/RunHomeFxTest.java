@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.home;
 
-import com.botmaker.studio.sharing.BmkDownload;
-import com.botmaker.studio.sharing.BotLink;
+import com.botmaker.core.sharing.BmkDownload;
+import com.botmaker.core.sharing.BotLink;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.core.sharing.PublisherRank;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;

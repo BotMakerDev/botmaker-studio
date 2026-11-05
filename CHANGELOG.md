@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (edits by id)
 
+- Sharing (`sharing`, `LocalBuilds`), `ClassFiles.Kind` (now `ClassKind`) and `RunEntries` moved to `botmaker-core`
+  (2026-11-05). The assistant's run log is told by `RunLogOnBus`, and its `ui` tool and the questions on screen reach
+  the MCP as `StudioToolGroup`; nothing a user sees changes.
 - Running and debugging report through `botmaker-core`'s events and a few ports, bridged to Studio's bus by `RunOnBus`
   and `DebugOnBus` (2026-11-05); nothing a user sees changes. Window grabs are `Capture`, apart from the overlay's.
 - Compiling, running, trying and debugging moved to `botmaker-core` (2026-11-05), with the run agent, the window grabs

@@ -10,7 +10,7 @@ import com.botmaker.core.project.UserLibrary;
 import com.botmaker.core.project.managed.MigrationSteps;
 import com.botmaker.core.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
-import com.botmaker.studio.services.LocalBuilds;
+import com.botmaker.core.services.LocalBuilds;
 import com.botmaker.core.services.upgrade.InstalledPlugin;
 import com.botmaker.core.services.upgrade.PluginHolders;
 import com.botmaker.core.services.upgrade.PluginUpgradeService;

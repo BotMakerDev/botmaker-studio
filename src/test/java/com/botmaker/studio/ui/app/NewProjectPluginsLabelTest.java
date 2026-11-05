@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.core.sharing.PublishedBotPlugins;
 import com.botmaker.core.sharing.PublisherRank;
-import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.core.sharing.ShowCommunity;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

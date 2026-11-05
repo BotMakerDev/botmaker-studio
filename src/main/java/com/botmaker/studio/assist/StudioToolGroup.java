@@ -1,0 +1,59 @@
+package com.botmaker.studio.assist;
+
+import com.botmaker.plugin.api.assist.AssistantTool;
+import javafx.application.Platform;
+
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Studio's {@link ToolGroup}: {@code ui} in a dev Studio Claude drives ({@link UiTools#enabled}), never in the installed
+ * app, and the questions Studio has on screen ({@link OnScreen}).
+ */
+public final class StudioToolGroup implements ToolGroup {
+
+    public static final StudioToolGroup INSTANCE = new StudioToolGroup();
+
+    private StudioToolGroup() {}
+
+    @Override
+    public List<AssistantTool<?>> tools() {
+        return UiTools.enabled() ? List.of(new UiTools().tool()) : List.of();
+    }
+
+    @Override
+    public Set<String> answering() {
+        return Set.of(UiTools.NAME);
+    }
+
+    @Override
+    public String busy() {
+        return OnScreen.busy();
+    }
+
+    @Override
+    public boolean asking() {
+        return OnScreen.asking();
+    }
+
+    @Override
+    public List<String> news() {
+        return OnScreen.news();
+    }
+
+    /** A {@code ui} press reads the windows on the FX thread, so on it the wait goes off it. */
+    @Override
+    public void whenQuiet(Runnable then) {
+        if (!UiTools.pressing()) {
+            then.run();
+        } else if (Platform.isFxApplicationThread()) {
+            Thread.ofVirtual().start(() -> {
+                UiTools.awaitPresses();
+                then.run();
+            });
+        } else {
+            UiTools.awaitPresses();
+            then.run();
+        }
+    }
+}

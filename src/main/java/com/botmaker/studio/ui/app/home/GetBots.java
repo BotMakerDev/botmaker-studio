@@ -2,10 +2,10 @@ package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubConfig;
-import com.botmaker.studio.sharing.BmkDownload;
+import com.botmaker.core.sharing.BmkDownload;
 import com.botmaker.core.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.HiddenBots;
-import com.botmaker.studio.sharing.ShowCommunity;
+import com.botmaker.core.sharing.HiddenBots;
+import com.botmaker.core.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.util.BrowserLauncher;

@@ -121,37 +121,39 @@ public final class McpTools {
     static final String NO_PROJECT = "No project is open in BotMaker Studio. Open one and try again.";
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /** Studio's own tools and the plugins' as they are now. */
-    public static List<SyncToolSpecification> all(McpJsonMapper json, LiveBot bot, StudioDriver driver, RunLog log) {
-        List<SyncToolSpecification> tools = new ArrayList<>(studio(json, bot, driver, log, () -> { }));
-        tools.addAll(pluginTools(json, driver, names(tools)));
+    /** Studio's own tools, {@code group}'s and the plugins' as they are now. */
+    public static List<SyncToolSpecification> all(McpJsonMapper json, LiveBot bot, StudioDriver driver, RunLog log,
+                                                  ToolGroup group) {
+        List<SyncToolSpecification> tools = new ArrayList<>(studio(json, bot, driver, log, group, () -> { }));
+        tools.addAll(pluginTools(json, driver, group, names(tools)));
         return tools;
     }
 
     /**
-     * Studio's own tools, without the plugins'.
+     * Studio's own tools and {@code group}'s, without the plugins'.
      *
+     * @param group          what a client with a screen attaches: its tools, and what of its screen a call waits for
      * @param pluginsChanged run after a tool added or removed a plugin, so the plugins' tools are served anew
      */
     static List<SyncToolSpecification> studio(McpJsonMapper json, LiveBot bot, StudioDriver driver, RunLog log,
-                                              Runnable pluginsChanged) {
+                                              ToolGroup group, Runnable pluginsChanged) {
         List<AssistantTool<?>> tools = new ArrayList<>(FileTools.of(bot));
         tools.addAll(StudioTools.of(driver));
         tools.addAll(RunTools.of(driver, log));
         tools.addAll(ProjectTools.of(driver, log, pluginsChanged));
-        // A dev Studio's own windows, for Claude to drive (BOTMAKER_MCP_UI); never in the installed app.
-        if (UiTools.enabled()) tools.add(new UiTools().tool());
-        return tools.stream().map(t -> guarded(driver, served(json, t))).toList();
+        tools.addAll(group.tools());
+        return tools.stream().map(t -> guarded(driver, group, served(json, t))).toList();
     }
 
     /**
      * {@code tool}, refused while the project is about to reload ({@link StudioDriver#reloading}), and, but for
      * the tools in {@link #WHILE_MOVING}, while a plugin move is asked or runs ({@link StudioDriver#pluginMoving}):
      * the move rewrites the bot's files and the pom under them; the same while a question is on screen
-     * ({@link OnScreen#busy}), whose answer is followed by what it starts. Every answer is followed by how an asked
-     * call ended ({@link #withNews}). Each call's time is kept in {@link #TIMES}.
+     * ({@link ToolGroup#busy}), whose answer is followed by what it starts. A tool of {@link ToolGroup#answering}
+     * passes while the question waits for it. Every answer is followed by how an asked call ended
+     * ({@link #withNews}). Each call's time is kept in {@link #TIMES}.
      */
-    private static SyncToolSpecification guarded(StudioDriver driver, SyncToolSpecification tool) {
+    private static SyncToolSpecification guarded(StudioDriver driver, ToolGroup group, SyncToolSpecification tool) {
         String name = tool.tool().name();
         return SyncToolSpecification.builder().tool(tool.tool()).callHandler((exchange, request) -> {
             boolean passes = WHILE_MOVING.contains(name) || WHILE_MOVING.contains(name + " " + actionOf(request));
@@ -162,16 +164,16 @@ public final class McpTools {
                     answer = result("REFUSED: Studio is switching the project (after a revert, or to a project "
                             + "create_project made). Reconnect and call again once it is open.", true);
                 } else {
-                    boolean presses = name.equals(UI);
+                    boolean presses = group.answering().contains(name);
                     String moving = passes || presses && driver.pluginAsked() ? "" : driver.pluginMoving();
-                    String asked = passes || presses && OnScreen.asking() ? "" : OnScreen.busy();
+                    String asked = passes || presses && group.asking() ? "" : group.busy();
                     answer = !moving.isEmpty()
                             ? result("REFUSED: " + moving + " Wait for it: plugins list says when it is done.", true)
                             : !asked.isEmpty()
                             ? result("REFUSED: " + asked + " Wait for it: an answer after it says how it ended.", true)
                             : tool.callHandler().apply(exchange, request);
                 }
-                answer = withNews(answer);
+                answer = withNews(group, answer);
                 return answer;
             } finally {
                 // A handler that threw counts as an error.
@@ -181,10 +183,10 @@ public final class McpTools {
         }).build();
     }
 
-    /** {@code answer}, followed by how the calls that asked on screen ended since the last answer ({@link OnScreen}). */
-    static CallToolResult withNews(CallToolResult answer) {
+    /** {@code answer}, followed by how the calls that asked on screen ended since the last answer ({@link ToolGroup#news}). */
+    static CallToolResult withNews(ToolGroup group, CallToolResult answer) {
         if (answer == null) return null;
-        List<String> news = OnScreen.news();
+        List<String> news = group.news();
         if (news.isEmpty()) return answer;
         List<McpSchema.Content> content = new ArrayList<>(answer.content() == null ? List.of() : answer.content());
         content.add(new McpSchema.TextContent(String.join("\n", news)));
@@ -192,9 +194,10 @@ public final class McpTools {
     }
 
     /** {@code tool} with {@link #withNews}: the home's tools, which nothing else wraps. */
-    static SyncToolSpecification withNews(SyncToolSpecification tool) {
+    static SyncToolSpecification withNews(ToolGroup group, SyncToolSpecification tool) {
         return SyncToolSpecification.builder().tool(tool.tool())
-                .callHandler((exchange, request) -> withNews(tool.callHandler().apply(exchange, request))).build();
+                .callHandler((exchange, request) -> withNews(group, tool.callHandler().apply(exchange, request)))
+                .build();
     }
 
     /** How many characters of text {@code answer} gives the assistant to read; 0 for none. */
@@ -218,13 +221,10 @@ public final class McpTools {
 
     /**
      * The tools, and the actions of a tool of several ({@code "plugins list"}), that touch neither the bot's files
-     * nor its plugins, so they answer while a plugin moves or a question is on screen ({@link OnScreen}).
+     * nor its plugins, so they answer while a plugin moves or a question is on screen ({@link ToolGroup#busy}).
      */
     static final Set<String> WHILE_MOVING = Set.of("plugins list", "plugins search", "versions list",
             "list_bots", "plugin_guide", "get_settings", "run_state", "read_trace", "stop", "quit_studio");
-
-    /** The tool that presses a question's buttons: it passes while a question is up, not while what it asked runs. */
-    private static final String UI = "ui";
 
     /** The action a call chose, as the contract reads it; empty for a tool of one action. */
     private static String actionOf(CallToolRequest request) {
@@ -236,11 +236,12 @@ public final class McpTools {
      * The bound plugins' tools, but one whose name is in {@code taken}: a name that is Studio's own or an earlier
      * plugin's would shadow it, so the first one keeps it.
      */
-    static List<SyncToolSpecification> pluginTools(McpJsonMapper json, StudioDriver driver, Set<String> taken) {
+    static List<SyncToolSpecification> pluginTools(McpJsonMapper json, StudioDriver driver, ToolGroup group,
+                                                   Set<String> taken) {
         Set<String> names = new HashSet<>(taken);
         List<SyncToolSpecification> out = new ArrayList<>();
         for (SyncToolSpecification tool : pluginTools(json, driver)) {
-            if (names.add(tool.tool().name())) out.add(guarded(driver, tool));
+            if (names.add(tool.tool().name())) out.add(guarded(driver, group, tool));
             else System.err.println("Warning: a plugin's assistant tool " + tool.tool().name() + " is taken; skipped.");
         }
         return out;

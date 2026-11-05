@@ -1,5 +1,11 @@
 # Dated notes — read these before the other files here
 
+> **Sharing is `botmaker-core`'s since 2026-11-05** (phase 9 of the same plan): `sharing` is `com.botmaker.core.sharing`,
+> `services.LocalBuilds` `com.botmaker.core.services`, `ClassFiles.Kind` the core's `project.ClassKind` and
+> `services.run.RunEntries` the core's `run.RunEntries`. The MCP's `RunLog` subscribes nothing (`RunLogOnBus` tells it),
+> and `McpTools`/`McpEndpoint` reach `ui` and the questions on screen only through a `ToolGroup`, Studio's
+> `StudioToolGroup`. Text below naming `studio.sharing` means the core's.
+
 > **The plugin host classes are `botmaker-core`'s since 2026-11-05** (phase 8a of the same plan). `plugin/*` but
 > `HostSlotContext`, `HostSlotRun`, `EditorContest` and `FxUi` is now `com.botmaker.core.plugin`; `services.upgrade` is
 > `com.botmaker.core.services.upgrade` and `JitPackSearch` `com.botmaker.core.services`. A file below naming

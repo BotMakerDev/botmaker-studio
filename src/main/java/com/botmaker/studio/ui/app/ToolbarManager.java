@@ -11,7 +11,7 @@ import com.botmaker.core.plugin.HostActionContext;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.plugin.PluginHost.PluginBar;
 import com.botmaker.studio.services.ProjectSettingsService;
-import com.botmaker.studio.services.run.RunEntries;
+import com.botmaker.core.run.RunEntries;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
