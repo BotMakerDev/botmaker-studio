@@ -19,7 +19,6 @@ import com.botmaker.core.plugin.PluginOwners;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectMode;
-import com.botmaker.core.project.ProjectOpenMigrations;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.core.project.vcs.Checkpoints;
@@ -212,9 +211,8 @@ public class UIManager implements ProjectWindow {
         // Startup banner: which local builds are actually running (distinct from the GitHub update check).
         System.out.println(VersionInfo.banner(config.projectPath()));
 
-        // Before the file explorer exists, which is the point: a migration can delete a file the tree would
-        // otherwise go on listing.
-        this.openReport = ProjectOpenMigrations.run(config, state, codeEditorService::rewritten);
+        // The core ran the open-time passes before it read the sources (plan phase 10d); this is what it said.
+        this.openReport = state.openReport();
 
         this.fileExplorerManager = new FileExplorerManager(ctx);
         // ▶ Try a statement and ▶ Run a method on its own, from the canvas, the overlay editor and the assistant.

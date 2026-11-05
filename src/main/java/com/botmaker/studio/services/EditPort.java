@@ -19,12 +19,6 @@ public interface EditPort {
     /** An undo or a redo of the project's history. */
     EditResult step(HistoryStep step);
 
-    /** A write of the open file made outside an edit (an open-time migration), recorded as one step. */
-    EditResult rewritten(String file, String original, String source);
-
-    /** An assistant's finished session, by its texts: lands while the open file still reads {@code original}. */
-    EditResult commit(String file, String original, String source, String label);
-
     /** Makes {@code file} the open file, as Studio just did. */
     EditResult show(String file);
 
@@ -39,16 +33,6 @@ public interface EditPort {
 
         @Override
         public EditResult step(HistoryStep step) {
-            return READ_ONLY;
-        }
-
-        @Override
-        public EditResult rewritten(String file, String original, String source) {
-            return READ_ONLY;
-        }
-
-        @Override
-        public EditResult commit(String file, String original, String source, String label) {
             return READ_ONLY;
         }
 

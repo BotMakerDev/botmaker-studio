@@ -31,7 +31,13 @@ public final class LocalEdits implements EditPort {
     /** What {@link CodeEditorService}'s constructor takes. */
     public static Function<Consumer<CoreEvent>, EditPort> over(ProjectConfig config, ProjectState state, EventBus bus,
                                                                ProjectAnalyzer analyzer) {
-        return told -> new LocalEdits(new CoreEditor(config, state, new BusEditorOutput(bus), analyzer, told));
+        return told -> of(config, state, bus, analyzer, told);
+    }
+
+    /** A core over the test's state, telling {@code told} what lands. */
+    public static LocalEdits of(ProjectConfig config, ProjectState state, EventBus bus, ProjectAnalyzer analyzer,
+                                Consumer<CoreEvent> told) {
+        return new LocalEdits(new CoreEditor(config, state, new BusEditorOutput(bus), analyzer, told));
     }
 
     @Override
@@ -44,15 +50,12 @@ public final class LocalEdits implements EditPort {
         return core.step(step) ? new EditResult.Accepted(List.of()) : new EditResult.Refused("No step that way.");
     }
 
-    @Override
-    public EditResult rewritten(String file, String original, String source) {
+    /**
+     * A write of the open file the test made outside an edit, recorded as one step and announced as an edit is: what a
+     * test redraws through. Studio has no such path; the core writes its own files.
+     */
+    public void rewritten(String source, String original) {
         core.rewritten(new EditorOutput.Write(source, original, false, null, List.of()));
-        return new EditResult.Accepted(List.of());
-    }
-
-    @Override
-    public EditResult commit(String file, String original, String source, String label) {
-        return core.commit(file, original, source, label);
     }
 
     @Override

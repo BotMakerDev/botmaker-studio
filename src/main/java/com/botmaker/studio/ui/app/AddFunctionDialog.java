@@ -6,7 +6,7 @@ import com.botmaker.java.edit.palette.SignatureType;
 import com.botmaker.java.edit.palette.SignatureTypes;
 import com.botmaker.java.edit.palette.TypeNames;
 import com.botmaker.core.project.params.BotRecords;
-import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.core.edit.TypeCatalog;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;

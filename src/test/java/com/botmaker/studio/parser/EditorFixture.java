@@ -60,6 +60,8 @@ public final class EditorFixture {
     private final BlockDragAndDropManager dragAndDrop;
     private final ProjectAnalyzer analyzer;
     private CodeEditorService context;
+    /** The core the service edits through, once the service is built. */
+    private LocalEdits edits;
 
     public EditorFixture(String source) {
         this(source, Paths.get("Subject.java").toAbsolutePath());
@@ -105,8 +107,17 @@ public final class EditorFixture {
         // that is how the canvas redraws from it (plan phase 6e).
         editor = new CodeEditor(CONFIG, state, TestOutput.of(bus, write -> {
             lastCode = write.newCode();
-            if (context != null) context.rewritten(write.newCode(), write.previousCode());
+            if (context != null) rewritten(write.newCode(), write.previousCode());
         }), analyzer, journal);
+    }
+
+    /**
+     * A write of the open file made outside an edit, landed in the fixture's own core as one step and announced to the
+     * service, so it is drawn and undone as an edit is. Builds the service when none is yet.
+     */
+    public void rewritten(String newCode, String previousCode) {
+        context();
+        edits.rewritten(newCode, previousCode);
     }
 
     /**
@@ -118,7 +129,7 @@ public final class EditorFixture {
         if (context == null) {
             context = new CodeEditorService(CONFIG, state, bus, converter, dragAndDrop,
                     new DiagnosticsManager(), analyzer, new ApiDocsService(CONFIG, bus),
-                    LocalEdits.over(CONFIG, state, bus, analyzer));
+                    told -> edits = LocalEdits.of(CONFIG, state, bus, analyzer, told));
         }
         return context;
     }

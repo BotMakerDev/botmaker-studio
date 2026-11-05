@@ -191,14 +191,6 @@ public class CodeEditorService {
         }
     }
 
-    /**
-     * A write of the open file made outside an edit, an open-time migration: the core records it as one step and
-     * announces it, so it is drawn and undone as an edit is.
-     */
-    public void rewritten(String newCode, String previousCode) {
-        state.activeFileName().ifPresent(file -> edits.rewritten(file, previousCode, newCode));
-    }
-
 
     public ProjectConfig getConfig() { return config; }
     public ProjectAnalyzer getProjectAnalyzer() { return projectAnalyzer; }

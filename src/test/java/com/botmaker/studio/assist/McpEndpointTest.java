@@ -7,8 +7,14 @@ import com.botmaker.core.assist.LiveBot;
 import com.botmaker.core.assist.RunLog;
 import com.botmaker.core.assist.McpTools;
 import com.botmaker.core.assist.McpEndpoint;
+import com.botmaker.core.server.CoreServer;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
+import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
+import io.modelcontextprotocol.server.McpSyncServer;
+import io.modelcontextprotocol.spec.McpSchema;
+import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import com.botmaker.core.edit.EditWorkspace;
-import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.core.edit.TypeCatalog;
 import com.botmaker.studio.services.RunLogOnBus;
 import com.botmaker.plugin.api.History;
 import com.botmaker.plugin.api.StudioServices;
@@ -278,7 +284,8 @@ class McpEndpointTest {
     private RunLog log;
     /** What the run's service says between a request and the bot's start. */
     private volatile boolean compiling;
-    private McpEndpoint endpoint;
+    private CoreServer server;
+    private final List<String> served = new ArrayList<>();
     private String session;
     private int ids = 10;
 
@@ -287,18 +294,54 @@ class McpEndpointTest {
         bot = new FakeBot();
         driver = new FakeDriver();
         log = RunLogOnBus.listen(bus, new RunLog(Clock.systemUTC(), () -> compiling));
-        endpoint = McpEndpoint.start(0, TOKEN, bot, driver, log, StudioToolGroup.INSTANCE);
+        server = CoreServer.start(0, TOKEN, "test",
+                new CoreServer.Hooks(CoreServer.Idle.DEFAULT, () -> true, channel -> { }, () -> { }));
+        serve();
     }
 
     @AfterEach
     void stop() {
-        endpoint.close();
+        server.close();
         log.close();
+    }
+
+    /**
+     * The tools as the core serves them with a project open in Studio (plan phase 10d, {@code ServedTools}): its own
+     * first, each admitted by Studio before it runs, then Studio's; the first of a name wins. Over again when a plugin
+     * comes or goes.
+     */
+    private synchronized void serve() {
+        McpSyncServer mcp = server.mcp();
+        served.forEach(mcp::removeTool);
+        served.clear();
+        JacksonMcpJsonMapper mapper = new JacksonMcpJsonMapper(json);
+        List<SyncToolSpecification> tools = new ArrayList<>(McpTools.own(mapper, bot).stream().map(this::admitted)
+                .toList());
+        tools.addAll(McpTools.all(mapper, driver, log, StudioToolGroup.INSTANCE, this::serve));
+        for (SyncToolSpecification tool : tools) {
+            if (served.contains(tool.tool().name())) continue;
+            mcp.addTool(tool);
+            served.add(tool.tool().name());
+        }
+        mcp.notifyToolsListChanged();
+    }
+
+    /** {@code tool} asked of Studio first, as the core asks it: refused, or answered with the news after. */
+    private SyncToolSpecification admitted(SyncToolSpecification tool) {
+        return SyncToolSpecification.builder().tool(tool.tool()).callHandler((exchange, request) -> {
+            CallToolResult admitted = McpTools.admit(driver, StudioToolGroup.INSTANCE, request);
+            if (Boolean.TRUE.equals(admitted.isError())) return admitted;
+            CallToolResult answer = tool.callHandler().apply(exchange, request);
+            if (admitted.content() == null || admitted.content().isEmpty()) return answer;
+            List<McpSchema.Content> content = new ArrayList<>(answer.content());
+            content.addAll(admitted.content());
+            return CallToolResult.builder().content(content).isError(answer.isError()).build();
+        }).build();
     }
 
     /** Posts one JSON-RPC message and answers the JSON reply, reading it out of an SSE frame when it is one. */
     private HttpResponse<String> post(String body, String token) throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(endpoint.url()))
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(McpEndpoint.url(server.port())))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json, text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
@@ -325,7 +368,7 @@ class McpEndpointTest {
     private void initialize() throws Exception {
         JsonNode init = rpc("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
                 + "\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"}}");
-        assertEquals("botmaker-studio", init.path("result").path("serverInfo").path("name").asText(), init.toString());
+        assertEquals("botmaker-core", init.path("result").path("serverInfo").path("name").asText(), init.toString());
         post("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", TOKEN);
     }
 
@@ -386,14 +429,11 @@ class McpEndpointTest {
     }
 
     @Test
-    void eachPluginWithAGuideIsNamedAtConnectAndItsGuideReadByPluginGuide() throws Exception {
+    void eachPluginsGuideIsReadByPluginGuide() throws Exception {
         JsonNode init = rpc("initialize", "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},"
                 + "\"clientInfo\":{\"name\":\"test\",\"version\":\"1\"}}");
-        String instructions = init.path("result").path("instructions").asText();
-        assertTrue(instructions.startsWith(McpTools.INSTRUCTIONS), instructions);
-        assertTrue(instructions.endsWith("This bot's plugins with a guide: Fake. Read plugin_guide before your first "
-                + "edit.\n"), instructions);
-        assertFalse(instructions.contains("One activity per chore."), "the guide itself is plugin_guide's answer");
+        // The core's instructions are fixed (plan phase 10d): one core serves every project, so no plugin is named.
+        assertEquals(McpTools.INSTRUCTIONS, init.path("result").path("instructions").asText());
         post("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", TOKEN);
         assertEquals("How a bot on Fake is laid out:\nOne activity per chore.", text(call("plugin_guide", "{}")));
         driver.more = true;

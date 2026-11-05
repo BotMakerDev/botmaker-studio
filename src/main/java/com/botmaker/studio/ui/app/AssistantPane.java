@@ -3,11 +3,16 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.services.RunLogOnBus;
 import com.botmaker.core.assist.AiTool;
-import com.botmaker.core.assist.HomeEndpoint;
 import com.botmaker.core.assist.McpConfig;
-import com.botmaker.studio.assist.StudioToolGroup;
 import com.botmaker.core.assist.McpEndpoint;
+import com.botmaker.core.assist.McpTools;
+import com.botmaker.core.server.CoreLauncher;
+import com.botmaker.studio.assist.CoreTools;
+import com.botmaker.studio.assist.StudioToolGroup;
 import com.botmaker.core.assist.RunLog;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.json.McpJsonMapper;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;
@@ -44,6 +49,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -61,10 +67,6 @@ final class AssistantPane {
 
     private static final String SHELL = System.getenv("SHELL");
 
-    /** How long a start waits for the port: at most {@code BIND_TRIES} times {@code BIND_PAUSE_MS}. */
-    private static final int BIND_TRIES = 16;
-    private static final long BIND_PAUSE_MS = 250;
-
     private final StudioContext ctx;
     private final Path projectDir;
     private final BorderPane root = new BorderPane();
@@ -81,13 +83,16 @@ final class AssistantPane {
     /** Where each tool was found; absent until the search that runs at construction answers. */
     private final Map<AiTool, Optional<Path>> found = new EnumMap<>(AiTool.class);
     private McpConfig mcpConfig = McpConfig.load();
-    private McpEndpoint endpoint;
-    /** What runs and what it printed, as {@link #endpoint}'s tools read it; closed with it. */
+    /** Where an MCP client reaches this project's tools, served through the core; null while they are not. */
+    private CoreLauncher.Address endpoint;
+    /** What runs and what it printed, as the served tools read it; closed when they go. */
     private RunLog runLog;
+    /** What the served tools ask of this window; with {@link #runLog}. */
+    private StudioBridge driver;
     /** ▶ Try and ▶ Run on its own, which the endpoint's run tools ask. */
     private final Trials trials;
-    /** Callers waiting for the endpoint that is starting now; null when none is starting. */
-    private List<Consumer<McpEndpoint>> waiting;
+    /** Callers waiting for the tools being registered now; null when none are. */
+    private List<Consumer<CoreLauncher.Address>> waiting;
     /** This window's private directory for the tools' config files (they hold the token); made on first use. */
     private Path configDir;
     private boolean disposed;
@@ -100,7 +105,7 @@ final class AssistantPane {
         serve.setSelected(mcpConfig.enabled());
         copySetup.setDisable(!mcpConfig.enabled());
         // A dev Studio Claude drives (BOTMAKER_MCP_UI) serves each project it opens, as the home serves the bot list.
-        if (mcpConfig.enabled() || HomeEndpoint.driven()) ensureEndpoint(e -> { });
+        if (mcpConfig.enabled() || StudioToolGroup.INSTANCE.driven()) ensureEndpoint(e -> { });
         else mcpStatus.setText("Opening a tool starts the endpoint; tick this to keep it for other clients.");
         findTools();
     }
@@ -181,7 +186,7 @@ final class AssistantPane {
     private void sessionsChanged() {
         boolean none = sessions.getTabs().isEmpty();
         root.setCenter(none ? placeholder : sessions);
-        if (none && !serve.isSelected() && !HomeEndpoint.driven()) stopEndpoint();
+        if (none && !serve.isSelected() && !StudioToolGroup.INSTANCE.driven()) stopEndpoint();
     }
 
     private static Node spacer() {
@@ -240,7 +245,7 @@ final class AssistantPane {
             if (started == null) return;
             try {
                 AiTool.Launch launch = chosen.launch(where.get(),
-                        new AiTool.Connection(started.url(), mcpConfig.token(), configDir()), shell);
+                        new AiTool.Connection(McpEndpoint.url(started.port()), started.token(), configDir()), shell);
                 addSession(chosen, launch, shell);
             } catch (IOException | RuntimeException e) {
                 status.setText("Could not prepare " + chosen.displayName() + ": " + e.getMessage());
@@ -287,11 +292,11 @@ final class AssistantPane {
     }
 
     /**
-     * Calls {@code then} on the FX thread with the running endpoint, starting it first if needed — off the FX
-     * thread, since a taken port can be a bind timeout — or with null, and the reason on the status line, when
-     * it cannot start.
+     * Calls {@code then} on the FX thread with where an MCP client reaches this project's tools, registering them with
+     * the core first if needed (plan phase 10d) — off the FX thread, since the core may have to be started — or with
+     * null, and the reason on the status line, when no core could be had.
      */
-    private void ensureEndpoint(Consumer<McpEndpoint> then) {
+    private void ensureEndpoint(Consumer<CoreLauncher.Address> then) {
         if (endpoint != null) {
             then.accept(endpoint);
             return;
@@ -302,49 +307,39 @@ final class AssistantPane {
         }
         waiting = new ArrayList<>(List.of(then));
         mcpStatus.setText("Starting…");
-        McpConfig starting = mcpConfig;
-        RunLog log = RunLogOnBus.listen(ctx.eventBus(),
-                new RunLog(Clock.systemUTC(), ctx.runs()::isRunning));
-        StudioBridge driver = new StudioBridge(ctx, trials, log,
+        runLog = RunLogOnBus.listen(ctx.eventBus(), new RunLog(Clock.systemUTC(), ctx.runs()::isRunning));
+        driver = new StudioBridge(ctx, trials, runLog,
                 () -> root.getScene() == null ? null : root.getScene().getWindow());
-        Thread starter = new Thread(() -> {
-            McpEndpoint started = null;
-            String failure = null;
-            try {
-                // A dev Studio's UI endpoint holds the port while no project serves; this one takes it over.
-                HomeEndpoint.yieldPort();
-                started = startRetrying(starting, ctx, driver, log);
-            } catch (Exception e) {
-                failure = "Could not listen on port " + starting.port() + ": " + e.getMessage();
-                HomeEndpoint.serve();
+        registerTools().thenAccept(at -> Platform.runLater(() -> {
+            List<Consumer<CoreLauncher.Address>> callers = waiting;
+            waiting = null;
+            if (disposed) return;
+            CoreLauncher.Address result = at.orElse(null);
+            if (result == null) {
+                String reason = "BotMaker's core could not be reached; core.log in the cache folder says why.";
+                mcpStatus.setText(reason);
+                status.setText(reason);
+                serve.setSelected(false);
+                CoreTools.backHome();
+                closeTools();
+            } else {
+                endpoint = result;
+                mcpStatus.setText("Serving " + McpEndpoint.url(result.port()) + " (token required)");
             }
-            McpEndpoint result = started;
-            String reason = failure;
+            callers.forEach(c -> c.accept(result));
+        }));
+    }
+
+    /** This project's tools and its plugins' as they are now, registered with the core; where they are reached. */
+    private CompletableFuture<Optional<CoreLauncher.Address>> registerTools() {
+        McpJsonMapper json = new JacksonMcpJsonMapper(new ObjectMapper());
+        StudioBridge projectDriver = driver;
+        return CoreTools.project(McpTools.all(json, projectDriver, runLog, StudioToolGroup.INSTANCE, () -> {
+            // A tool added or removed a plugin: its tools are served anew, on FX, which owns driver and runLog.
             Platform.runLater(() -> {
-                List<Consumer<McpEndpoint>> callers = waiting;
-                waiting = null;
-                if (disposed) {
-                    // A start that finishes after the window closed must let go of the port, or the next
-                    // window's endpoint cannot bind it.
-                    if (result != null) result.close();
-                    log.close();
-                    return;
-                }
-                if (result == null) {
-                    log.close();
-                    mcpStatus.setText(reason);
-                    status.setText(reason);
-                    serve.setSelected(false);
-                } else {
-                    endpoint = result;
-                    runLog = log;
-                    mcpStatus.setText("Serving " + result.url() + " (token required)");
-                }
-                callers.forEach(c -> c.accept(result));
+                if (driver == projectDriver) registerTools();
             });
-        }, "mcp-start");
-        starter.setDaemon(true);
-        starter.start();
+        }), projectDriver, StudioToolGroup.INSTANCE);
     }
 
     /** Keeps the endpoint on for clients outside Studio, and remembers the choice. */
@@ -354,37 +349,25 @@ final class AssistantPane {
         copySetup.setDisable(!on);
         if (on) {
             ensureEndpoint(e -> { });
-        } else if (sessions.getTabs().isEmpty() && !HomeEndpoint.driven()) {
+        } else if (sessions.getTabs().isEmpty() && !StudioToolGroup.INSTANCE.driven()) {
             stopEndpoint();
             mcpStatus.setText("Opening a tool starts the endpoint; tick this to keep it for other clients.");
         }
     }
 
-    /**
-     * The endpoint started, tried again for a few seconds: a dev Studio's endpoint that a {@code ui} press closed
-     * lets go of the port only once the press has answered ({@code McpEndpoint#close}).
-     */
-    private McpEndpoint startRetrying(McpConfig config, StudioContext ctx, StudioBridge driver, RunLog log)
-            throws Exception {
-        LiveEditorBot bot = new LiveEditorBot(ctx);
-        for (int attempt = 1; ; attempt++) {
-            try {
-                return McpEndpoint.start(config.port(), config.token(), bot, driver, log, StudioToolGroup.INSTANCE);
-            } catch (Exception taken) {
-                if (attempt >= BIND_TRIES) throw taken;
-                Thread.sleep(BIND_PAUSE_MS);
-            }
-        }
+    /** This project's tools go from the core, and the home's come back; the core's own go too, as nothing admits them. */
+    private void stopEndpoint() {
+        if (driver == null) return;
+        CoreTools.backHome();
+        closeTools();
+        mcpStatus.setText("Stopped.");
     }
 
-    private void stopEndpoint() {
-        if (endpoint == null) return;
-        endpoint.close();
+    private void closeTools() {
         endpoint = null;
-        HomeEndpoint.serve();
-        runLog.close();
+        driver = null;
+        if (runLog != null) runLog.close();
         runLog = null;
-        mcpStatus.setText("Stopped.");
     }
 
     private Path configDir() throws IOException {

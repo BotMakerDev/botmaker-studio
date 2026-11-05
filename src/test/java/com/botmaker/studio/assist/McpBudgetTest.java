@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
@@ -46,8 +47,11 @@ class McpBudgetTest {
         EventBus bus = new EventBus(false);
         RunLog log = RunLogOnBus.listen(bus, new RunLog(Clock.systemUTC(), () -> false));
         try {
-            List<SyncToolSpecification> tools = McpTools.studio(new JacksonMcpJsonMapper(JSON), Stubs.of(LiveBot.class),
-                    Stubs.of(StudioDriver.class), log, StudioToolGroup.INSTANCE, () -> { });
+            // What the core serves with a project open in Studio: its own edit tools, then Studio's (plan phase 10d).
+            JacksonMcpJsonMapper json = new JacksonMcpJsonMapper(JSON);
+            List<SyncToolSpecification> tools = new ArrayList<>(McpTools.own(json, Stubs.of(LiveBot.class)));
+            tools.addAll(McpTools.studio(json, Stubs.of(StudioDriver.class), log, StudioToolGroup.INSTANCE,
+                    () -> { }));
             List<Cost> costs = tools.stream().map(t -> cost(t.tool()))
                     .sorted(Comparator.comparingInt(Cost::chars).reversed()).toList();
             int instructions = McpTools.INSTRUCTIONS.length();

@@ -152,12 +152,12 @@ class MethodSwitchTest extends FxHeadlessTest {
         pick(fixture, "max", "min");
         pick(fixture, "min", "abs");
         // An unrelated edit, re-rendering around the call with block reuse.
-        onFx(() -> fixture.context().rewritten(
+        onFx(() -> fixture.rewritten(
                 fixture.state.getCurrentCode().replace("int a = 1;", "int a = 5;"),
                 fixture.state.getCurrentCode()));
         pick(fixture, "abs", "max");
         pick(fixture, "max", "min");
-        onFx(() -> fixture.context().rewritten(
+        onFx(() -> fixture.rewritten(
                 fixture.state.getCurrentCode().replace("int b = 2;", "int b = 7;"),
                 fixture.state.getCurrentCode()));
         pick(fixture, "min", "max");

@@ -112,8 +112,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
-import static com.botmaker.studio.ui.app.LiveEditorBot.onFx;
-
 /**
  * Studio as the MCP endpoint drives it ({@link StudioDriver}): targets, the overlay editor's caret and boxes, and
  * runs through the same events and the same {@link Trials} the toolbar and the menus use. Calls arrive on Jetty's
@@ -1716,5 +1714,32 @@ final class StudioBridge implements StudioDriver {
 
     private void say(String message) {
         ctx.eventBus().publish(new CoreApplicationEvents.StatusMessageEvent(message));
+    }
+
+    /** How long a tool waits for the FX thread to answer. */
+    private static final long WAIT_SECONDS = 30;
+
+    /** {@code work} on the FX thread, waited for: at once when this is it. */
+    static <T> T onFx(Supplier<T> work) {
+        if (Platform.isFxApplicationThread()) return work.get();
+        CompletableFuture<T> result = new CompletableFuture<>();
+        Platform.runLater(() -> {
+            try {
+                result.complete(work.get());
+            } catch (RuntimeException e) {
+                result.completeExceptionally(e);
+            }
+        });
+        try {
+            return result.get(WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted waiting for the editor", e);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RuntimeException thrown) throw thrown;
+            throw new IllegalStateException("the editor did not answer: " + e.getMessage(), e);
+        } catch (TimeoutException e) {
+            throw new IllegalStateException("the editor did not answer in " + WAIT_SECONDS + "s", e);
+        }
     }
 }

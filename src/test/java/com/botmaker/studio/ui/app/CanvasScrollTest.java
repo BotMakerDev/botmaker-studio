@@ -108,7 +108,7 @@ class CanvasScrollTest extends FxHeadlessTest {
                 "the fixture must be tall enough to scroll, or this test asserts nothing (was " + scrolledTo + ")");
 
         // An edit to the FIRST statement, so the whole program below it is re-rendered around a changed node.
-        onFx(() -> fixture.context().rewritten(source("int a = 99;"), fixture.state.getCurrentCode()));
+        onFx(() -> fixture.rewritten(source("int a = 99;"), fixture.state.getCurrentCode()));
         onFx(() -> {
             root.applyCss();
             root.layout();
@@ -131,7 +131,7 @@ class CanvasScrollTest extends FxHeadlessTest {
                 e -> seen.add(e.rootBlock().getUINode(fixture.context())), false));
 
         onFx(fixture::rerender);
-        onFx(() -> fixture.context().rewritten(source("int a = 99;"), fixture.state.getCurrentCode()));
+        onFx(() -> fixture.rewritten(source("int a = 99;"), fixture.state.getCurrentCode()));
 
         assertEquals(2, seen.size(), "both renders should have published a root");
         assertTrue(seen.get(0) != seen.get(1),

@@ -92,7 +92,7 @@ class OverlayReuseTest extends FxHeadlessTest {
     }
 
     private static void edit(EditorFixture fixture, String newSource) throws Exception {
-        onFx(() -> fixture.context().rewritten(newSource, fixture.state.getCurrentCode()));
+        onFx(() -> fixture.rewritten(newSource, fixture.state.getCurrentCode()));
     }
 
     @Test

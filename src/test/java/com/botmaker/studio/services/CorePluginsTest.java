@@ -72,8 +72,8 @@ class CorePluginsTest extends FxHeadlessTest {
         bus.subscribe(CoreApplicationEvents.PluginWroteEvent.class, e -> wrote.incrementAndGet(), false);
         CoreServer.Idle idle = new CoreServer.Idle(Duration.ofMinutes(10), Duration.ofSeconds(30));
         try (CoreMain.Running core = CoreMain.serve(cache, VERSION, idle, CoreRunsTest.LIBRARIES, () -> { })) {
-            CoreLauncher.Address at = CoreLauncher.connect(cache, VERSION, CoreLauncher.process());
-            try (CoreEdits edits = CoreEdits.open(at, VERSION, config, state, bus, EventBus.UiThread.INLINE)) {
+            try (CoreEdits edits = CoreEdits.open(cache, VERSION, CoreLauncher.process(), config, state, bus,
+                    EventBus.UiThread.INLINE)) {
                 edits.heardBy(event -> {
                     if (event instanceof CoreEvent.HistoryChanged changed) HostHistory.told(changed);
                 });

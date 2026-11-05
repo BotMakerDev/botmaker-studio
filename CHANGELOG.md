@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- Claude reaches Studio through BotMaker's core (2026-11-05). The core is the only MCP server. It runs Claude's edits on
+  the open project itself, and Studio registers its own tools with it: the screen, runs, versions and plugins. With no
+  project open, Studio registers the home's tools. If the core stops, Studio says so, starts a new one and reopens the
+  project. The files stay as the last accepted edit left them. The open-time migrations run in the core, and the
+  status bar shows what they did.
 - The plugins write the bot through BotMaker's core (2026-11-05). Studio's copy of a plugin draws its windows and
   reads the bot, and the core makes each write and records it in the history. A batch of writes is one undo step.
   Studio no longer resolves the pom: it binds to what the core resolved, and Reload and the pom watcher ask the core.

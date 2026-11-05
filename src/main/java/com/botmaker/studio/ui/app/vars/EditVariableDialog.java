@@ -15,7 +15,7 @@ import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.app.params.ValueEditors;
-import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.core.edit.TypeCatalog;
 import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.components.pickers.PickerContext;
 import com.botmaker.studio.ui.render.components.pickers.PickerRegistry;

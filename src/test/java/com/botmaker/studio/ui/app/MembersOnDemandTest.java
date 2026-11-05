@@ -141,7 +141,7 @@ class MembersOnDemandTest extends FxHeadlessTest {
         onFx(() -> canvas.revealBlock(farStatement(fixture), false));
         onFx(() -> scroll.setVvalue(0));
         // An edit to the first constant: run() is a blank again, while its statement's block keeps its node.
-        onFx(() -> fixture.context().rewritten(
+        onFx(() -> fixture.rewritten(
                 source().replace("C0 = 0;", "C0 = 99;"), fixture.state.getCurrentCode()));
         CodeBlock kept = farStatement(fixture);
         onFx(() -> {

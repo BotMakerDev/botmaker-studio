@@ -4,7 +4,7 @@ import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.java.edit.palette.TypeNames;
 import com.botmaker.core.project.params.BotRecords;
-import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.core.edit.TypeCatalog;
 import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;

@@ -106,8 +106,8 @@ class CoreRunsTest extends FxHeadlessTest {
         CoreServer.Idle idle = new CoreServer.Idle(Duration.ofMinutes(10), Duration.ofSeconds(30));
         try (CoreMain.Running core = CoreMain.serve(cache, VERSION, idle, LIBRARIES, () -> { })) {
             // Finds the core just served: nothing is started.
-            CoreLauncher.Address at = CoreLauncher.connect(cache, VERSION, CoreLauncher.process());
-            try (CoreEdits edits = CoreEdits.open(at, VERSION, config, state, bus, EventBus.UiThread.INLINE);
+            try (CoreEdits edits = CoreEdits.open(cache, VERSION, CoreLauncher.process(), config, state, bus,
+                    EventBus.UiThread.INLINE);
                  CoreRuns runs = CoreRuns.attach(edits, new DiagnosticsManager(), state, config, bus)) {
                 edits.heardBy(event -> { });
                 edits.show(FILE);

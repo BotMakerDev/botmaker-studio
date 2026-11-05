@@ -14,6 +14,7 @@ import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.server.CoreClient;
 import com.botmaker.core.server.CoreLauncher;
+import com.botmaker.core.server.CoreLink;
 import com.botmaker.core.services.MavenService;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.shared.config.CacheDirs;
@@ -63,7 +64,7 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     private final Object draining = new Object();
     private volatile Consumer<CoreEvent> heard;
     private volatile boolean closing;
-    private CoreClient client;
+    private CoreLink link;
     private final Path sourceRoot;
     /** Whoever hears of runs; told through {@link #runEvents}, which waits for it. */
     private final CompletableFuture<Consumer<CoreEvent>> runListener = new CompletableFuture<>();
@@ -89,24 +90,40 @@ public final class CoreEdits implements EditPort, AutoCloseable {
      */
     public static CoreEdits open(ProjectConfig config, ProjectState state, EventBus bus, EventBus.UiThread ui)
             throws IOException {
-        String version = AppVersion.label();
-        // A sandboxed Studio has its own core, or it would share the user's and its one open project.
-        Path dir = AppPaths.sandbox().map(home -> home.resolve("core")).orElseGet(CacheDirs::cacheRoot);
-        return open(CoreLauncher.connect(dir, version, CoreLauncher.process()), version, config, state, bus, ui);
+        return open(coreDir(), AppVersion.label(), CoreLauncher.process(), config, state, bus, ui);
     }
 
-    /** As {@link #open(ProjectConfig, ProjectState, EventBus, EventBus.UiThread)}, on the core that answers at {@code at}. */
-    static CoreEdits open(CoreLauncher.Address at, String version, ProjectConfig config, ProjectState state, EventBus bus,
-                          EventBus.UiThread ui) throws IOException {
+    /** Where this Studio's core keeps its files: a sandboxed Studio has its own, or it would share the user's. */
+    public static Path coreDir() {
+        return AppPaths.sandbox().map(home -> home.resolve("core")).orElseGet(CacheDirs::cacheRoot);
+    }
+
+    /**
+     * As {@link #open(ProjectConfig, ProjectState, EventBus, EventBus.UiThread)}, on the core for {@code dir}, started by
+     * {@code starter} when none runs, and again by it when that core stops (plan phase 10d): the project is reopened
+     * on the new one and the open file shown again.
+     */
+    static CoreEdits open(Path dir, String version, CoreLauncher.Starter starter, ProjectConfig config,
+                          ProjectState state, EventBus bus, EventBus.UiThread ui) throws IOException {
         CoreEdits edits = new CoreEdits(config, state, bus, ui);
-        edits.client = CoreClient.connect(at, version, edits::arrived, edits::ended);
+        edits.link = CoreLink.connect(dir, version, starter, edits::arrived, call -> { }, edits.new Restarts());
+        // Before the first open: a core that dies during it is replaced with the project open again.
+        edits.link.rejoin(client -> {
+            if (client.open(config.projectPath()) instanceof EditResult.Refused refused) {
+                throw new IOException(refused.reason());
+            }
+            String shown = state.activeFileName().orElse(null);
+            if (shown != null && client.show(shown) instanceof EditResult.Refused refused) {
+                throw new IOException(refused.reason());
+            }
+        });
         try {
-            if (edits.client.open(config.projectPath()) instanceof EditResult.Refused refused) {
+            if (edits.link.client().open(config.projectPath()) instanceof EditResult.Refused refused) {
                 throw new IOException(refused.reason());
             }
         } catch (IOException e) {
             // Closed even when the answer never came: the core would keep this channel on the project it goes on opening.
-            edits.client.close();
+            edits.link.close();
             throw e;
         }
         state.setSavedByCore(true);
@@ -202,7 +219,7 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     /** A request to the core, on the caller's thread, with nothing told drained; for what the mirror does not wait on. */
     public EditResult request(Ask ask) {
         try {
-            return ask.of(client);
+            return ask.of(link.client());
         } catch (IOException e) {
             return new EditResult.Refused("BotMaker's core did not answer: " + e.getMessage());
         } catch (IllegalArgumentException e) {
@@ -244,18 +261,6 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     }
 
     @Override
-    public EditResult rewritten(String file, String original, String source) {
-        return ask(client -> client.rewritten(file, original, source));
-    }
-
-    @Override
-    public EditResult commit(String file, String original, String source, String label) {
-        EditResult result = ask(client -> client.commit(file, original, source, label));
-        if (result instanceof EditResult.Accepted) readOthersFromDisk();
-        return result;
-    }
-
-    @Override
     public EditResult show(String file) {
         return ask(client -> client.show(file));
     }
@@ -269,7 +274,7 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     private EditResult ask(Ask ask) {
         EditResult result;
         try {
-            result = ask.of(client);
+            result = ask.of(link.client());
         } catch (IOException e) {
             result = new EditResult.Refused("BotMaker's core did not answer: " + e.getMessage());
             bus.publish(new CoreApplicationEvents.StatusMessageEvent(((EditResult.Refused) result).reason()));
@@ -282,6 +287,11 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         if (event instanceof CoreEvent.LibrariesResolved resolved) {
             // Not queued: the asker that waits for it reads it as soon as its answer is in, on no UI thread.
             resolution = new MavenService.Resolution(resolved.jars(), resolved.problems());
+            return;
+        }
+        if (event instanceof CoreEvent.Opened opened) {
+            // Kept, not drawn: the status bar that shows it is built after the open answers.
+            state.setOpenReport(opened.report());
             return;
         }
         if (ofARun(event)) {
@@ -393,27 +403,50 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         }
     }
 
-    private void ended() {
-        if (closing) return;
-        bus.publish(new CoreApplicationEvents.StatusMessageEvent(
-                "BotMaker's core stopped: reopen the project to edit it again."));
-        // Nothing will tell what it ran has ended, and the toolbar would wait for that for ever.
-        toRuns(new CoreEvent.RunState(CoreEvent.RunState.Phase.ENDED, "the core stopped"));
-        toRuns(new CoreEvent.DebugSession(CoreEvent.DebugSession.Phase.FINISHED));
+    /** What Studio says and does as its core stops and a new one takes the project over (plan phase 10d). */
+    private final class Restarts implements CoreLink.Listener {
+        @Override
+        public void stopped() {
+            if (closing) return;
+            status("The core stopped; BotMaker is starting it again.");
+            // Nothing will tell what it ran has ended, and the toolbar would wait for that for ever.
+            toRuns(new CoreEvent.RunState(CoreEvent.RunState.Phase.ENDED, "the core stopped"));
+            toRuns(new CoreEvent.DebugSession(CoreEvent.DebugSession.Phase.FINISHED));
+        }
+
+        @Override
+        public void restarted() {
+            // Every accepted change was on disk before it was answered; one another client made just before may not be
+            // in the mirror yet.
+            readOthersFromDisk();
+            status("BotMaker's core is back, with the project open again.");
+        }
+
+        @Override
+        public void lost(IOException why) {
+            if (closing) return;
+            status("The core stopped and could not be started again (" + why.getMessage()
+                    + "): reopen the project to edit it again.");
+        }
+    }
+
+    private void status(String message) {
+        bus.publish(new CoreApplicationEvents.StatusMessageEvent(message));
     }
 
     /** Leaves the project, which the core closes when no other client is on it, and ends the channel. */
     @Override
     public void close() {
         runEvents.shutdownNow();
-        if (client == null) return;
+        if (link == null) return;
         closing = true;
+        CoreClient client = link.client();
         try {
             if (client.isOpen()) client.leave();
         } catch (IOException e) {
             System.err.println("BotMaker's core did not let the project go: " + e.getMessage());
         } finally {
-            client.close();
+            link.close();
         }
     }
 }

@@ -5,8 +5,11 @@ import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
 import com.botmaker.core.assist.BotGuard;
-import com.botmaker.core.assist.HomeEndpoint;
+import com.botmaker.core.assist.HomeTools;
+import com.botmaker.studio.assist.CoreTools;
 import com.botmaker.studio.assist.StudioToolGroup;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import com.botmaker.studio.assist.UiEvents;
 import com.botmaker.core.config.AppPaths;
 import com.botmaker.core.config.Constants;
@@ -157,12 +160,12 @@ public class BotMakerStudio extends Application {
         LinkScheme.registerOnWindows();
         // A dev Studio's ui tool, from the first window on (BOTMAKER_MCP_UI); nothing otherwise.
         StudioToolGroup.mainWindow(primaryStage);
-        HomeEndpoint.group(StudioToolGroup.INSTANCE);
-        HomeEndpoint.shell(new HomeShell(primaryStage, (dir, runner) -> {
-            if (runner) openAs(primaryStage, dir, true, false);
-            else editProject(primaryStage, dir, false);
-        }));
-        HomeEndpoint.serve();
+        // Served through the core (plan phase 10d), and only when Claude drives this Studio.
+        CoreTools.home(HomeTools.served(new JacksonMcpJsonMapper(new ObjectMapper()), StudioToolGroup.INSTANCE,
+                new HomeShell(primaryStage, (dir, runner) -> {
+                    if (runner) openAs(primaryStage, dir, true, false);
+                    else editProject(primaryStage, dir, false);
+                })));
         if (bmk.isPresent()) {
             // A second launch is a Studio of its own (2026-10-25): it opens the file on the loading page (N12).
             make(primaryStage, new BmkFlow(primaryStage).opening(bmk.get()));
@@ -692,10 +695,10 @@ public class BotMakerStudio extends Application {
         }
     }
 
-    /** The toolkit is ending: the UI tools' endpoint goes too, or its server threads keep the JVM alive. */
+    /** The toolkit is ending: Studio's tools leave the core with it. */
     @Override
     public void stop() {
-        HomeEndpoint.yieldPort();
+        CoreTools.stop();
         channel.ifPresent(StudioChannel::close);
     }
 

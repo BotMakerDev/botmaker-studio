@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.core.sharing.PluginRegistry;
-import com.botmaker.core.assist.HomeEndpoint;
+import com.botmaker.core.assist.HomeTools;
 import com.botmaker.studio.assist.OnScreen;
 import com.botmaker.studio.ui.app.AssistedNewProject;
 import javafx.application.Platform;
@@ -17,7 +17,7 @@ import java.util.function.Function;
  * published bots and a new project as New Project makes one, opened on the FX thread, and what is on screen. The tools
  * ask this, never a window of Studio's.
  */
-public final class HomeShell implements HomeEndpoint.Shell {
+public final class HomeShell implements HomeTools.Shell {
 
     private final BiConsumer<Path, Boolean> opens;
     private final AssistedNewProject newProject;

@@ -96,7 +96,7 @@ class BlockReuseRenderTest extends FxHeadlessTest {
 
     /** Publishes the edit the way {@code CodeEditor} does after a write, and waits for the render. */
     private void edit(EditorFixture fixture, String newSource) throws Exception {
-        onFx(() -> fixture.context().rewritten(newSource, fixture.state.getCurrentCode()));
+        onFx(() -> fixture.rewritten(newSource, fixture.state.getCurrentCode()));
     }
 
     /**

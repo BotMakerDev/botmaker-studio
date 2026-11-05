@@ -6,7 +6,7 @@ import com.botmaker.core.assist.SignatureNames;
 import com.botmaker.core.edit.PaletteEntry;
 import com.botmaker.core.edit.Outcome;
 import com.botmaker.core.edit.EditWorkspace;
-import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.core.edit.TypeCatalog;
 import com.botmaker.plugin.api.value.Drawn;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.core.parser.guard.RefusalJournal;

@@ -23,7 +23,7 @@ import com.botmaker.core.state.SnapshotHistory;
 import com.botmaker.studio.ui.app.RefusalDialog;
 import com.botmaker.studio.ui.app.StudioWindow;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets.ValueEditor;
-import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.core.edit.TypeCatalog;
 import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.Animation;
