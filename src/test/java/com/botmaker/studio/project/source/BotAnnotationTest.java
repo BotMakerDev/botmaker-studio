@@ -110,16 +110,14 @@ class BotAnnotationTest {
                 package com.example.bot;
                 import com.botmaker.plugin.api.params.Param;
                 class Parameters {
-                    static final String LIMITS = "Limits";
                     static final String NOTE = "How many";
-                    @Param(category = LIMITS, description = NOTE)
+                    @Param(description = NOTE)
                     public static int a = 1;
                 }
                 """);
         assertNotNull(annotation.resolveAnnotationBinding(), "the contract is on the test classpath");
         assertEquals(true, BotAnnotation.PARAM.marks(annotation));
         Map<String, Object> members = BotAnnotation.PARAM.members(annotation);
-        assertEquals("Limits", members.get("category"));
         assertEquals("How many", members.get("description"));
     }
 
@@ -130,10 +128,10 @@ class BotAnnotationTest {
         Annotation annotation = only(empty, """
                 package com.example.bot;
                 import com.botmaker.plugin.api.params.Param;
-                class Parameters { @Param(category = "X") public static int a = 1; }
+                class Parameters { @Param(description = "X") public static int a = 1; }
                 """);
         assertEquals(true, BotAnnotation.PARAM.marks(annotation));
-        assertEquals("X", BotAnnotation.PARAM.members(annotation).get("category"));
+        assertEquals("X", BotAnnotation.PARAM.members(annotation).get("description"));
     }
 
     @Test

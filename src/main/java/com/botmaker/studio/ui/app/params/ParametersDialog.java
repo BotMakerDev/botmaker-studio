@@ -357,7 +357,8 @@ public final class ParametersDialog {
         newCategory.setMaxWidth(Double.MAX_VALUE);
         newCategory.setOnAction(e -> createCategory());
 
-        VBox column = new VBox(6, rail, newCategory, moveHere);
+        // No New category or Move here (2026-11-05): the class is the category, so neither has anything to write.
+        VBox column = new VBox(6, rail);
         VBox.setVgrow(rail, Priority.ALWAYS);
         return column;
     }
@@ -540,31 +541,12 @@ public final class ParametersDialog {
     }
 
     /**
-     * Files the dragged parameter under {@code tag} — what a drop onto the rail does, and the same edit the
-     * card's own picker makes. Returns whether anything moved, which is what a drop reports back.
-     *
-     * <p>{@code dragged} is the {@code class\nname} pair the grip put on the dragboard; a payload with no
-     * newline is read as a bare name in the default class, which is what every earlier drag was.
+     * What a drop onto the rail does: nothing since 2026-11-05, when the class became the category, so a drop
+     * refiles no parameter and reports so. Phase 5 of the params cleanup takes the drag away.
      */
+    @SuppressWarnings("unused")
     private boolean fileUnder(String dragged, String tag) {
-        if (dragged == null) return false;
-        int cut = dragged.indexOf('\n');
-        String group = cut < 0 ? JavaParameters.DEFAULT_CLASS : dragged.substring(0, cut);
-        String name = cut < 0 ? dragged : dragged.substring(cut + 1);
-        JavaParameter entry = find(group, name);
-        if (entry == null) return false;
-        String home = ParameterRow.GENERAL.equals(tag) ? "" : tag;
-        edit(entry, "the category", current -> current.toBuilder().category(home).build());
-        return true;
-    }
-
-    /** The categories a parameter may be filed under without typing one: its section's, plus "no category". */
-    private List<String> filingChoices(JavaParameter entry) {
-        List<String> choices = new ArrayList<>();
-        choices.add(ParameterRow.GENERAL);
-        choices.addAll(VariableRailModel.categoriesIn(filed(), entry.className(),
-                addedCategories.get(entry.className())));
-        return choices;
+        return false;
     }
 
     // --- right: the parameters of the selected tag ---------------------------------------------------------
@@ -763,7 +745,8 @@ public final class ParametersDialog {
             row++;
         }
         grid.add(new Label("Category"), 0, row);
-        grid.add(mine ? buildTagPicker(entry) : hintLabel(v.categoryOrGeneral()), 1, row);
+        // The class is the category (2026-11-05): read, never picked; the core refuses an edit that refiles one.
+        grid.add(hintLabel(v.categoryOrGeneral()), 1, row);
         row++;
 
         grid.add(new Label("Value"), 0, row);
@@ -960,30 +943,6 @@ public final class ParametersDialog {
     }
 
     /**
-     * Where this parameter is listed — one category or none, never several: a parameter has one home.
-     *
-     * <p><b>Editable again (2026-09-27)</b>: pick one of its section's categories, or type a new one and press
-     * Enter. It had become a closed list of the categories already in use, so a first category could only be
-     * made by hand in the Java.
-     */
-    private Node buildTagPicker(JavaParameter entry) {
-        ComboBox<String> picker = new ComboBox<>();
-        picker.setEditable(true);
-        picker.setPromptText(ParameterRow.GENERAL);
-        picker.getItems().setAll(filingChoices(entry));
-        String current = entry.row().category().isBlank() ? ParameterRow.GENERAL : entry.row().category();
-        picker.setValue(current);
-        picker.setTooltip(new Tooltip("Pick a category, or type a new one and press Enter."));
-        picker.setOnAction(e -> {
-            String chosen = picker.getValue() == null ? "" : picker.getValue().strip();
-            String home = chosen.isEmpty() || ParameterRow.GENERAL.equalsIgnoreCase(chosen) ? "" : chosen;
-            if (home.equalsIgnoreCase(entry.row().category().strip())) return;
-            edit(entry, "the category", row -> row.toBuilder().category(home).build());
-        });
-        return picker;
-    }
-
-    /**
      * A new parameter lands in the category being looked at, which is where somebody adding one means to put
      * it — and in the class the picker names, which is a different question.
      *
@@ -1018,8 +977,6 @@ public final class ParametersDialog {
                 return;
             }
             change("adding " + candidate, () -> {
-                String tag = VariableRailModel.ALL.equals(selectedTag)
-                        || ParameterRow.GENERAL.equals(selectedTag) ? "" : selectedTag;
                 boolean fresh = !JavaParameters.classes(config, state).contains(selectedClass);
                 Type form = type.type();
                 if (PluginHost.grammar().freshSpelling(form).isEmpty()) {
@@ -1028,7 +985,8 @@ public final class ParametersDialog {
                     return;
                 }
                 Optional<ParameterRow> stored = JavaParameters.add(config, state, selectedClass, candidate,
-                        form, PluginHost.grammar().freshSpelling(form).orElse(null), tag, "");
+                        form, PluginHost.grammar().freshSpelling(form).orElse(null), "",
+                        Param.Changes.DURING_RUN);  // a bot parameter Studio adds changes during a run, 2026-11-05
                 if (stored.isEmpty()) {
                     error("“" + candidate + "” was not written — " + selectedClass + " may already declare "
                             + "a field of that name, or no installed plugin declares this type.");
@@ -1244,7 +1202,7 @@ public final class ParametersDialog {
             if (held == null) {
                 // The snapshot's value is Java this file held, so it goes back as that expression, kept.
                 JavaParameters.add(config, state, entry.className(), row.name(), entry.form(),
-                        row.value().orElse(null), row.category(), row.description());
+                        row.value().orElse(null), row.description(), row.changes());
                 held = find(entry.className(), row.name());
             }
             if (held == null) continue;

@@ -12,6 +12,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The Parameters window shows a parameter's category, its class, read-only (2026-11-05): the card's category picker,
+  *+ New category…* and *Move parameters here…* are gone, and a parameter it adds changes during a run.
 - JDT comes through `botmaker-java`, whose pom alone names its version (2026-11-05).
 - Only `java.util.ArrayList` draws as a list (2026-11-05): `new ArrayListOfMine(x)` no longer does, and neither does an
   `ArrayList` the file does not import. A type picked on a method or constructor header is compared by its whole name,
