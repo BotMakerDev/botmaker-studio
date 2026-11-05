@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -116,20 +117,17 @@ class AstRewriteFailureTest {
     }
 
     /**
-     * The primitive. A failure currently returns the original text, so no caller can tell it apart from an
-     * edit that legitimately changed nothing.
+     * The primitive (2026-11-05): a failure throws {@code RewriteFailed} with a sentence, so no caller can take it
+     * for an edit that legitimately changed nothing.
      */
     @Test
-    @Disabled("B11 is unfixed: verified red on this commit — applyRewrite returns the original code on "
-            + "failure. Delete this line in Phase 4 with SP5's fix.")
-    void aRewriteThatCannotBeAppliedReturnsNull() {
+    void aRewriteThatCannotBeAppliedSaysSo() {
         Failing f = failingRewrite();
 
-        String result = AstRewriteHelper.applyRewrite(f.rewriter(), f.mismatchedCode());
+        AstRewriteHelper.RewriteFailed failed = assertThrows(AstRewriteHelper.RewriteFailed.class,
+                () -> AstRewriteHelper.applyRewrite(f.rewriter(), f.mismatchedCode()));
 
-        assertNull(result,
-                "applyRewrite returned " + (f.mismatchedCode().equals(result) ? "the original code" : "text")
-                        + " for a rewrite that threw. Every caller reads that as a successful no-op edit.");
+        assertTrue(failed.getMessage().startsWith("BotMaker could not write that change"), failed.getMessage());
     }
 
     /**
@@ -138,8 +136,6 @@ class AstRewriteFailureTest {
      * about what the editor publishes, not about the helper in isolation.
      */
     @Test
-    @Disabled("B11 as above — a failed edit still publishes a CodeUpdatedEvent carrying unchanged source. "
-            + "Delete this line in Phase 4 with SP5's fix.")
     void aFailedEditPublishesNothing() {
         EditorFixture f = new EditorFixture(SOURCE);
         var body = f.body("run");
