@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (edits by id)
 
+- The assistant's MCP endpoint and its tools moved to `botmaker-core` (`com.botmaker.core.assist`, 2026-11-05), with
+  the MCP SDK and Jetty. Studio keeps `ui`, the questions on screen and `quit_studio`, which reach the home through
+  `StudioToolGroup`; nothing a user sees changes.
 - The assistant's `read_tree` reads the file's Java through `botmaker-core`'s `StatementKind` and `StatementBodies`, which
   the canvas draws by too, instead of building blocks (2026-11-05). It now also lists a body inside a variable's value, a
   lambda's or an arrow switch's. The home's tools ask a `HomeShell`; the Edit Variable types reach the assistant as

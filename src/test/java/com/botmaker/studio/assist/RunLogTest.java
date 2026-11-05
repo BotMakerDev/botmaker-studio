@@ -1,5 +1,6 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.assist.RunLog;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.studio.services.RunLogOnBus;
 import com.botmaker.studio.events.CoreApplicationEvents.OutputAppendedEvent;

@@ -1,7 +1,7 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.assist.RunLog;
+import com.botmaker.core.assist.RunLog;
 import com.botmaker.studio.events.CoreApplicationEvents.DebugSessionFinishedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.DebugSessionStartedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.EntryRunRequestedEvent;

@@ -1,9 +1,9 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.studio.assist.AssistTurn;
+import com.botmaker.core.assist.AssistTurn;
 import com.botmaker.core.edit.DeclarableTypes;
 import com.botmaker.core.edit.EditWorkspace;
-import com.botmaker.studio.assist.BlockView;
+import com.botmaker.core.assist.BlockView;
 import com.botmaker.core.edit.Outcome;
 import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.edit.palette.BlockType;

@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.assist.AssistTurn;
+import com.botmaker.core.assist.AssistTurn;
 import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.edit.EditWorkspace;
-import com.botmaker.studio.assist.LiveBot;
+import com.botmaker.core.assist.LiveBot;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.index.nav.Refactor;

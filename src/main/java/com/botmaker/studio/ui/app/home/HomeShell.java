@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.core.sharing.PluginRegistry;
-import com.botmaker.studio.assist.HomeEndpoint;
+import com.botmaker.core.assist.HomeEndpoint;
 import com.botmaker.studio.assist.OnScreen;
 import com.botmaker.studio.ui.app.AssistedNewProject;
 import javafx.application.Platform;

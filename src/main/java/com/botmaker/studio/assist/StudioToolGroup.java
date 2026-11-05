@@ -1,5 +1,7 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.assist.ToolGroup;
+import com.botmaker.core.assist.McpTools;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import javafx.application.Platform;
 import javafx.stage.Window;
@@ -9,7 +11,7 @@ import java.util.Set;
 
 /**
  * Studio's {@link ToolGroup}: {@code ui} in a dev Studio Claude drives ({@link UiTools#enabled}), never in the installed
- * app, and the questions Studio has on screen ({@link OnScreen}).
+ * app, {@code quit_studio} on the home, and the questions Studio has on screen ({@link OnScreen}).
  */
 public final class StudioToolGroup implements ToolGroup {
 
@@ -24,7 +26,17 @@ public final class StudioToolGroup implements ToolGroup {
 
     @Override
     public List<AssistantTool<?>> tools() {
-        return UiTools.enabled() ? List.of(new UiTools().tool()) : List.of();
+        return driven() ? List.of(new UiTools().tool()) : List.of();
+    }
+
+    @Override
+    public boolean driven() {
+        return UiTools.enabled();
+    }
+
+    @Override
+    public List<AssistantTool<?>> homeTools() {
+        return List.of(McpTools.quitStudio(UiTools::quit));
     }
 
     @Override

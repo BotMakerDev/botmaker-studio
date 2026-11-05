@@ -2,12 +2,12 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.services.RunLogOnBus;
-import com.botmaker.studio.assist.AiTool;
-import com.botmaker.studio.assist.HomeEndpoint;
-import com.botmaker.studio.assist.McpConfig;
+import com.botmaker.core.assist.AiTool;
+import com.botmaker.core.assist.HomeEndpoint;
+import com.botmaker.core.assist.McpConfig;
 import com.botmaker.studio.assist.StudioToolGroup;
-import com.botmaker.studio.assist.McpEndpoint;
-import com.botmaker.studio.assist.RunLog;
+import com.botmaker.core.assist.McpEndpoint;
+import com.botmaker.core.assist.RunLog;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;

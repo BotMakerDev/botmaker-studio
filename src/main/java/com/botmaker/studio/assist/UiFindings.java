@@ -17,7 +17,7 @@ import java.time.temporal.ChronoUnit;
  * {@link UiEvents} caught, every stall {@link FxWatch} saw over {@link #STALL_MS}, and every {@code ui} press or type
  * with its time to idle, so a click-test walk compares its steps with the previous walk's.
  *
- * <p>Best effort, as {@link ToolTimes}: a row that cannot be written is dropped, and the file is moved aside to
+ * <p>Best effort, as the core's {@code ToolTimes}: a row that cannot be written is dropped, and the file is moved aside to
  * {@code ui-findings.old.tsv} once it passes {@link #ROLL_BYTES}. Writes nothing until {@link #install}, so tests write
  * no file.
  */

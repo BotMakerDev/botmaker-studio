@@ -1,5 +1,10 @@
 # Dated notes — read these before the other files here
 
+> **The MCP endpoint and its tools are `botmaker-core`'s since 2026-11-05** (phase 9b of the same plan): every class of
+> `assist/` moved to `com.botmaker.core.assist`, `AiTool` and `BotGuard` included, except these, which stay in Studio:
+> `UiTools`, `UiInput`, `UiEvents`, `UiFindings`, `UiProfile`, `OnScreen`, `FxWatch`, `PluginMove` and `StudioToolGroup`. `HomeEndpoint` serves for the `ToolGroup` Studio sets
+> (`HomeEndpoint.group`), which says whether Claude drives the screen (`driven`) and adds `quit_studio` (`homeTools`).
+
 > **What a statement is, and which bodies it holds, is `botmaker-core`'s since 2026-11-05** (phase 9a of the same plan):
 > `BlockConverter` dispatches on the core's `parser.StatementKind` and builds bodies and switch cases from
 > `parser.StatementBodies`; `blocks.func.CallOwner` is the core's `parser.CallOwner`. `AssistTurn.tree` reads the JDT

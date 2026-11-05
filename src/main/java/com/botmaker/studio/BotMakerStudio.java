@@ -4,8 +4,8 @@ import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
-import com.botmaker.studio.assist.BotGuard;
-import com.botmaker.studio.assist.HomeEndpoint;
+import com.botmaker.core.assist.BotGuard;
+import com.botmaker.core.assist.HomeEndpoint;
 import com.botmaker.studio.assist.StudioToolGroup;
 import com.botmaker.studio.assist.UiEvents;
 import com.botmaker.core.config.AppPaths;
@@ -157,6 +157,7 @@ public class BotMakerStudio extends Application {
         LinkScheme.registerOnWindows();
         // A dev Studio's ui tool, from the first window on (BOTMAKER_MCP_UI); nothing otherwise.
         StudioToolGroup.mainWindow(primaryStage);
+        HomeEndpoint.group(StudioToolGroup.INSTANCE);
         HomeEndpoint.shell(new HomeShell(primaryStage, (dir, runner) -> {
             if (runner) openAs(primaryStage, dir, true, false);
             else editProject(primaryStage, dir, false);

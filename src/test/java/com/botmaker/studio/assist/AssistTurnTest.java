@@ -1,5 +1,8 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.assist.AssistTurn;
+import com.botmaker.core.assist.BlockView;
+import com.botmaker.core.assist.SignatureNames;
 import com.botmaker.core.edit.PaletteEntry;
 import com.botmaker.core.edit.Outcome;
 import com.botmaker.core.edit.EditWorkspace;

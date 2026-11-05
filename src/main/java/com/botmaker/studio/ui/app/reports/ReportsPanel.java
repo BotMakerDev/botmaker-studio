@@ -8,7 +8,7 @@ import com.botmaker.runlog.ReportTarget;
 import com.botmaker.runlog.RunLog;
 import com.botmaker.runlog.api.Dimension;
 import com.botmaker.runlog.api.Level;
-import com.botmaker.studio.assist.PastRuns;
+import com.botmaker.core.assist.PastRuns;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.plugin.PluginHost;

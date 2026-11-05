@@ -1,5 +1,10 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.assist.StudioDriver;
+import com.botmaker.core.assist.LiveBot;
+import com.botmaker.core.assist.RunLog;
+import com.botmaker.core.assist.McpTools;
+import com.botmaker.core.assist.Stubs;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.services.RunLogOnBus;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -8,14 +13,11 @@ import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import io.modelcontextprotocol.spec.McpSchema.Tool;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,8 +46,8 @@ class McpBudgetTest {
         EventBus bus = new EventBus(false);
         RunLog log = RunLogOnBus.listen(bus, new RunLog(Clock.systemUTC(), () -> false));
         try {
-            List<SyncToolSpecification> tools = McpTools.studio(new JacksonMcpJsonMapper(JSON), stub(LiveBot.class),
-                    stub(StudioDriver.class), log, StudioToolGroup.INSTANCE, () -> { });
+            List<SyncToolSpecification> tools = McpTools.studio(new JacksonMcpJsonMapper(JSON), Stubs.of(LiveBot.class),
+                    Stubs.of(StudioDriver.class), log, StudioToolGroup.INSTANCE, () -> { });
             List<Cost> costs = tools.stream().map(t -> cost(t.tool()))
                     .sorted(Comparator.comparingInt(Cost::chars).reversed()).toList();
             int instructions = McpTools.INSTRUCTIONS.length();
@@ -81,24 +83,5 @@ class McpBudgetTest {
         } catch (Exception e) {
             throw new IllegalStateException(tool.name(), e);
         }
-    }
-
-    /**
-     * {@code type}, answering nothing: listing the tools calls none of their handlers. A list is empty, an optional
-     * empty, a default method its own body.
-     */
-    static <T> T stub(Class<T> type) {
-        InvocationHandler none = (proxy, method, args) -> {
-            if (method.isDefault()) return InvocationHandler.invokeDefault(proxy, method, args);
-            Class<?> returns = method.getReturnType();
-            if (returns == List.class) return List.of();
-            if (returns == Optional.class) return Optional.empty();
-            if (returns == boolean.class) return false;
-            if (returns == int.class) return 0;
-            if (returns == long.class) return 0L;
-            if (returns == String.class) return "";
-            return null;
-        };
-        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type}, none));
     }
 }

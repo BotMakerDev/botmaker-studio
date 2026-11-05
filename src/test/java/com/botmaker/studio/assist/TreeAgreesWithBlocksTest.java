@@ -1,5 +1,7 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.assist.AssistTurn;
+import com.botmaker.core.assist.BlockView;
 import com.botmaker.core.edit.DeclarableTypes;
 import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.core.events.EventBus;

@@ -1,5 +1,12 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.assist.McpConfig;
+import com.botmaker.core.assist.AssistTurn;
+import com.botmaker.core.assist.StudioDriver;
+import com.botmaker.core.assist.LiveBot;
+import com.botmaker.core.assist.RunLog;
+import com.botmaker.core.assist.McpTools;
+import com.botmaker.core.assist.McpEndpoint;
 import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.studio.services.RunLogOnBus;
