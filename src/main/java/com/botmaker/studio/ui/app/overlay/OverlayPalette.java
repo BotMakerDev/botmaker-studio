@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.catalog.FacadeEntry;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.java.types.MethodSignature;

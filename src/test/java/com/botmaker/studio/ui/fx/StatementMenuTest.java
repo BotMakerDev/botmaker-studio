@@ -278,7 +278,7 @@ class StatementMenuTest extends FxHeadlessTest {
                 com.botmaker.studio.TestSupport.SOURCE_ROOT);
         var main = ((org.eclipse.jdt.core.dom.TypeDeclaration) cu.types().getFirst()).getMethods()[2];
         var analyzer = new com.botmaker.java.types.ProjectAnalyzer(null,
-                new com.botmaker.studio.project.ProjectState());
+                new com.botmaker.core.project.ProjectState());
         AtomicReference<BlockType> picked = new AtomicReference<>();
 
         ContextMenu menu = StatementMenu.create(analyzer, main.getBody(), picked::set);

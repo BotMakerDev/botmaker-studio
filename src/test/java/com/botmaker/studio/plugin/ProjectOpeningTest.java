@@ -1,5 +1,8 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.TestPlugins;
+import com.botmaker.core.plugin.PluginLogs;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.plugin.api.StudioPlugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.host.LoadedPlugin;
@@ -17,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Telling the incoming plugins <em>which</em> project they are now serving — the mirror of
- * {@link ProjectClosingTest}.
+ * the core's {@code ProjectClosingTest}.
  *
  * <p>The failure this guards against is not a leak but an empty window. A plugin is constructed once by the
  * loader and then serves whatever is bound to it, so a plugin never told which project it has cannot read that

@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectRepair;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectRepair;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.scene.control.Alert;

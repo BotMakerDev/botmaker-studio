@@ -1,9 +1,9 @@
 package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.studio.plugin.DuplicatePlugins;
-import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.services.MavenService;
-import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.core.plugin.DuplicatePlugins;
+import com.botmaker.core.project.UserLibrary;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.sharing.PluginRegistry;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

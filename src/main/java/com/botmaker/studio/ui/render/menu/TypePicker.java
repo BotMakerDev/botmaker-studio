@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.parse.JavaLevel;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;

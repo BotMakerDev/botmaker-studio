@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.fx;
 
-import com.botmaker.studio.project.params.ParameterRow;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.project.params.ParameterRow;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.java.grammar.ValueGrammar;

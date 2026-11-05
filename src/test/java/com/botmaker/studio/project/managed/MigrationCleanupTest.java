@@ -1,10 +1,12 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.MigrationTypes;
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
-import com.botmaker.studio.project.managed.MigrationTypes.Shot;
+import com.botmaker.core.project.managed.MigrationTypes.OldShot;
+import com.botmaker.core.project.managed.MigrationTypes.Shot;
 import com.botmaker.java.index.BotIndex;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -37,8 +39,8 @@ class MigrationCleanupTest {
     private static final String OLD_SHOTS = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.OldShot;
 
             @TestValue(TestValue.Id.OLD_SHOTS)
             public final class OldShots {
@@ -53,8 +55,8 @@ class MigrationCleanupTest {
             package com.bot.plugins.sdk;
 
             import com.botmaker.plugin.api.meta.Migrated;
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.Shot;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.Shot;
 
             @TestValue(TestValue.Id.SHOTS)
             public final class Shots {
@@ -70,7 +72,7 @@ class MigrationCleanupTest {
             package com.bot;
 
             import com.bot.plugins.sdk.OldShots;
-            import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
+            import com.botmaker.core.project.managed.MigrationTypes.OldShot;
 
             public final class Miner {
                 static Object first() {
@@ -87,7 +89,7 @@ class MigrationCleanupTest {
             package com.bot;
 
             import com.botmaker.plugin.api.meta.Migrate;
-            import com.botmaker.studio.project.managed.MigrationTypes.*;
+            import com.botmaker.core.project.managed.MigrationTypes.*;
 
             public final class Migrations {
                 private Migrations() {
@@ -198,9 +200,9 @@ class MigrationCleanupTest {
 
                     @com.botmaker.plugin.api.meta.Migrate(value = OldShot.class,
                             kind = com.botmaker.plugin.api.meta.Migrate.Kind.TYPE)
-                    public static com.botmaker.studio.project.managed.MigrationTypes.Shot shot(String file,
+                    public static com.botmaker.core.project.managed.MigrationTypes.Shot shot(String file,
                                                                                          int threshold) {
-                        return new com.botmaker.studio.project.managed.MigrationTypes.Shot(file, threshold, false);
+                        return new com.botmaker.core.project.managed.MigrationTypes.Shot(file, threshold, false);
                     }
                 """);
         Map<Path, String> sources = new LinkedHashMap<>(index(root, MINER).sources());

@@ -4,7 +4,7 @@ import com.botmaker.shared.input.InputEvent;
 import com.botmaker.shared.input.InputListener;
 import com.botmaker.shared.input.InputListenerFactory;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import javafx.application.Platform;
 
 import java.util.List;

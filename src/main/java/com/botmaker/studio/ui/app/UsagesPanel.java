@@ -1,10 +1,10 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.java.index.nav.Usages;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.index.BotIndex;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.services.BotSources;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;

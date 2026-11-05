@@ -1,6 +1,6 @@
 package com.botmaker.studio.services.trial;
 
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.services.debug.DebugSnapshot;
 import org.junit.jupiter.api.Test;

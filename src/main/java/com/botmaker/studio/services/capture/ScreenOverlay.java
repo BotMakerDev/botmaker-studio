@@ -1,6 +1,6 @@
 package com.botmaker.studio.services.capture;
 
-import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.core.project.ProjectPreferences;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 
 import javafx.application.Platform;

@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.plugin.PluginHost.PluginBar;
+import com.botmaker.core.plugin.PluginHost.PluginBar;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Bounds;
 import javafx.geometry.Insets;

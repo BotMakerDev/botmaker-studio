@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.TestOutcome;
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.JavaValue;
@@ -35,7 +37,7 @@ class ManagedSetsTest {
     private static final String PICTURES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestValue;
 
             @TestValue(TestValue.Id.PICTURES)
             public final class Pictures {
@@ -199,8 +201,8 @@ class ManagedSetsTest {
     private static final String OUTCOMES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestOutcome;
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestOutcome;
+            import com.botmaker.core.project.managed.TestValue;
 
             @TestValue(TestValue.Id.OUTCOMES)
             public enum Outcomes implements TestOutcome {
@@ -212,7 +214,7 @@ class ManagedSetsTest {
             package com.bot;
 
             import com.bot.plugins.sdk.Outcomes;
-            import com.botmaker.studio.project.managed.TestOutcome;
+            import com.botmaker.core.project.managed.TestOutcome;
 
             class Reports {
                 TestOutcome body() {
@@ -257,8 +259,8 @@ class ManagedSetsTest {
     private static final String ACTIVITIES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestOutcome;
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestOutcome;
+            import com.botmaker.core.project.managed.TestValue;
 
             @TestValue(TestValue.Id.OUTCOMES)
             public final class Activities {
@@ -364,7 +366,7 @@ class ManagedSetsTest {
     private static final String ROUTES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestValue;
 
             @TestValue(TestValue.Id.PICTURES)
             public final class Pictures {

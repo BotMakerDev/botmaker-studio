@@ -1,21 +1,23 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.MigrationTypes;
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationSteps.Choice;
 import com.botmaker.studio.project.managed.MigrationSteps.Shape;
 import com.botmaker.studio.project.managed.MigrationSteps.Step;
-import com.botmaker.studio.project.managed.MigrationTypes.Area;
-import com.botmaker.studio.project.managed.MigrationTypes.Badge;
-import com.botmaker.studio.project.managed.MigrationTypes.Frame;
-import com.botmaker.studio.project.managed.MigrationTypes.OldArea;
-import com.botmaker.studio.project.managed.MigrationTypes.OldBadge;
-import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
-import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
-import com.botmaker.studio.project.managed.MigrationTypes.OldTint;
-import com.botmaker.studio.project.managed.MigrationTypes.Shot;
-import com.botmaker.studio.project.managed.MigrationTypes.Tint;
+import com.botmaker.core.project.managed.MigrationTypes.Area;
+import com.botmaker.core.project.managed.MigrationTypes.Badge;
+import com.botmaker.core.project.managed.MigrationTypes.Frame;
+import com.botmaker.core.project.managed.MigrationTypes.OldArea;
+import com.botmaker.core.project.managed.MigrationTypes.OldBadge;
+import com.botmaker.core.project.managed.MigrationTypes.OldFrame;
+import com.botmaker.core.project.managed.MigrationTypes.OldShot;
+import com.botmaker.core.project.managed.MigrationTypes.OldTint;
+import com.botmaker.core.project.managed.MigrationTypes.Shot;
+import com.botmaker.core.project.managed.MigrationTypes.Tint;
 import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.AST;
 import org.junit.jupiter.api.Test;
@@ -51,8 +53,8 @@ class MigrationStepsTest {
     private static final String OLD_SHOTS = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.OldShot;
 
             @TestValue(TestValue.Id.OLD_SHOTS)
             public final class OldShots {
@@ -66,8 +68,8 @@ class MigrationStepsTest {
     private static final String SHOTS = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.Shot;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.Shot;
 
             @TestValue(TestValue.Id.SHOTS)
             public final class Shots {
@@ -78,9 +80,9 @@ class MigrationStepsTest {
     private static final String OLD_FRAMES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.OldArea;
-            import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.OldArea;
+            import com.botmaker.core.project.managed.MigrationTypes.OldFrame;
 
             @TestValue(TestValue.Id.OLD_FRAMES)
             public final class OldFrames {
@@ -93,8 +95,8 @@ class MigrationStepsTest {
     private static final String FRAMES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.Frame;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.Frame;
 
             @TestValue(TestValue.Id.FRAMES)
             public final class Frames {

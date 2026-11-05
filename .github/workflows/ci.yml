@@ -164,7 +164,7 @@ jobs:
         run: |
           source .github/mvn-retry.sh
           for repo in botmaker-studio-api botmaker-java botmaker-plugin-host botmaker-plugin-toolkit botmaker-plugin-parent botmaker-plugin-archetype \
-                      botmaker-cli botmaker-runlog botmaker-shared botmaker-session; do
+                      botmaker-cli botmaker-runlog botmaker-shared botmaker-session botmaker-core; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -f ".deps/${repo}/pom.xml" install -DskipTests
           done
@@ -283,14 +283,14 @@ jobs:
       # what `build` does.
       #
       # The SDK is not among them (gone 2026-09-02): Studio bundles no plugin. The release still moves
-      # MavenService.SDK_FALLBACK_VERSION on an --sdk release, but that is text naming what a GENERATED
+      # MavenService.SDK_FALLBACK_VERSION (the core's since 2026-11-05) on an --sdk release, but that is text naming what a GENERATED
       # bot's pom pins, not a jar this build resolves.
       - name: Install upstream main (a dispatch from a branch only)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         run: |
           source .github/mvn-retry.sh
-          for repo in botmaker-studio-api botmaker-java botmaker-plugin-host botmaker-runlog botmaker-shared botmaker-session; do
+          for repo in botmaker-studio-api botmaker-java botmaker-plugin-host botmaker-runlog botmaker-shared botmaker-session botmaker-core; do
             git clone --depth 1 "https://github.com/BotMakerDev/${repo}.git" ".deps/${repo}"
             mvn_retry mvn -B -f ".deps/${repo}/pom.xml" install -DskipTests
           done

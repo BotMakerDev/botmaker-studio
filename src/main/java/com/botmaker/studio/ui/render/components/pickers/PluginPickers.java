@@ -5,7 +5,7 @@ import com.botmaker.plugin.api.slot.SlotRun;
 import com.botmaker.studio.plugin.EditorContest;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.HostSlotContext;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.application.Platform;
 import javafx.scene.Node;

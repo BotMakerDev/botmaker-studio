@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.ProjectRepair;
+import com.botmaker.core.project.ProjectRepair;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

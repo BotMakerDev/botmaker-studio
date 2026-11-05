@@ -1,9 +1,9 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

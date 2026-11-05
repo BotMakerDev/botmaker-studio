@@ -3,8 +3,8 @@ package com.botmaker.studio.migrate;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.plugin.host.PluginPoms;
-import com.botmaker.studio.services.MavenService;
-import com.botmaker.studio.services.ProgressReporter;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.services.ProgressReporter;
 
 import java.io.IOException;
 import java.io.InputStream;

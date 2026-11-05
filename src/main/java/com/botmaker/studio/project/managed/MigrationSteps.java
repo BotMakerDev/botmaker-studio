@@ -18,7 +18,7 @@ import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.core.project.params.JavaParameterSource;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.AST;

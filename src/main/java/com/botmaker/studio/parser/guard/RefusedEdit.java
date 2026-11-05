@@ -1,10 +1,10 @@
 package com.botmaker.studio.parser.guard;
 
-import com.botmaker.studio.config.AppVersion;
+import com.botmaker.core.config.AppVersion;
 import com.botmaker.java.edit.BlockId;
-import com.botmaker.studio.project.LockResolver.EditKind;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.LockResolver.EditKind;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.ASTNode;

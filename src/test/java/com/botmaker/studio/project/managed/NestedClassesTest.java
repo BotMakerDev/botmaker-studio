@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.index.nav.Refactor;
@@ -42,7 +43,7 @@ class NestedClassesTest {
             package com.bot.plugins.sdk;
 
             import com.botmaker.studio.project.managed.TestScreen;
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestValue;
 
             @TestValue(TestValue.Id.SCREENS)
             public final class Screens {

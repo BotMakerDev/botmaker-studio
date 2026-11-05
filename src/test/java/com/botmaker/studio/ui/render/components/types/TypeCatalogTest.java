@@ -1,10 +1,10 @@
 package com.botmaker.studio.ui.render.components.types;
 
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.TestPlugins;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.plugin.TestPlugins;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.params.TestValues;
+import com.botmaker.core.project.params.BotRecords;
+import com.botmaker.core.project.params.TestValues;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

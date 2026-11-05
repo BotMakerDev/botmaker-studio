@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.plugin.PluginHost.PluginBar;
+import com.botmaker.core.plugin.PluginHost.PluginBar;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
 import org.junit.jupiter.api.Test;

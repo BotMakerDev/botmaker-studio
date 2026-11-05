@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **The open project and the plugin host are `botmaker-core`'s since 2026-11-05** (umbrella plan
+> `2026-11-04-java-and-core.md`, phase 6a). `ProjectState`, `ProjectConfig`, `ProjectCreator`, `ProjectRepair`,
+> `ProjectOpenMigrations`, `LockResolver`, the project's settings, `project/migration`, `PluginHost` and its gate,
+> owners and logs, `MavenService`, `config`, `EventBus` and the parts of `managed`, `params`, `vcs` and `sharing` they
+> need moved, each under `com.botmaker.core` in the package it had here. Where a file here names one of them under
+> `com.botmaker.studio`, read the core's. `BotProject`, `StudioContext`, `EditorState` and `CoreApplicationEvents`
+> stay in Studio.
+
 > **The value grammar is `botmaker-java`'s since 2026-11-04** (umbrella plans `2026-11-04-private-values.md`, phase 1,
 > by way of plugin-host, then `2026-11-04-java-and-core.md`, phase 1). Every `plugin/grammar/` class,
 > `parser/helpers/SourceParser` and `SourceFormatter` is now in `com.botmaker.java.grammar`, so the CLI and a running

@@ -1,11 +1,11 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectFile;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 

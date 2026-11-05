@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.services.debug.DebugSnapshot;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;

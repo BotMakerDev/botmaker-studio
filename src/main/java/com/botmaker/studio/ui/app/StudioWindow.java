@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.core.project.ProjectPreferences;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;

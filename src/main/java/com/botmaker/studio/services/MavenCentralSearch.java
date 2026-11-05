@@ -1,6 +1,7 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.project.UserLibrary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

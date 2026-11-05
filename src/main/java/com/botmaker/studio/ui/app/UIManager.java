@@ -1,29 +1,29 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
-import com.botmaker.studio.config.VersionInfo;
+import com.botmaker.core.config.VersionInfo;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.migrate.PluginRules;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.project.managed.HolderMove;
 import com.botmaker.java.index.BotIndex;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.ClassFiles;
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.PluginOwners;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginOwners;
 import com.botmaker.studio.services.LibraryService;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectMode;
-import com.botmaker.studio.project.ProjectOpenMigrations;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectMode;
+import com.botmaker.core.project.ProjectOpenMigrations;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.vcs.Checkpoints;
-import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.core.project.vcs.Checkpoints;
+import com.botmaker.core.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.studio.services.ProjectSettingsService;
@@ -214,7 +214,8 @@ public class UIManager implements ProjectWindow {
 
         // Before the file explorer exists, which is the point: a migration can delete a file the tree would
         // otherwise go on listing.
-        this.openReport = ProjectOpenMigrations.run(config, state, eventBus);
+        this.openReport = ProjectOpenMigrations.run(config, state, (updated, previous) ->
+                eventBus.publish(new CoreApplicationEvents.CodeUpdatedEvent(updated, previous)));
 
         this.fileExplorerManager = new FileExplorerManager(ctx);
         // ▶ Try a statement and ▶ Run a method on its own, from the canvas, the overlay editor and the assistant.

@@ -4,22 +4,22 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.BlockDiff;
-import com.botmaker.studio.project.vcs.Checkpoints;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.ProjectVcs.CommitInfo;
-import com.botmaker.studio.project.vcs.VcsFileStatus;
-import com.botmaker.studio.project.vcs.VersionOrigin;
-import com.botmaker.studio.project.vcs.VersionReader;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.core.project.vcs.Checkpoints;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.ProjectVcs.CommitInfo;
+import com.botmaker.core.project.vcs.VcsFileStatus;
+import com.botmaker.core.project.vcs.VersionOrigin;
+import com.botmaker.core.project.vcs.VersionReader;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.project.vcs.SyncModel;
 import com.botmaker.studio.sharing.BotInstaller;
 import com.botmaker.studio.sharing.BotPublisher;
-import com.botmaker.studio.sharing.BotSource;
-import com.botmaker.studio.sharing.CatalogClient;
-import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.core.sharing.BotSource;
+import com.botmaker.core.sharing.CatalogClient;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.MyCopy;
@@ -601,7 +601,7 @@ public final class VersionsPane {
         if (settings == null || body.getDividers().isEmpty()) return;
         var layout = settings.current().workspaceLayout();
         var base = layout == null
-                ? new com.botmaker.studio.project.StudioProjectSettings.WorkspaceLayout(null, null, null) : layout;
+                ? new com.botmaker.core.project.StudioProjectSettings.WorkspaceLayout(null, null, null) : layout;
         settings.update(settings.current().withWorkspaceLayout(
                 base.withPublishDivider(body.getDividers().getFirst().getPosition())));
     }

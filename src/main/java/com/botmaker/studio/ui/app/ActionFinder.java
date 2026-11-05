@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.plugin.api.toolbar.ActionContext;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.plugin.PluginHost.PluginBar;
+import com.botmaker.core.plugin.PluginHost.PluginBar;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Pos;
 import javafx.scene.Node;

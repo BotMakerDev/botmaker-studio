@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.meta.Migrated;
@@ -18,7 +19,7 @@ import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.core.project.params.JavaParameterSource;
 import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.java.parse.BotParser;

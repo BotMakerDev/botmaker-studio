@@ -1,5 +1,10 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.core.project.params.TestValues;
+import com.botmaker.core.project.params.JavaParameterEdits;
+import com.botmaker.core.project.params.Visibility;
+import com.botmaker.core.project.params.JavaParameterSource;
+import com.botmaker.core.project.params.JavaParameter;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;

@@ -37,7 +37,7 @@ public enum CallOwner {
         if (declaring == null) return PROJECT;
         declaring = declaring.getErasure();
         if (declaring.isFromSource()) return PROJECT;
-        if (com.botmaker.studio.plugin.PluginHost.isFacadeClass(declaring.getName())) return PLUGIN;
+        if (com.botmaker.core.plugin.PluginHost.isFacadeClass(declaring.getName())) return PLUGIN;
         String pkg = declaring.getPackage() == null ? "" : declaring.getPackage().getName();
         if (pkg.equals("java") || pkg.startsWith("java.") || pkg.startsWith("javax.") || pkg.startsWith("jdk.")) {
             return JAVA;

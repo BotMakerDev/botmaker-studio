@@ -1,12 +1,13 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.services.MavenService;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.java.index.ApiDocsParser;
 import com.botmaker.java.edit.palette.ApiDocs;
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.ProjectConfig;
 
 import java.io.IOException;
 import java.io.InputStream;

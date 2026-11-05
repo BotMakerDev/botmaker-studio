@@ -2,9 +2,9 @@ package com.botmaker.studio.services.trial;
 
 import com.botmaker.plugin.api.assist.TrialEntry;
 import com.botmaker.plugin.host.LoadedPlugin;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
-import com.botmaker.studio.project.managed.ManagedIds;
+import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.IAnnotationBinding;

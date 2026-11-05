@@ -1,10 +1,10 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.plugin.TestPlugins;
-import com.botmaker.studio.project.PluginFiles;
-import com.botmaker.studio.project.ProjectState.SourceFile;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.VcsFileStatus;
+import com.botmaker.core.plugin.TestPlugins;
+import com.botmaker.core.project.PluginFiles;
+import com.botmaker.core.project.ProjectState.SourceFile;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.VcsFileStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

@@ -1,5 +1,8 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.core.project.params.TestValues;
+import com.botmaker.core.project.params.ParameterRow;
+import com.botmaker.core.project.params.BotRecords;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
@@ -63,7 +66,7 @@ class RecordValueCellTest extends FxHeadlessTest {
     @Test
     void theComponentsReadBackOneFullyQualifiedConstructorCall() {
         com.botmaker.studio.TestSupport.assumeSdkPluginBound();
-        BotRecords records = BotRecords.of(com.botmaker.studio.plugin.PluginHost.grammar(), List.of(POINT));
+        BotRecords records = BotRecords.of(com.botmaker.core.plugin.PluginHost.grammar(), List.of(POINT));
         ParameterRow row = ParameterRow.named("origin", ValueTypes.sourceName(FORM)).value("new Point(1, 2)").build();
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();

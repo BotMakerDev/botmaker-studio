@@ -2,10 +2,10 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.cli.catalog.DerivedFacts;
-import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.sharing.PublishedBotPlugins;
-import com.botmaker.studio.sharing.PublisherRank;
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.sharing.PluginRegistry;
+import com.botmaker.core.sharing.PublishedBotPlugins;
+import com.botmaker.core.sharing.PublisherRank;
 import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;

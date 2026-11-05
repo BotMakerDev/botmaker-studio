@@ -1,5 +1,7 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.sharing.CatalogIndex;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

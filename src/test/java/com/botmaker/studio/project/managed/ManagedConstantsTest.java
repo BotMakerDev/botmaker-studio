@@ -1,12 +1,14 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.TestOutcome;
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.value.ComponentType;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.QualifiedName;
@@ -49,7 +51,7 @@ class ManagedConstantsTest {
     private static final String PICTURES = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestValue;
 
             @TestValue(TestValue.Id.PICTURES)
             public final class Pictures {
@@ -174,7 +176,7 @@ class ManagedConstantsTest {
         String days = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.PICTURES)
                 public final class Pictures {
@@ -205,8 +207,8 @@ class ManagedConstantsTest {
         String outcomes = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestOutcome;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestOutcome;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.OUTCOMES)
                 public enum Outcomes implements TestOutcome { WON, LOST }
@@ -246,8 +248,8 @@ class ManagedConstantsTest {
         String outcomes = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestOutcome;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestOutcome;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.OUTCOMES)
                 public enum Outcomes implements TestOutcome { WON, LOST }
@@ -309,8 +311,8 @@ class ManagedConstantsTest {
         String activities = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestOutcome;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestOutcome;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.OUTCOMES)
                 public final class Activities {
@@ -347,8 +349,8 @@ class ManagedConstantsTest {
         String activities = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestOutcome;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestOutcome;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.OUTCOMES)
                 public final class Activities {
@@ -358,7 +360,7 @@ class ManagedConstantsTest {
         String steps = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.FLOW)
                 public final class Steps {

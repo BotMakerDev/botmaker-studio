@@ -1,15 +1,15 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
-import com.botmaker.studio.services.MavenService;
+import com.botmaker.core.services.MavenService;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.sharing.PluginCatalog;
-import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.gallery.GalleryCard;
 import com.botmaker.studio.util.BrowserLauncher;

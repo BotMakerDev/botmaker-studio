@@ -10,7 +10,7 @@ import com.botmaker.java.edit.guard.CompileGuard;
 import com.botmaker.java.edit.guard.CompileGuard.Problem;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.edit.refactor.ReviewMarks;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.java.parse.BotParser;

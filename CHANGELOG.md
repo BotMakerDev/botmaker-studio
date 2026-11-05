@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (the open project and the plugin host live in botmaker-core)
+
+- Nothing the user sees (2026-11-05). The project layer, the plugin host, Maven resolution, the app's paths and the
+  event bus moved to `botmaker-core` under `com.botmaker.core`, which Studio now depends on and calls in-process;
+  `BotProject`, `StudioContext`, `EditorState` and `CoreApplicationEvents` stay here. `ProjectOpenMigrations.run`
+  tells its caller when it rewrote the file on screen, rather than publishing on the bus.
+
 ### Changed (the project and its history no longer need JavaFX)
 
 - Nothing the user sees (2026-11-05). `EventBus` delivers a UI subscriber through `EventBus.UiThread`, inline unless

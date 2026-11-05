@@ -2,14 +2,14 @@ package com.botmaker.studio.ui.app.dev;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.plugin.api.value.PluginType;
-import com.botmaker.studio.project.params.ParameterRow;
-import com.botmaker.studio.project.params.Visibility;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.project.params.ParameterRow;
+import com.botmaker.core.project.params.Visibility;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.ui.app.params.ParamValueWidgets;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.animation.Animation;
@@ -58,7 +58,7 @@ import java.util.Locale;
  * construction throws says so in place of its control rather than taking the window down with it: finding
  * that is why you opened this.
  *
- * <p><b>Dev builds only.</b> Gated by {@link com.botmaker.studio.config.AppVersion#isDevBuild()} where it is
+ * <p><b>Dev builds only.</b> Gated by {@link com.botmaker.core.config.AppVersion#isDevBuild()} where it is
  * offered (Help ▸ Picker Gallery), the same switch that decides whether locally-installed SDK snapshots are
  * listed. It is Java source, but it is a screen, not a test class.
  */

@@ -43,7 +43,7 @@ public final class TestSupport {
      * skip says which of the two it was. The SDK is known by its artifactId, its pom's coordinate.
      */
     public static void assumeSdkPluginBound() {
-        boolean bound = com.botmaker.studio.plugin.PluginHost.plugins().stream()
+        boolean bound = com.botmaker.core.plugin.PluginHost.plugins().stream()
                 .anyMatch(p -> "botmaker-sdk".equals(p.coordinate().artifactId()));
         org.junit.jupiter.api.Assumptions.assumeTrue(bound,
                 "the SDK plugin is not on this classpath — Studio does not depend on botmaker-sdk (2026-09-02)");

@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.loading;
 
-import com.botmaker.studio.services.ProgressReporter;
+import com.botmaker.core.services.ProgressReporter;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;

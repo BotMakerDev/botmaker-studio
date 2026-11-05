@@ -10,7 +10,7 @@ import com.botmaker.java.edit.palette.BlockType.ControlFlow.Kind;
 import com.botmaker.java.edit.palette.BotType;
 import com.botmaker.java.edit.palette.Initializer;
 import com.botmaker.java.edit.EditContext;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;

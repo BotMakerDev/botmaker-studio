@@ -1,5 +1,10 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.core.project.params.TestValues;
+import com.botmaker.core.project.params.JavaParameterEdits;
+import com.botmaker.core.project.params.Visibility;
+import com.botmaker.core.project.params.ParameterRow;
+import com.botmaker.core.project.params.JavaParameter;
 import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.ParameterWrite;
@@ -8,9 +13,9 @@ import com.botmaker.plugin.api.source.PluginValues;
 import com.botmaker.plugin.api.source.RunParameter;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.studio.project.managed.TestScreen;
-import com.botmaker.studio.project.managed.TestValue;
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.java.grammar.ParamsFitter;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

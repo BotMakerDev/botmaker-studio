@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.render.menu;
 
-import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.core.project.ProjectPreferences;
 
 import java.util.ArrayList;
 import java.util.List;

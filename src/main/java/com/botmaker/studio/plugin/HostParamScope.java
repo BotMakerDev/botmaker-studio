@@ -1,10 +1,11 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.ParamScope;
 import com.botmaker.plugin.api.source.PluginValues;
-import com.botmaker.studio.project.params.JavaParameter;
+import com.botmaker.core.project.params.JavaParameter;
 
 import java.util.HashMap;
 import java.util.List;

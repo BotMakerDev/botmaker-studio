@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.shared.input.InputEvent;
 import com.botmaker.shared.input.InputListener;
 import com.botmaker.shared.input.InputListenerFactory;
-import com.botmaker.studio.config.AppVersion;
+import com.botmaker.core.config.AppVersion;
 import com.botmaker.studio.runtime.StopKey;
 import com.botmaker.studio.runtime.StopKeyPreference;
 import com.botmaker.studio.ui.render.theme.BlockStyle;
@@ -17,7 +17,7 @@ import com.botmaker.studio.ui.render.theme.CanvasZoom;
 import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -637,14 +637,14 @@ public class MenuBarManager {
             if (opt.isEmpty()) {
                 if (!silentIfNone) {
                     showInfo("You're up to date",
-                            "BotMaker Studio " + com.botmaker.studio.config.AppVersion.get() + " is the latest version.");
+                            "BotMaker Studio " + com.botmaker.core.config.AppVersion.get() + " is the latest version.");
                 }
                 return;
             }
             com.botmaker.studio.services.UpdateService.AvailableUpdate update = opt.get();
             if (!confirm("Update available",
                     "Version " + update.tag() + " is available (you have "
-                            + com.botmaker.studio.config.AppVersion.get() + ").\n\nDownload and install it now?")) {
+                            + com.botmaker.core.config.AppVersion.get() + ").\n\nDownload and install it now?")) {
                 return;
             }
             downloadAndInstall(service, update);
@@ -811,9 +811,9 @@ public class MenuBarManager {
                 "A visual block-based programming environment for Java.\n" +
                         "Build Java applications using drag-and-drop blocks!\n\n" +
                         "Builds in use (local — not the GitHub update check):\n" +
-                        "  Studio: " + com.botmaker.studio.config.VersionInfo.studio() + "\n" +
-                        "  shared: " + com.botmaker.studio.config.VersionInfo.shared() + "\n" +
-                        "  SDK (project): " + com.botmaker.studio.config.VersionInfo.sdkForProject(projectPath)
+                        "  Studio: " + com.botmaker.core.config.VersionInfo.studio() + "\n" +
+                        "  shared: " + com.botmaker.core.config.VersionInfo.shared() + "\n" +
+                        "  SDK (project): " + com.botmaker.core.config.VersionInfo.sdkForProject(projectPath)
         );
         alert.showAndWait();
     }

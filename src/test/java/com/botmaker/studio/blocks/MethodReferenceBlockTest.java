@@ -10,10 +10,10 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.parser.BlockConverter;
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

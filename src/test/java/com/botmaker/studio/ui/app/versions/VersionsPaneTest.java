@@ -1,13 +1,13 @@
 package com.botmaker.studio.ui.app.versions;
 
-import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.events.EventBus;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.SyncModel;
-import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.SyncModel;
+import com.botmaker.core.project.vcs.VersionOrigin;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
 import javafx.scene.Parent;

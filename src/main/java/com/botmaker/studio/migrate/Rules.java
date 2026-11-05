@@ -3,7 +3,7 @@ package com.botmaker.studio.migrate;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.java.grammar.ParamsFitter;
 import com.botmaker.java.edit.refactor.ReviewMarks;
-import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.core.project.params.JavaParameterSource;
 import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTNode;

@@ -1,5 +1,7 @@
 package com.botmaker.studio.events;
 
+import com.botmaker.core.events.EventBus;
+import com.botmaker.core.events.ApplicationEvent;
 import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.application.Platform;

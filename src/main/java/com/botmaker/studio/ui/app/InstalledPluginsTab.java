@@ -1,12 +1,12 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.migrate.Broken;
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.ReleasedPlugins;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.plugin.ReleasedPlugins;
 import com.botmaker.java.grammar.JavaNames;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.UserLibrary;
 import com.botmaker.studio.project.managed.MigrationSteps;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
@@ -16,7 +16,7 @@ import com.botmaker.studio.services.upgrade.PluginHolders;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
 import com.botmaker.studio.services.upgrade.ProjectUpgrade;
-import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;

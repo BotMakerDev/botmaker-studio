@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.versions;
 
-import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.ProjectVcs;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

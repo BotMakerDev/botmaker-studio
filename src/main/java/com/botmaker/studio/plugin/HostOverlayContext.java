@@ -3,7 +3,7 @@ package com.botmaker.studio.plugin;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.toolbar.ActionContext;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 
 import java.util.Optional;
 import java.util.function.Supplier;

@@ -1,5 +1,6 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.studio.services.LocalBuilds;
 import org.junit.jupiter.api.Test;
 
@@ -51,9 +52,9 @@ class PluginCatalogTest {
     @Test
     void anEditorDependencyOnlyAnAbsentPluginListsIsUnneeded() {
         PluginRegistry.Plugin pilot = published("pilot", "g:pilot", "1.0.0");    // lists g:companion
-        List<com.botmaker.studio.project.UserLibrary> libraries = List.of(
-                new com.botmaker.studio.project.UserLibrary("g", "companion", "1"),
-                new com.botmaker.studio.project.UserLibrary("mine", "own-library", "2"));
+        List<com.botmaker.core.project.UserLibrary> libraries = List.of(
+                new com.botmaker.core.project.UserLibrary("g", "companion", "1"),
+                new com.botmaker.core.project.UserLibrary("mine", "own-library", "2"));
 
         assertEquals(java.util.Set.of("g:companion"),
                 PluginCatalog.unneededEditorDependencies(libraries, List.of(pilot), entry -> false));

@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.reports;
 
-import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.core.project.StudioProjectSettings;
 
 /**
  * Whether this machine sends a bot's problems to its author (run reports spec §3): a run property of the bot,

@@ -1,17 +1,18 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.MigrationTypes;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.studio.project.managed.MigrationSteps.Choice;
 import com.botmaker.studio.project.managed.MigrationSteps.Step;
-import com.botmaker.studio.project.managed.MigrationTypes.Area;
-import com.botmaker.studio.project.managed.MigrationTypes.Frame;
-import com.botmaker.studio.project.managed.MigrationTypes.OldArea;
-import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
-import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
-import com.botmaker.studio.project.managed.MigrationTypes.OldTint;
-import com.botmaker.studio.project.managed.MigrationTypes.Shot;
-import com.botmaker.studio.project.managed.MigrationTypes.Tint;
+import com.botmaker.core.project.managed.MigrationTypes.Area;
+import com.botmaker.core.project.managed.MigrationTypes.Frame;
+import com.botmaker.core.project.managed.MigrationTypes.OldArea;
+import com.botmaker.core.project.managed.MigrationTypes.OldFrame;
+import com.botmaker.core.project.managed.MigrationTypes.OldShot;
+import com.botmaker.core.project.managed.MigrationTypes.OldTint;
+import com.botmaker.core.project.managed.MigrationTypes.Shot;
+import com.botmaker.core.project.managed.MigrationTypes.Tint;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

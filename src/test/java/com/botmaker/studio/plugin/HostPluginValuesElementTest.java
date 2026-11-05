@@ -1,7 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.project.managed.TestValue;
+import com.botmaker.core.project.managed.TestValue;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

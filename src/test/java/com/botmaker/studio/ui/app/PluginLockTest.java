@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.sharing.PublishedBotPlugins;
+import com.botmaker.core.sharing.PublishedBotPlugins;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;

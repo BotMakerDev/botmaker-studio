@@ -17,7 +17,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.TypeChip;
 import javafx.css.PseudoClass;
@@ -416,8 +416,8 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
                 return;
             }
             new AddFunctionDialog(owner, otherSignatures(method), current.get())
-                    .withProject(com.botmaker.studio.project.params.BotRecords.scan(context.getConfig(),
-                            context.getState(), com.botmaker.studio.plugin.PluginHost.grammar()))
+                    .withProject(com.botmaker.core.project.params.BotRecords.scan(context.getConfig(),
+                            context.getState(), com.botmaker.core.plugin.PluginHost.grammar()))
                     .showAndWait()
                     .ifPresent(draft -> SignatureEdits.apply(context, owner, method, current.get(), draft));
         });

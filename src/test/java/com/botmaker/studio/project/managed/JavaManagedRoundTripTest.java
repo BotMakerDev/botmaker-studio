@@ -1,11 +1,14 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.JavaManagedSource;
+import com.botmaker.core.project.managed.TestValue;
+import com.botmaker.core.project.managed.ManagedMethod;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.params.BotRecords;
-import com.botmaker.studio.project.params.TestValues;
+import com.botmaker.core.project.params.BotRecords;
+import com.botmaker.core.project.params.TestValues;
 import com.botmaker.java.parse.BotParser;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +60,7 @@ class JavaManagedRoundTripTest {
         return """
                 package com.example.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 /** The plugin's values for this bot. Yours from the moment it was copied here. */
                 public final class Sdk {
@@ -113,7 +116,7 @@ class JavaManagedRoundTripTest {
     @Test
     void aMethodReferenceSurvives() {
         assertEquals("Collect::body",
-                roundTrip("com.botmaker.studio.project.params.TestValues.Body", BODY, "Collect::body"));
+                roundTrip("com.botmaker.core.project.params.TestValues.Body", BODY, "Collect::body"));
     }
 
     @Test
@@ -135,11 +138,11 @@ class JavaManagedRoundTripTest {
     void aFixedShapeWrittenAsAPlainTypeNameRoundTrips() {
         TestValues.Span value = new TestValues.Span("phase one", 12);
 
-        Object read = roundTrip("com.botmaker.studio.project.params.TestValues.Span", TestValues.SPAN_FORM, value);
+        Object read = roundTrip("com.botmaker.core.project.params.TestValues.Span", TestValues.SPAN_FORM, value);
 
         assertEquals(value, read);
         assertEquals("TestValues.Span", ValueTypes.sourceName(TestValues.SPAN_FORM));
-        assertEquals("com.botmaker.studio.project.params.TestValues.Span.of(\"phase one\", 12)",
+        assertEquals("com.botmaker.core.project.params.TestValues.Span.of(\"phase one\", 12)",
                 CATALOG.initializer(TestValues.SPAN_FORM, value).orElseThrow().source());
     }
 
@@ -149,7 +152,7 @@ class JavaManagedRoundTripTest {
     void aHandEditedBodyIsReadOnlyAndNotPartlyRead() {
         String source = """
                 package com.example.bot.plugins.sdk;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
                 public final class Sdk {
                     @TestValue(TestValue.Id.FLOW)
                     public static String value() {
@@ -204,7 +207,7 @@ class JavaManagedRoundTripTest {
         String source = """
                 package com.example.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 public final class Sdk {
 
@@ -236,7 +239,7 @@ class JavaManagedRoundTripTest {
     void onlyAnAnnotatedMethodIsAValue() {
         List<ManagedMethod> read = read("""
                 package com.example.bot;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
                 public final class Sdk {
                     @TestValue(TestValue.Id.FLOW)
                     public static String flow() { return "a"; }
@@ -261,7 +264,7 @@ class JavaManagedRoundTripTest {
     private static String note(String declaration) {
         return only("""
                 package com.example.bot;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
                 public final class Sdk {
                     @TestValue(TestValue.Id.FLOW)
                     %s

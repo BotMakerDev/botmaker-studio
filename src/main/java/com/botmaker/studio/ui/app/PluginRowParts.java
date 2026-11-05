@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.plugin.PluginJarFiles;
-import com.botmaker.studio.plugin.PluginLogs;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginJarFiles;
+import com.botmaker.core.plugin.PluginLogs;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;

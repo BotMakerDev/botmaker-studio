@@ -2,9 +2,9 @@ package com.botmaker.studio.runtime;
 
 import com.botmaker.shared.input.InputEvent;
 import com.botmaker.shared.input.InputListener;
-import com.botmaker.studio.events.ApplicationEvent;
+import com.botmaker.core.events.ApplicationEvent;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

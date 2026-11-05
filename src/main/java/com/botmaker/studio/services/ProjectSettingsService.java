@@ -1,12 +1,12 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.studio.events.CoreApplicationEvents.SettingsChangedEvent;
-import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectRepair;
-import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.ProjectTemplate;
-import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.core.events.EventBus;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectRepair;
+import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.ProjectTemplate;
+import com.botmaker.core.project.StudioProjectSettings;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;

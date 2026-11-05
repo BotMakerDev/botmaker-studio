@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.render.components.types;
 
-import com.botmaker.studio.project.params.TestValues;
+import com.botmaker.core.project.params.TestValues;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.event.ActionEvent;
 import javafx.scene.Node;

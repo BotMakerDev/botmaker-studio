@@ -5,9 +5,9 @@ import com.botmaker.cli.bmk.BotFiles;
 import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.cli.bmk.Central;
 import com.botmaker.cli.publish.PublishTarget;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.services.MavenService;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.services.MavenService;
 
 import java.io.IOException;
 import java.io.OutputStream;

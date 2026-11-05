@@ -1,5 +1,8 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.sharing.CatalogIndex;
+import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;

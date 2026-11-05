@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.home;
 
-import com.botmaker.studio.project.ProjectManager;
+import com.botmaker.core.project.ProjectManager;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.Facts;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;

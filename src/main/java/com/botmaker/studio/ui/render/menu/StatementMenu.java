@@ -9,7 +9,7 @@ import com.botmaker.java.edit.StatementPlacement;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.plugin.EntryPoints;
 import com.botmaker.studio.plugin.PaletteCuration;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.java.types.MethodSignature;

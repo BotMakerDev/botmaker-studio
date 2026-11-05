@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app.versions;
 
 import com.botmaker.studio.project.vcs.BlockDiff;
-import com.botmaker.studio.project.vcs.ProjectVcs.Side;
-import com.botmaker.studio.project.vcs.VersionReader;
+import com.botmaker.core.project.vcs.ProjectVcs.Side;
+import com.botmaker.core.project.vcs.VersionReader;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

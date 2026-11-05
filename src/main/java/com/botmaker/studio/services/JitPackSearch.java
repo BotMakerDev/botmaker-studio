@@ -1,5 +1,6 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.services.MavenService;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;

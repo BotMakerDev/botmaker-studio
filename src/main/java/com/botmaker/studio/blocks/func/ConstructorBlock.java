@@ -5,7 +5,7 @@ import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.app.SignatureEdits;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.java.edit.DefaultNames;
 import javafx.scene.Node;

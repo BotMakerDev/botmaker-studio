@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.core.project.params.ParameterRow;
+import com.botmaker.core.project.params.JavaParameter;
 import com.botmaker.java.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

@@ -1,14 +1,14 @@
 package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.java.edit.EditContext;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 
 import com.botmaker.studio.TestSupport;
 import com.botmaker.java.edit.palette.BotType;
 import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.java.edit.palette.SignatureType;
 import com.botmaker.java.edit.helpers.MethodSignatures;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;

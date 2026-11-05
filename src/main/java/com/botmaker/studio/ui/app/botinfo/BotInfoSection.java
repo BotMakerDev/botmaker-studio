@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app.botinfo;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.project.BotIcon;
-import com.botmaker.studio.project.PomInfo;
+import com.botmaker.core.project.BotIcon;
+import com.botmaker.core.project.PomInfo;
 import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
 import com.botmaker.studio.ui.Choosers;

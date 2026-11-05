@@ -2,8 +2,8 @@ package com.botmaker.studio.services;
 
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.EditorState;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectFile;
+import com.botmaker.core.project.ProjectState;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.junit.jupiter.api.Test;

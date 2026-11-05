@@ -1,8 +1,10 @@
 package com.botmaker.studio.sharing;
 
-import com.botmaker.studio.config.Constants;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.sharing.BotSource;
+import com.botmaker.core.config.Constants;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.VersionOrigin;
 
 import java.io.IOException;
 import java.nio.file.Files;

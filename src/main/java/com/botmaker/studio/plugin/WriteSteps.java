@@ -1,7 +1,7 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.services.BotSources;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

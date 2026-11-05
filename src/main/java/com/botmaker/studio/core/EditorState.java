@@ -1,6 +1,6 @@
 package com.botmaker.studio.core;
 
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectState;
 import org.eclipse.jdt.core.dom.ASTNode;
 
 import java.util.Collections;

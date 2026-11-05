@@ -4,9 +4,9 @@ import com.botmaker.java.edit.ImportManager;
 
 import com.botmaker.studio.TestSupport;
 import com.botmaker.java.edit.factories.InitializerFactory;
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.ProjectFile;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;

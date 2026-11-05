@@ -1,9 +1,9 @@
 package com.botmaker.studio.services.upgrade;
 
-import com.botmaker.studio.plugin.TestPlugins;
-import com.botmaker.studio.project.PluginFiles;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.plugin.TestPlugins;
+import com.botmaker.core.project.PluginFiles;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

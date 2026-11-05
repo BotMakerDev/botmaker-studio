@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.StudioProjectSettings.WorkspaceLayout;
+import com.botmaker.core.project.StudioProjectSettings.WorkspaceLayout;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;

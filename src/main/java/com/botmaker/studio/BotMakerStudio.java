@@ -7,27 +7,27 @@ import com.botmaker.session.Sessions;
 import com.botmaker.studio.assist.BotGuard;
 import com.botmaker.studio.assist.HomeEndpoint;
 import com.botmaker.studio.assist.UiEvents;
-import com.botmaker.studio.config.AppPaths;
-import com.botmaker.studio.config.Constants;
+import com.botmaker.core.config.AppPaths;
+import com.botmaker.core.config.Constants;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.plugin.PluginGate;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginGate;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.project.BotProject;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectManager;
-import com.botmaker.studio.project.ProjectPreferences;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectFile;
+import com.botmaker.core.project.ProjectManager;
+import com.botmaker.core.project.ProjectPreferences;
 import com.botmaker.shared.platform.Os;
-import com.botmaker.studio.services.OpenStep;
-import com.botmaker.studio.services.ProgressReporter;
+import com.botmaker.core.services.OpenStep;
+import com.botmaker.core.services.ProgressReporter;
 import com.botmaker.studio.services.StudioChannel;
-import com.botmaker.studio.sharing.BmkOpen;
+import com.botmaker.core.sharing.BmkOpen;
 import com.botmaker.studio.sharing.BotLink;
 import com.botmaker.studio.sharing.LinkScheme;
 import com.botmaker.studio.sharing.ProgramEntries;
-import com.botmaker.studio.sharing.UnpackedBots;
-import com.botmaker.studio.project.migration.ProjectSchema;
-import com.botmaker.studio.project.migration.ProjectSchemaTooNew;
+import com.botmaker.core.sharing.UnpackedBots;
+import com.botmaker.core.project.migration.ProjectSchema;
+import com.botmaker.core.project.migration.ProjectSchemaTooNew;
 import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.app.CommunityPluginPrompt;
 import com.botmaker.studio.ui.app.ForceX11Notice;
@@ -89,7 +89,7 @@ public class BotMakerStudio extends Application {
      *
      * <p>Session-only and deliberately not on disk: previewing what a user sees, or taking a read-only look at
      * an installed bot's code, must not change what the project <em>is</em>. Only "Improve this bot" does that,
-     * and it does it through {@link com.botmaker.studio.project.ProjectMode}'s marker. Cleared whenever a
+     * and it does it through {@link com.botmaker.core.project.ProjectMode}'s marker. Cleared whenever a
      * different project is opened, so the choice never outlives the bot it was made about.
      */
     private Boolean showAsUser;

@@ -1,6 +1,8 @@
 package com.botmaker.studio.sharing;
 
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.sharing.PluginRegistry;
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.project.UserLibrary;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

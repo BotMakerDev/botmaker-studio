@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.dev;
 
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueTypes;
 import org.junit.jupiter.api.Test;
 

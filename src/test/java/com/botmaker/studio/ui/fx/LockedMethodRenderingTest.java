@@ -50,7 +50,7 @@ class LockedMethodRenderingTest extends FxHeadlessTest {
     public void start(Stage stage) {
         // The header only reaches getState() (for collapse state) while rendering; the rest of the service is
         // needed at click time, which is exactly what a locked header must never get to.
-        com.botmaker.studio.events.EventBus eventBus = new com.botmaker.studio.events.EventBus(false);
+        com.botmaker.core.events.EventBus eventBus = new com.botmaker.core.events.EventBus(false);
         context = new CodeEditorService(
                 null, new com.botmaker.studio.core.EditorState(), eventBus, null,
                 new com.botmaker.studio.ui.dnd.BlockDragAndDropManager(eventBus),

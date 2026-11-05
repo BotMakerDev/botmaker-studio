@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.java.index.nav.TextSearch;
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;

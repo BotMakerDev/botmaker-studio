@@ -1,5 +1,8 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PublisherRank;
+import com.botmaker.core.sharing.PluginRegistry;
+import com.botmaker.core.sharing.GalleryEntry;
 import java.util.List;
 import java.util.prefs.Preferences;
 

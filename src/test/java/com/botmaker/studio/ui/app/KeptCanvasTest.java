@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.EditorFixture;
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;

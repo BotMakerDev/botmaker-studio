@@ -1,8 +1,9 @@
 package com.botmaker.studio.events;
 
+import com.botmaker.core.events.ApplicationEvent;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.project.UserLibrary;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.ui.dnd.DropInfo;
 import com.botmaker.studio.ui.dnd.ExpressionDropInfo;
@@ -100,10 +101,10 @@ public class CoreApplicationEvents {
     // it opens.
 
     /**
-     * Published after the project's {@link com.botmaker.studio.project.StudioProjectSettings} change
+     * Published after the project's {@link com.botmaker.core.project.StudioProjectSettings} change
      * (e.g. capture targets added/removed or the default target switched).
      */
-    public record SettingsChangedEvent(com.botmaker.studio.project.StudioProjectSettings settings)
+    public record SettingsChangedEvent(com.botmaker.core.project.StudioProjectSettings settings)
             implements ApplicationEvent {}
 
     // ResourcesChangedEvent was published after a picture was added, renamed or deleted, "so open template

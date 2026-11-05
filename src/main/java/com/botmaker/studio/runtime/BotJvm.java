@@ -1,8 +1,8 @@
 package com.botmaker.studio.runtime;
 
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.StudioProjectSettings;
 import com.botmaker.runlog.RunLog;
 import com.botmaker.studio.runtime.agent.RunPlan;
 import com.botmaker.studio.runtime.agent.TracePlan;

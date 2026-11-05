@@ -1,9 +1,10 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.events.EventBus;
+import com.botmaker.core.project.ProjectFile;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.state.HistoryManager;
 
 import java.io.IOException;

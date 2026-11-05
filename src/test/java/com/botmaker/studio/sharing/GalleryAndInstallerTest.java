@@ -1,10 +1,13 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PublisherRank;
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.sharing.BotSource;
 import com.botmaker.cli.catalog.Catalog;
-import com.botmaker.studio.project.ProjectMode;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.core.project.ProjectMode;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.project.vcs.VersionOrigin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

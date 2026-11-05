@@ -1,8 +1,8 @@
 package com.botmaker.studio.services.trial;
 
 import com.botmaker.java.grammar.JavaValue;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.services.BotSources;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;

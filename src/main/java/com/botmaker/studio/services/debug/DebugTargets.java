@@ -3,7 +3,7 @@ package com.botmaker.studio.services.debug;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.SourceParser;
-import com.botmaker.studio.project.ProjectState.SourceFile;
+import com.botmaker.core.project.ProjectState.SourceFile;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;

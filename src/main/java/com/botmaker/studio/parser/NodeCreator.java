@@ -10,7 +10,7 @@ import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.parser.handlers.MethodHandler;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.java.edit.palette.ExpressionType;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.*;

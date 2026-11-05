@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app.trial;
 
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.services.trial.TrialCaller;
 import com.botmaker.studio.services.trial.TrialPlan;
 import com.botmaker.studio.ui.app.params.ValueEditors;

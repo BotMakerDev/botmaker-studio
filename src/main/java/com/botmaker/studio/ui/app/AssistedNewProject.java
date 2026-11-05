@@ -3,13 +3,13 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.studio.assist.OnScreen;
-import com.botmaker.studio.config.Constants;
-import com.botmaker.studio.project.ProjectCreator;
-import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.core.config.Constants;
+import com.botmaker.core.project.ProjectCreator;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.GitHubGallery;
 import com.botmaker.studio.sharing.HiddenBots;
 import com.botmaker.studio.sharing.NewProjects;
-import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.studio.sharing.ShowCommunity;
 import javafx.stage.Window;
 

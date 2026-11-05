@@ -2,7 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.History;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;

@@ -1,5 +1,7 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.sharing.BmkOpen;
 import com.botmaker.cli.bmk.BotFiles;
 import com.botmaker.shared.github.GitHubConfig;
 import com.fasterxml.jackson.databind.JsonNode;

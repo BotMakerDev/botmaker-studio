@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.core.project.params.BotRecords;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Node;
 import javafx.scene.control.ToggleButton;

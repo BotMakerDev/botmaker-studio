@@ -5,7 +5,7 @@ import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayNameGeneration;

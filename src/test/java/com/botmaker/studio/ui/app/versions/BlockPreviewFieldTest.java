@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app.versions;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.vcs.BlockDiff;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.application.Platform;

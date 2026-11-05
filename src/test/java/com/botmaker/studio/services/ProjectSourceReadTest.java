@@ -1,6 +1,6 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.project.ProjectFile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

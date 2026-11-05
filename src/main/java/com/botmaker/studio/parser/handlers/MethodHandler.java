@@ -25,7 +25,7 @@ import com.botmaker.java.parse.SourceSet;
 import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.java.types.ProjectAnalyzer;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;

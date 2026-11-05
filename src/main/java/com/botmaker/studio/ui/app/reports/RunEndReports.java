@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app.reports;
 import com.botmaker.runlog.ReportTarget;
 import com.botmaker.shared.reports.IssueSender;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.application.Platform;
 import javafx.stage.Window;

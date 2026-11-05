@@ -1,7 +1,7 @@
 package com.botmaker.studio.services.upgrade;
 
 import com.botmaker.shared.github.SemVer;
-import com.botmaker.studio.plugin.PluginJarFiles;
+import com.botmaker.core.plugin.PluginJarFiles;
 import com.botmaker.studio.services.upgrade.PluginUpgradeService.Highlight;
 
 import java.nio.charset.StandardCharsets;

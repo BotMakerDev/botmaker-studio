@@ -35,9 +35,9 @@ import com.botmaker.java.edit.handlers.BranchChainHandler;
 import com.botmaker.java.edit.handlers.LambdaCallHandler;
 import com.botmaker.java.edit.helpers.FileTypeDetector;
 import com.botmaker.java.edit.helpers.NumberLiterals;
-import com.botmaker.studio.project.LockResolver;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.LockResolver;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.types.JdkType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import org.eclipse.jdt.core.dom.*;
@@ -1197,7 +1197,7 @@ public class BlockConverter {
     // =========================================================================
 
     private static boolean isLibraryClass(String name) {
-        return com.botmaker.studio.plugin.PluginHost.isFacadeClass(name);
+        return com.botmaker.core.plugin.PluginHost.isFacadeClass(name);
     }
 
     /**

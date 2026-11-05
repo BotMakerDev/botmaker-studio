@@ -1,5 +1,6 @@
 package com.botmaker.studio.parser.refactor;
 
+import com.botmaker.core.parser.refactor.ReviewMarker;
 import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.java.parse.JavaLevel;
@@ -12,7 +13,7 @@ import com.botmaker.java.edit.refactor.MethodReferences.CallSite;
 import com.botmaker.java.edit.refactor.SignatureMigration.ArgumentEdit;
 import com.botmaker.java.edit.refactor.SignatureMigration.CallChange;
 import com.botmaker.java.parse.SourceSet;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.ASTNode;

@@ -11,7 +11,7 @@ import com.botmaker.studio.events.CoreApplicationEvents.ProgramStartedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.ProgramStoppedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.TraceLineEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.TrialRunRequestedEvent;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 
 import java.time.Clock;
 import java.time.Duration;

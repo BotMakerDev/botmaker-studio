@@ -1,10 +1,11 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.core.runtime.JavacRelease;
 import com.botmaker.java.grammar.ParamsFitter;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.services.MavenService;
-import com.botmaker.studio.services.ProgressReporter;
-import com.botmaker.studio.util.ClassPathManager;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.services.ProgressReporter;
+import com.botmaker.core.util.ClassPathManager;
 
 import java.io.File;
 import java.io.IOException;

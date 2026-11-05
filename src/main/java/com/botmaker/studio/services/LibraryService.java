@@ -1,19 +1,22 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.services.ProgressReporter;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.services.ContractDependency;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.events.CoreApplicationEvents.LibrariesChangedEvent;
-import com.botmaker.studio.runtime.JavacRelease;
+import com.botmaker.core.runtime.JavacRelease;
 import com.botmaker.studio.events.CoreApplicationEvents.SettingsChangedEvent;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.plugin.HostPluginValues;
 import com.botmaker.studio.plugin.HostServices;
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.StudioProjectSettings;
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.StudioProjectSettings;
+import com.botmaker.core.project.UserLibrary;
 
 import javafx.application.Platform;
 

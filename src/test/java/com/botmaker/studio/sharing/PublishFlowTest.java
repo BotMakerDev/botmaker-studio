@@ -1,5 +1,7 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PluginRegistry;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.cli.catalog.ApprovedRelease;
 import com.botmaker.cli.catalog.BotEntry;
 import com.botmaker.cli.catalog.Catalog;
@@ -11,9 +13,9 @@ import com.botmaker.cli.publish.Listener;
 import com.botmaker.cli.publish.PublishHost;
 import com.botmaker.cli.publish.PublishTarget;
 import com.botmaker.cli.validate.CheckResult;
-import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.core.project.UserLibrary;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.VersionOrigin;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -312,12 +314,12 @@ class PublishFlowTest {
     /** An organization's template publishes into the organization's repository, when the account can push there. */
     @Test
     void aPublishGoesToTheCopysOwnerOnlyWhenTheAccountCanPushThere() {
-        var org = com.botmaker.studio.project.vcs.SyncModel.slug("https://github.com/BotMakerDev/botmaker-gamebot");
+        var org = com.botmaker.core.project.vcs.SyncModel.slug("https://github.com/BotMakerDev/botmaker-gamebot");
         assertEquals("BotMakerDev", BotPublisher.ownerFor("LiQiyeDev", org, true));
         assertEquals("LiQiyeDev", BotPublisher.ownerFor("LiQiyeDev", org, false));
         assertEquals("alice", BotPublisher.ownerFor("alice", Optional.empty(), true), "no copy yet: your own");
         assertEquals("alice", BotPublisher.ownerFor("alice",
-                com.botmaker.studio.project.vcs.SyncModel.slug("https://github.com/Alice/koala"), false),
+                com.botmaker.core.project.vcs.SyncModel.slug("https://github.com/Alice/koala"), false),
                 "your own copy, whatever its case");
     }
 

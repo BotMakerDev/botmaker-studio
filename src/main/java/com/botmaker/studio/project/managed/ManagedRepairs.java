@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.JavaManagedSource;
+import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.source.ManagedMethod;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
@@ -7,7 +9,7 @@ import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
-import com.botmaker.studio.parser.refactor.ReviewMarker;
+import com.botmaker.core.parser.refactor.ReviewMarker;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.ValueGrammar;

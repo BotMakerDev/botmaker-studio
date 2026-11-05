@@ -1,6 +1,6 @@
 package com.botmaker.studio.assist;
 
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;

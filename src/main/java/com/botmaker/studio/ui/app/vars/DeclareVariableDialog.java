@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app.vars;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.java.edit.palette.TypeNames;
-import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.core.project.params.BotRecords;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -44,7 +44,7 @@ public final class DeclareVariableDialog {
     public static void declareInto(com.botmaker.studio.services.CodeEditorService context, Window owner,
                                    com.botmaker.studio.core.BodyBlock body, int index) {
         BotRecords records = BotRecords.scan(context.getConfig(), context.getState(),
-                com.botmaker.studio.plugin.PluginHost.grammar());
+                com.botmaker.core.plugin.PluginHost.grammar());
         ask(owner, records, EditVariableDialog.declaredNames(context)).ifPresent(declared ->
                 context.getCodeEditor().declareLocal(body.getId(), index, declared.name(), declared.type()));
     }

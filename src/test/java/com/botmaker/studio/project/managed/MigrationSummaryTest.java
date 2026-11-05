@@ -1,7 +1,7 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
-import com.botmaker.studio.project.managed.MigrationTypes.Shot;
+import com.botmaker.core.project.managed.MigrationTypes.OldShot;
+import com.botmaker.core.project.managed.MigrationTypes.Shot;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** What migration list and plugins set_version say of the bot's migrations. */
 class MigrationSummaryTest {
 
-    private static final String OLD = "OldShot (com.botmaker.studio.project.managed.MigrationTypes.OldShot)";
+    private static final String OLD = "OldShot (com.botmaker.core.project.managed.MigrationTypes.OldShot)";
 
     @Test
     void aTypeIsNamedAsReadAndAsATakesItBack() {

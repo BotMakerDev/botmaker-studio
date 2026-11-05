@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.TestValue;
+import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.ASTVisitor;
@@ -39,7 +41,7 @@ class ManagedIdsTest {
     private static final String QUALIFIED = """
             package bot;
 
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestValue;
 
             public final class Values {
                 @TestValue(TestValue.Id.GREETING)
@@ -74,7 +76,7 @@ class ManagedIdsTest {
 
     @Test
     void aBindingSaysTheAnnotationIsAMarkerAndWhichConstantItHolds() {
-        assertEquals("com.botmaker.studio.project.managed.TestValue$Id.GREETING", GREETING);
+        assertEquals("com.botmaker.core.project.managed.TestValue$Id.GREETING", GREETING);
         // No declarations needed: the class itself says it is marked.
         assertEquals(GREETING, idOfLast(BOUND, QUALIFIED, List.of()));
     }
@@ -92,7 +94,7 @@ class ManagedIdsTest {
     @Test
     void aConstantTheClasspathNoLongerHasStillMarksItsValue() {
         String source = QUALIFIED.replace("TestValue.Id.GREETING", "TestValue.Id.OUTCOMES");
-        assertEquals("com.botmaker.studio.project.managed.TestValue$Id.OUTCOMES", idOfLast(BOUND, source, KNOWN));
+        assertEquals("com.botmaker.core.project.managed.TestValue$Id.OUTCOMES", idOfLast(BOUND, source, KNOWN));
     }
 
     @Test
@@ -100,8 +102,8 @@ class ManagedIdsTest {
         String source = """
                 package bot;
 
-                import com.botmaker.studio.project.managed.TestValue;
-                import static com.botmaker.studio.project.managed.TestValue.Id.FAREWELL;
+                import com.botmaker.core.project.managed.TestValue;
+                import static com.botmaker.core.project.managed.TestValue.Id.FAREWELL;
 
                 public final class Values {
                     @TestValue(FAREWELL)
@@ -118,7 +120,7 @@ class ManagedIdsTest {
         String source = """
                 package bot;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.NAMES)
                 public final class Names {
@@ -131,7 +133,7 @@ class ManagedIdsTest {
 
     @Test
     void anAnnotationOfTheSameSimpleNameFromElsewhereIsNotTheMarker() {
-        String source = QUALIFIED.replace("import com.botmaker.studio.project.managed.TestValue;",
+        String source = QUALIFIED.replace("import com.botmaker.core.project.managed.TestValue;",
                 "import other.TestValue;");
         assertNull(idOfLast(BotParser.SYNTAX, source, KNOWN));
     }

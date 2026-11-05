@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.fx;
 
-import com.botmaker.studio.events.ApplicationEvent;
+import com.botmaker.core.events.ApplicationEvent;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.ui.app.OverflowBar;
 import com.botmaker.studio.ui.app.ToolbarManager;
 import javafx.scene.Scene;

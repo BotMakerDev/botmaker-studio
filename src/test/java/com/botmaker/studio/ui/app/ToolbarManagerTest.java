@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.toolbar.EnabledWhen;
 import com.botmaker.plugin.api.toolbar.ToolbarItem;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

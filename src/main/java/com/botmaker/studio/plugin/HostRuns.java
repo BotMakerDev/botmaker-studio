@@ -1,10 +1,11 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.plugin.api.run.RunProperty;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.ProjectSettingsService;
 

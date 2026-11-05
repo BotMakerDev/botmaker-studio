@@ -2,7 +2,7 @@ package com.botmaker.studio.sharing;
 
 import com.botmaker.cli.bmk.BotFile;
 import com.botmaker.cli.bmk.BotJson;
-import com.botmaker.studio.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.ProjectVcs;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.StoredConfig;
 import org.junit.jupiter.api.Test;

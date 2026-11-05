@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.loading;
 
-import com.botmaker.studio.services.OpenStep;
-import com.botmaker.studio.services.ProgressReporter;
+import com.botmaker.core.services.OpenStep;
+import com.botmaker.core.services.ProgressReporter;
 import com.botmaker.studio.ui.app.loading.LoadingPage.State;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.application.Platform;

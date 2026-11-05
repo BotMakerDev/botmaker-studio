@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app.versions;
 
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
-import com.botmaker.studio.sharing.BotSource;
+import com.botmaker.core.sharing.BotSource;
 import com.botmaker.studio.ui.app.GitHubAccountBar;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;

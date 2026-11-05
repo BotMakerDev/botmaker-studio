@@ -1,5 +1,6 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.studio.services.LocalBuilds;
 
 import java.util.ArrayList;
@@ -65,11 +66,11 @@ public final class PluginCatalog {
      * What the Libraries tab marks <i>not needed</i> (2026-10-06); a library no entry lists is the user's and
      * never marked.
      */
-    public static java.util.Set<String> unneededEditorDependencies(List<com.botmaker.studio.project.UserLibrary> libraries,
+    public static java.util.Set<String> unneededEditorDependencies(List<com.botmaker.core.project.UserLibrary> libraries,
                                                                    List<PluginRegistry.Plugin> registry,
                                                                    java.util.function.Predicate<PluginRegistry.Plugin> present) {
         java.util.Set<String> unneeded = new java.util.LinkedHashSet<>();
-        for (com.botmaker.studio.project.UserLibrary library : libraries) {
+        for (com.botmaker.core.project.UserLibrary library : libraries) {
             List<PluginRegistry.Plugin> listing = registry.stream()
                     .filter(entry -> entry.editorLibraries().stream()
                             .anyMatch(dep -> dep.groupArtifact().equals(library.groupArtifact())))

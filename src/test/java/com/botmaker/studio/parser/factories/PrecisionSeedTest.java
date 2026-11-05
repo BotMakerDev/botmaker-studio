@@ -2,7 +2,7 @@ package com.botmaker.studio.parser.factories;
 
 import com.botmaker.java.edit.factories.InitializerFactory;
 
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.Expression;

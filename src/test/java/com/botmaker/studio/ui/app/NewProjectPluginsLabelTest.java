@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.sharing.PluginRegistry;
-import com.botmaker.studio.sharing.PublishedBotPlugins;
-import com.botmaker.studio.sharing.PublisherRank;
+import com.botmaker.core.sharing.PluginRegistry;
+import com.botmaker.core.sharing.PublishedBotPlugins;
+import com.botmaker.core.sharing.PublisherRank;
 import com.botmaker.studio.sharing.ShowCommunity;
 import org.junit.jupiter.api.Test;
 

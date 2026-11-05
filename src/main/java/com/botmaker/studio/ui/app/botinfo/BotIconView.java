@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app.botinfo;
 
-import com.botmaker.studio.project.BotIcon;
+import com.botmaker.core.project.BotIcon;
 import com.botmaker.studio.services.capture.ScreenOverlay;
 import javafx.beans.InvalidationListener;
 import javafx.scene.Node;

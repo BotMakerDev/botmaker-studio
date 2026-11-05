@@ -1,5 +1,9 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.core.project.params.JavaParameterEdits;
+import com.botmaker.core.project.params.Visibility;
+import com.botmaker.core.project.params.JavaParameterSource;
+import com.botmaker.core.project.params.JavaParameter;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
@@ -7,7 +11,7 @@ import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.grammar.BotAnnotation;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.java.parse.BotParser;

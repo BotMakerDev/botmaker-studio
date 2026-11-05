@@ -1,5 +1,7 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.core.project.params.JavaParameterEdits;
+import com.botmaker.core.project.params.JavaParameter;
 import com.botmaker.plugin.api.source.ManagedParam;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.index.nav.Refactor;
@@ -7,7 +9,7 @@ import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.ManagedIds;
+import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.java.index.BotIndex;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;

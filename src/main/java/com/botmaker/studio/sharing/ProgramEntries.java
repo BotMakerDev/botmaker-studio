@@ -2,8 +2,8 @@ package com.botmaker.studio.sharing;
 
 import com.botmaker.shared.platform.Os;
 import com.botmaker.shared.tools.UserDirs;
-import com.botmaker.studio.config.AppPaths;
-import com.botmaker.studio.project.BotIcon;
+import com.botmaker.core.config.AppPaths;
+import com.botmaker.core.project.BotIcon;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;

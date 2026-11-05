@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.versions;
 
-import com.botmaker.studio.project.vcs.ProjectVcs.CommitInfo;
-import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.core.project.vcs.ProjectVcs.CommitInfo;
+import com.botmaker.core.project.vcs.VersionOrigin;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;

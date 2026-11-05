@@ -1,5 +1,8 @@
 package com.botmaker.studio.project.vcs;
 
+import com.botmaker.core.project.vcs.VersionOrigin;
+import com.botmaker.core.project.vcs.RepairPoints;
+import com.botmaker.core.project.vcs.ProjectVcs;
 import com.botmaker.cli.repair.Compile;
 import com.botmaker.cli.repair.Damage;
 import com.botmaker.studio.sharing.BotPublisher;

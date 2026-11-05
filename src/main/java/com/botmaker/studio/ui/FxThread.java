@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui;
 
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import javafx.application.Platform;
 
 /** The JavaFX application thread, as the {@link EventBus} a Studio window listens on delivers to it. */

@@ -1,12 +1,15 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.PluginOwners;
+import com.botmaker.core.plugin.PluginLogs;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.plugin.api.Dialogs;
 import com.botmaker.plugin.api.History;
 import com.botmaker.plugin.api.PluginLog;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.Theme;
 import com.botmaker.plugin.api.source.PluginValues;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.NativeFileDialog;

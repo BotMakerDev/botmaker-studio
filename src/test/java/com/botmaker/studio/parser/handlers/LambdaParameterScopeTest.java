@@ -3,7 +3,7 @@ package com.botmaker.studio.parser.handlers;
 import com.botmaker.java.edit.handlers.LambdaCallHandler;
 
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;

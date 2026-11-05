@@ -135,8 +135,8 @@ public class ClassBlock extends TypeBlock {
         Window owner = source.getScene() == null ? null : source.getScene().getWindow();
 
         new AddFunctionDialog(owner, MethodSignatures.declaredIn(typeDecl))
-                .withProject(com.botmaker.studio.project.params.BotRecords.scan(context.getConfig(),
-                        context.getState(), com.botmaker.studio.plugin.PluginHost.grammar()))
+                .withProject(com.botmaker.core.project.params.BotRecords.scan(context.getConfig(),
+                        context.getState(), com.botmaker.core.plugin.PluginHost.grammar()))
                 .showAndWait().ifPresent(draft ->
                 context.getCodeEditor().addFunctionToClass(typeDecl, draft, insertIndex));
     }

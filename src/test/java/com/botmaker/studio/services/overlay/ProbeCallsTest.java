@@ -1,12 +1,12 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.OverlayPart;
-import com.botmaker.studio.plugin.TestPlugins;
+import com.botmaker.core.plugin.TestPlugins;
 import com.botmaker.plugin.api.overlay.ProbeResult;
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.project.managed.ManagedConstants;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.services.BotSources;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.Statement;

@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.core.sharing.GalleryEntry;
 
 import java.util.List;
 import java.util.Optional;

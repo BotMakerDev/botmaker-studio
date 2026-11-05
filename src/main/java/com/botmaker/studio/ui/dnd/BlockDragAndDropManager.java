@@ -12,7 +12,7 @@ import com.botmaker.studio.blocks.ClassBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.java.types.SlotFit;
 import com.botmaker.java.types.TypeExpectation;

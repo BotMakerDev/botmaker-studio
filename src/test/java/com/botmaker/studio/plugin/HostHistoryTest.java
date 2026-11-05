@@ -1,10 +1,10 @@
 package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.History;
-import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.events.EventBus;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.EditorHistory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

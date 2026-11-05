@@ -1,22 +1,23 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.core.runtime.JavacRelease;
 import com.botmaker.java.grammar.ParamValues;
 import com.botmaker.java.grammar.ParamsFitter;
 import com.botmaker.shared.ipc.TelemetryServer;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.vcs.Checkpoints;
-import com.botmaker.studio.project.vcs.VersionOrigin;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.events.EventBus;
+import com.botmaker.core.project.vcs.Checkpoints;
+import com.botmaker.core.project.vcs.VersionOrigin;
+import com.botmaker.core.project.ProjectFile;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.runtime.tryhost.TryHost;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.trial.TrialCaller;
 import com.botmaker.studio.ui.app.reports.RunProblems;
 import com.botmaker.session.launch.BackgroundLauncher;
-import com.botmaker.studio.util.ClassPathManager;
+import com.botmaker.core.util.ClassPathManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.application.Platform;
 

@@ -2,7 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.toolbar.ActionContext;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 
 /**
  * Studio's side of {@link ActionContext} — the facts a toolbar item's click is handed.

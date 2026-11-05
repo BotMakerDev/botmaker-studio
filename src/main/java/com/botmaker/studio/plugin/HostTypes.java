@@ -1,5 +1,6 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.plugin.api.slot.TypeRef;
 import com.botmaker.java.grammar.JdkLiterals;
 import com.botmaker.java.types.ResolvedType;

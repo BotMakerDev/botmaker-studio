@@ -6,7 +6,7 @@ import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 
 import java.io.IOException;
 import java.nio.file.Path;

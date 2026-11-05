@@ -1,9 +1,13 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.PluginFiles;
+import com.botmaker.core.project.LockResolver;
+import com.botmaker.core.project.FileRole;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.project.LockResolver.EditKind;
-import com.botmaker.studio.project.managed.TestValue;
+import com.botmaker.core.project.LockResolver.EditKind;
+import com.botmaker.core.project.managed.TestValue;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -217,7 +221,7 @@ class LockResolverTest {
     void anAnnotatedClassIsManagedWhole() {
         TypeDeclaration type = typeOf("""
                 package com.mybot;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
                 import com.example.vision.Picture;
                 @TestValue(TestValue.Id.PICTURES)
                 public final class Pictures {
@@ -253,7 +257,7 @@ class LockResolverTest {
     void anAnnotatedMethodIsLockedAndItsNeighboursAreNot() {
         TypeDeclaration type = typeOf("""
                 package com.mybot.plugins.sdk;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
                 public final class Sdk {
                     @TestValue(TestValue.Id.FLOW)
                     public static Flow flow() { return Flow.of(); }
@@ -272,7 +276,7 @@ class LockResolverTest {
     void anIdNoPluginClaimsIsOrdinaryCode() {
         TypeDeclaration type = typeOf("""
                 package com.mybot;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
                 public final class Mine {
                     @TestValue(TestValue.Id.MINE)
                     public static int value() { return 3; }

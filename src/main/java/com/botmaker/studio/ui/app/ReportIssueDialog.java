@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
-import com.botmaker.studio.config.AppVersion;
+import com.botmaker.core.config.AppVersion;
 import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;

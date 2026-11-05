@@ -2,8 +2,8 @@ package com.botmaker.studio.parser;
 
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.events.EventBus;
+import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;

@@ -1,5 +1,7 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PublisherRank;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.cli.catalog.Catalog;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;

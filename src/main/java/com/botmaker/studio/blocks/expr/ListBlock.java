@@ -11,7 +11,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import com.botmaker.studio.ui.render.components.ArgumentEditors;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;

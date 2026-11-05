@@ -2,8 +2,8 @@ package com.botmaker.studio.services;
 
 import com.botmaker.shared.launch.LaunchKind;
 import com.botmaker.shared.launch.LaunchSpec;
-import com.botmaker.studio.project.ProjectTemplate;
-import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.core.project.ProjectTemplate;
+import com.botmaker.core.project.StudioProjectSettings;
 import com.botmaker.studio.runtime.BotJvm;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

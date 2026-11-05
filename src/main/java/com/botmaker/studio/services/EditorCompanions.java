@@ -1,8 +1,10 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.plugin.DuplicatePlugins;
-import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.core.services.ProgressReporter;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.plugin.DuplicatePlugins;
+import com.botmaker.core.project.UserLibrary;
+import com.botmaker.core.sharing.PluginRegistry;
 
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;

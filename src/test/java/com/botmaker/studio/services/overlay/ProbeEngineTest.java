@@ -2,10 +2,10 @@ package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayPart;
-import com.botmaker.studio.plugin.TestPlugins;
+import com.botmaker.core.plugin.TestPlugins;
 import com.botmaker.plugin.api.overlay.Probe;
 import com.botmaker.plugin.api.overlay.ProbeResult;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import org.junit.jupiter.api.Test;
 
 import java.awt.image.BufferedImage;

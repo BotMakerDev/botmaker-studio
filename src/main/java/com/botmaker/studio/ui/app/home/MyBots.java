@@ -1,16 +1,16 @@
 package com.botmaker.studio.ui.app.home;
 
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.PomInfo;
-import com.botmaker.studio.project.ProjectManager;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.PomInfo;
+import com.botmaker.core.project.ProjectManager;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.project.vcs.SyncModel;
 import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.studio.sharing.BotInstaller;
-import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.ProgramEntries;
-import com.botmaker.studio.sharing.UnpackedBots;
+import com.botmaker.core.sharing.UnpackedBots;
 
 import com.botmaker.studio.runtime.TreeCompile;
 

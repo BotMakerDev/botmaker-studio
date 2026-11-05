@@ -14,8 +14,8 @@ import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
 import org.eclipse.jdt.core.dom.VariableDeclarationStatement;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectTemplate;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectTemplate;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;

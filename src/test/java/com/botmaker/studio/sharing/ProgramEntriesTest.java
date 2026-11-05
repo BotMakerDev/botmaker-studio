@@ -1,6 +1,7 @@
 package com.botmaker.studio.sharing;
 
-import com.botmaker.studio.project.BotIcon;
+import com.botmaker.core.sharing.BmkOpen;
+import com.botmaker.core.project.BotIcon;
 import com.botmaker.studio.sharing.ProgramEntries.Entry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

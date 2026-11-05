@@ -1,7 +1,7 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.shared.tools.UserDirs;
-import com.botmaker.studio.config.AppPaths;
+import com.botmaker.core.config.AppPaths;
 
 import java.io.BufferedReader;
 import java.io.IOException;

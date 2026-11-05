@@ -1,13 +1,15 @@
 package com.botmaker.studio.project.managed;
 
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.project.managed.JavaManagedSource;
+import com.botmaker.core.project.managed.ManagedMethod;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.params.BotRecords;
 import com.botmaker.java.index.BotIndex;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.services.BotSources;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

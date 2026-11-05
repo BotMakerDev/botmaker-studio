@@ -1,7 +1,8 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.project.UserLibrary;
-import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.project.UserLibrary;
+import com.botmaker.core.sharing.PluginRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

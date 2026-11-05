@@ -1,10 +1,12 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PluginRegistry;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
-import com.botmaker.studio.project.ProjectCreator;
-import com.botmaker.studio.project.ProjectTemplate;
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.project.ProjectCreator;
+import com.botmaker.core.project.ProjectTemplate;
+import com.botmaker.core.project.UserLibrary;
 
 import java.io.IOException;
 import java.util.ArrayList;

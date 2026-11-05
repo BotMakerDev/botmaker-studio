@@ -3,10 +3,10 @@ package com.botmaker.studio.services.upgrade;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginLoader;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.services.MavenService;
-import com.botmaker.studio.services.ProgressReporter;
+import com.botmaker.core.services.MavenService;
+import com.botmaker.core.services.ProgressReporter;
 
 import java.io.IOException;
 import java.nio.file.Files;

@@ -41,6 +41,8 @@
         <botmaker.java.version>0.1.0-SNAPSHOT</botmaker.java.version>
         <!-- botmaker-cli version: its main jar, the silent library Studio's Publish runs. Same contract again. -->
         <botmaker.cli.version>0.10.2-SNAPSHOT</botmaker.cli.version>
+        <!-- botmaker-core version: the open project and its plugins, in-process (2026-11-05). -->
+        <botmaker.core.version>0.1.0-SNAPSHOT</botmaker.core.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
              (2026-09-02). See the note where that dependency stood, below. -->
         <mcp.version>2.1.0</mcp.version>
@@ -173,6 +175,22 @@
             <groupId>com.github.BotMakerDev</groupId>
             <artifactId>botmaker-java</artifactId>
             <version>${botmaker.java.version}</version>
+        </dependency>
+
+        <!-- The core (2026-11-05): the open project, its plugins and its Maven, called in-process until the core
+             is its own process. -->
+        <dependency>
+            <groupId>com.github.BotMakerDev</groupId>
+            <artifactId>botmaker-core</artifactId>
+            <version>${botmaker.core.version}</version>
+        </dependency>
+        <!-- The core's TestPlugins, for the tests here that load in-memory plugins. -->
+        <dependency>
+            <groupId>com.github.BotMakerDev</groupId>
+            <artifactId>botmaker-core</artifactId>
+            <version>${botmaker.core.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
         </dependency>
 
         <!-- The cli's main jar (2026-10-24), for com.botmaker.cli.publish: Studio's Publish runs the same steps and

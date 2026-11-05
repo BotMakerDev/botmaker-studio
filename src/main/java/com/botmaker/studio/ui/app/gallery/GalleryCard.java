@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.gallery;
 
-import com.botmaker.studio.sharing.GalleryEntry;
-import com.botmaker.studio.sharing.PublisherRank;
+import com.botmaker.core.sharing.GalleryEntry;
+import com.botmaker.core.sharing.PublisherRank;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.geometry.Pos;
 import javafx.scene.control.Hyperlink;

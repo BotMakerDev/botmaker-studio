@@ -6,9 +6,9 @@ import com.botmaker.cli.publish.PublishHost;
 import com.botmaker.cli.publish.Refusal;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.services.MavenService;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.services.MavenService;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;

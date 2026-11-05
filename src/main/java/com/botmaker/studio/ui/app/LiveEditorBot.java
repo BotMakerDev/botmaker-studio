@@ -6,11 +6,11 @@ import com.botmaker.studio.assist.LiveBot;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.BotIndex;
-import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectFile;
+import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.project.vcs.Checkpoints;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.project.vcs.Checkpoints;
+import com.botmaker.core.services.BotSources;
 import javafx.application.Platform;
 
 import java.io.IOException;

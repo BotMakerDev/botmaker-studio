@@ -1,17 +1,19 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.JavaManagedSource;
+import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.ImportManager;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.SourceFormatter;
-import com.botmaker.studio.parser.refactor.ReviewMarker;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.parser.refactor.ReviewMarker;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.core.project.params.JavaParameterSource;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.java.parse.BotParser;
 import com.botmaker.java.index.ValueTypeResolver;

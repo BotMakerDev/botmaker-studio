@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.core.project.UserLibrary;
 import com.botmaker.studio.TestSupport;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.junit.jupiter.api.Test;

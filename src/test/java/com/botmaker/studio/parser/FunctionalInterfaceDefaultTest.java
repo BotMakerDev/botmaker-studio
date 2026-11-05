@@ -4,7 +4,7 @@ import com.botmaker.java.edit.EditContext;
 
 import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.handlers.MethodHandler;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.dom.AST;

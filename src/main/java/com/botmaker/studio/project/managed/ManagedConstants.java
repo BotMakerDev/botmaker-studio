@@ -1,19 +1,20 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.ManagedIds;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.BotNames;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNames;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
-import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.params.JavaParameterSource;
 import com.botmaker.java.parse.BotParser;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.services.BotSources;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.Annotation;

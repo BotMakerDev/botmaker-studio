@@ -1,6 +1,6 @@
 package com.botmaker.studio.services.debug;
 
-import com.botmaker.studio.project.ProjectState.SourceFile;
+import com.botmaker.core.project.ProjectState.SourceFile;
 import com.sun.jdi.Bootstrap;
 import com.sun.jdi.Location;
 import com.sun.jdi.ReferenceType;

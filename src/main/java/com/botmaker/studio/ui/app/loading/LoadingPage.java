@@ -1,11 +1,11 @@
 package com.botmaker.studio.ui.app.loading;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.project.PomInfo;
-import com.botmaker.studio.project.vcs.SyncModel;
-import com.botmaker.studio.services.OpenStep;
-import com.botmaker.studio.services.ProgressReporter;
-import com.botmaker.studio.sharing.UnpackedBots;
+import com.botmaker.core.project.PomInfo;
+import com.botmaker.core.project.vcs.SyncModel;
+import com.botmaker.core.services.OpenStep;
+import com.botmaker.core.services.ProgressReporter;
+import com.botmaker.core.sharing.UnpackedBots;
 import com.botmaker.studio.ui.app.botinfo.BotIconView;
 import com.botmaker.studio.ui.app.home.MyBots;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;

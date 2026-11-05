@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.StartingPoints.Kind;
 import com.botmaker.studio.ui.app.StartingPoints.StartChoice;
 import com.botmaker.studio.ui.app.botinfo.BotIconView;

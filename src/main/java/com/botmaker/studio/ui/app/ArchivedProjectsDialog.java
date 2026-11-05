@@ -1,11 +1,10 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.project.ProjectInfo;
-import com.botmaker.studio.project.ProjectManager;
+import com.botmaker.core.project.ProjectInfo;
+import com.botmaker.core.project.ProjectManager;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;

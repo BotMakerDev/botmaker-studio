@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.StudioProjectSettings;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.StudioProjectSettings;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.app.botinfo.BotInfoSection;

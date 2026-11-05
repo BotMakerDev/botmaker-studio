@@ -3,7 +3,7 @@ package com.botmaker.studio.services.run;
 import com.botmaker.plugin.api.run.RunEntry;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 
 import java.nio.file.Path;
 import java.util.ArrayList;

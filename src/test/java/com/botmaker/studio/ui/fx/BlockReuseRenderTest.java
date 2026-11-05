@@ -4,7 +4,7 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.parser.EditorFixture;
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.application.Platform;
 import javafx.scene.Node;

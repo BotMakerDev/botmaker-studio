@@ -1,10 +1,11 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.JavaManagedSource;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.JavaValue;
-import com.botmaker.studio.project.params.JavaParameterSource;
+import com.botmaker.core.project.params.JavaParameterSource;
 import com.botmaker.java.parse.BotParser;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTVisitor;

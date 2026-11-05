@@ -1,11 +1,13 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.PublisherRank;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.cli.bmk.BotFile;
 import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.cli.catalog.Catalog;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.project.vcs.SyncModel;
 
 import java.io.IOException;
 import java.nio.file.Files;

@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app.overlay;
 
 import com.botmaker.plugin.api.overlay.OverlayTool;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.plugin.PluginHost;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;

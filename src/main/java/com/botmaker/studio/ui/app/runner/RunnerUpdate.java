@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.app.runner;
 
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.project.vcs.VersionOrigin;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.project.vcs.VersionOrigin;
 import com.botmaker.studio.runtime.TreeCompile;
 
 import java.io.IOException;

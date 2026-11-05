@@ -1,8 +1,8 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.plugin.api.overlay.OverlayPart;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.services.BotSources;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.services.BotSources;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

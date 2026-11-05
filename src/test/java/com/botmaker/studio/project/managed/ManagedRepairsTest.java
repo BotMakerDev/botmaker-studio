@@ -1,8 +1,10 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.TestOutcome;
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.index.BotIndex;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,7 +50,7 @@ class ManagedRepairsTest {
     private static final String GREETINGS = """
             package %s.plugins.test;
 
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestValue;
 
             public final class Greetings {
                 @TestValue(TestValue.Id.GREETING_V1)
@@ -63,7 +65,7 @@ class ManagedRepairsTest {
     private static final String VALUES = """
             package %s.plugins.test;
 
-            import com.botmaker.studio.project.managed.TestValue;
+            import com.botmaker.core.project.managed.TestValue;
 
             public final class Values {
                 @TestValue(TestValue.Id.GREETING)
@@ -123,8 +125,8 @@ class ManagedRepairsTest {
         BotIndex index = index(config, Map.of(activities, """
                 package %s.plugins.test;
 
-                import com.botmaker.studio.project.managed.TestOutcome;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestOutcome;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.ACTIVITIES)
                 public enum Activities implements TestOutcome { WON, LOST }
@@ -145,8 +147,8 @@ class ManagedRepairsTest {
         BotIndex index = index(config, Map.of(activities, """
                 package %s.plugins.test;
 
-                import com.botmaker.studio.project.managed.TestOutcome;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestOutcome;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.ACTIVITIES)
                 public enum Activities implements TestOutcome { WON, LOST }
@@ -223,7 +225,7 @@ class ManagedRepairsTest {
         BotIndex index = index(config, Map.of(words, """
                 package %s.plugins.test;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.WORDS)
                 public final class Words {

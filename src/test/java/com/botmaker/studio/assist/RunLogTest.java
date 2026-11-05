@@ -3,7 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.studio.events.CoreApplicationEvents.OutputAppendedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.TraceLineEvent;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 

@@ -1,5 +1,6 @@
 package com.botmaker.studio.sharing;
 
+import com.botmaker.core.sharing.GalleryEntry;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;

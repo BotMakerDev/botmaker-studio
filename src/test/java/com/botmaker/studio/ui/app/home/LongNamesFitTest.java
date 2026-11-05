@@ -2,9 +2,9 @@ package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.studio.sharing.BmkDownload;
-import com.botmaker.studio.sharing.GalleryEntry;
+import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.HiddenBots;
-import com.botmaker.studio.sharing.PublisherRank;
+import com.botmaker.core.sharing.PublisherRank;
 import com.botmaker.studio.sharing.ShowCommunity;
 import com.botmaker.studio.ui.app.home.MyBots.CompileState;
 import com.botmaker.studio.ui.app.home.MyBots.MyBot;

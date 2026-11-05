@@ -1,15 +1,15 @@
 package com.botmaker.studio.ui.app.params;
 
-import com.botmaker.studio.project.params.ParameterRow;
-import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.core.project.params.ParameterRow;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNode;
 import com.botmaker.java.grammar.ValueContainer;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.params.BotRecords;
+import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.core.project.params.BotRecords;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;

@@ -3,7 +3,7 @@ package com.botmaker.studio.project.source;
 import com.botmaker.java.index.ValueTypeResolver;
 import com.botmaker.java.parse.BotParser;
 import com.botmaker.java.grammar.ValueTypes;
-import com.botmaker.studio.project.params.TestValues;
+import com.botmaker.core.project.params.TestValues;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.FieldDeclaration;

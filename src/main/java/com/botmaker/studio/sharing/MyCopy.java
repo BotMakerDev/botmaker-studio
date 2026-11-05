@@ -2,9 +2,9 @@ package com.botmaker.studio.sharing;
 
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
-import com.botmaker.studio.project.vcs.ProjectVcs;
-import com.botmaker.studio.project.vcs.Remote;
-import com.botmaker.studio.project.vcs.SyncModel;
+import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.core.project.vcs.Remote;
+import com.botmaker.core.project.vcs.SyncModel;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.IOException;

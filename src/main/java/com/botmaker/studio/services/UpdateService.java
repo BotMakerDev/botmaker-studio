@@ -5,7 +5,7 @@ import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.shared.github.SemVer;
 import com.botmaker.shared.platform.Os;
-import com.botmaker.studio.config.AppVersion;
+import com.botmaker.core.config.AppVersion;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.awt.Desktop;

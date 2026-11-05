@@ -1,15 +1,17 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.core.project.managed.MigrationTypes;
+import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.grammar.ValueGrammar;
-import com.botmaker.studio.project.managed.MigrationTypes.Frame;
-import com.botmaker.studio.project.managed.MigrationTypes.OldFrame;
-import com.botmaker.studio.project.managed.MigrationTypes.OldPaint;
-import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
-import com.botmaker.studio.project.managed.MigrationTypes.Paint;
-import com.botmaker.studio.project.managed.MigrationTypes.Shot;
+import com.botmaker.core.project.managed.MigrationTypes.Frame;
+import com.botmaker.core.project.managed.MigrationTypes.OldFrame;
+import com.botmaker.core.project.managed.MigrationTypes.OldPaint;
+import com.botmaker.core.project.managed.MigrationTypes.OldShot;
+import com.botmaker.core.project.managed.MigrationTypes.Paint;
+import com.botmaker.core.project.managed.MigrationTypes.Shot;
 import com.botmaker.java.index.BotIndex;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,8 +50,8 @@ class ManagedMigrationsTest {
     private static final String OLD_SHOTS = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.OldShot;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.OldShot;
 
             @TestValue(TestValue.Id.OLD_SHOTS)
             public final class OldShots {
@@ -64,8 +66,8 @@ class ManagedMigrationsTest {
     private static final String SHOTS = """
             package com.bot.plugins.sdk;
 
-            import com.botmaker.studio.project.managed.TestValue;
-            import com.botmaker.studio.project.managed.MigrationTypes.Shot;
+            import com.botmaker.core.project.managed.TestValue;
+            import com.botmaker.core.project.managed.MigrationTypes.Shot;
 
             @TestValue(TestValue.Id.SHOTS)
             public final class Shots {
@@ -79,7 +81,7 @@ class ManagedMigrationsTest {
             package com.bot;
 
             import com.botmaker.plugin.api.meta.Migrate;
-            import com.botmaker.studio.project.managed.MigrationTypes.*;
+            import com.botmaker.core.project.managed.MigrationTypes.*;
 
             public final class Migrations {
                 @Migrate(kind = Migrate.Kind.TYPE, value = OldShot.class)
@@ -153,8 +155,8 @@ class ManagedMigrationsTest {
         String old = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
-                import com.botmaker.studio.project.managed.MigrationTypes.*;
+                import com.botmaker.core.project.managed.TestValue;
+                import com.botmaker.core.project.managed.MigrationTypes.*;
 
                 @TestValue(TestValue.Id.OLD_FRAMES)
                 public final class OldFrames {
@@ -164,7 +166,7 @@ class ManagedMigrationsTest {
         String frames = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.FRAMES)
                 public final class Frames {
@@ -185,8 +187,8 @@ class ManagedMigrationsTest {
         String old = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
-                import com.botmaker.studio.project.managed.MigrationTypes.*;
+                import com.botmaker.core.project.managed.TestValue;
+                import com.botmaker.core.project.managed.MigrationTypes.*;
 
                 @TestValue(TestValue.Id.OLD_PAINTS)
                 public final class OldPaints {
@@ -196,7 +198,7 @@ class ManagedMigrationsTest {
         String paints = """
                 package com.bot.plugins.sdk;
 
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
 
                 @TestValue(TestValue.Id.PAINTS)
                 public final class Paints {

@@ -6,7 +6,7 @@ import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.ImportManager;
 import com.botmaker.java.edit.guard.CompileGuard;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
-import com.botmaker.studio.parser.refactor.ReviewMarker;
+import com.botmaker.core.parser.refactor.ReviewMarker;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.index.BotIndex;
 import com.botmaker.java.parse.BotParser;

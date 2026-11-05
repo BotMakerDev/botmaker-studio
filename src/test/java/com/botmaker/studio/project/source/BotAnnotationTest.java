@@ -140,7 +140,7 @@ class BotAnnotationTest {
     void aPluginsManagedMarkerIsNotParam() {
         Annotation annotation = only(BotParser.SYNTAX, """
                 package com.example.bot;
-                import com.botmaker.studio.project.managed.TestValue;
+                import com.botmaker.core.project.managed.TestValue;
                 class Sdk { @TestValue(TestValue.Id.FLOW) static int a = 1; }
                 """);
         assertEquals(false, BotAnnotation.PARAM.marks(annotation));

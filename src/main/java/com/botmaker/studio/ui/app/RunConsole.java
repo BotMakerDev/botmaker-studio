@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.events.ApplicationEvent;
+import com.botmaker.core.events.ApplicationEvent;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.events.EventBus;
+import com.botmaker.core.events.EventBus;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;

@@ -1,6 +1,7 @@
 package com.botmaker.studio.config;
 
-import com.botmaker.studio.services.MavenService;
+import com.botmaker.core.config.HostContract;
+import com.botmaker.core.services.MavenService;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

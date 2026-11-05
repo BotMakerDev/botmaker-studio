@@ -4,7 +4,7 @@ import com.botmaker.java.types.ProjectAnalyzer;
 
 import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.index.TypeSummaryManager;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.core.project.ProjectState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

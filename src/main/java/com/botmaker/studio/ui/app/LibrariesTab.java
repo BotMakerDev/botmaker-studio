@@ -1,12 +1,12 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.UserLibrary;
+import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.project.UserLibrary;
 import com.botmaker.studio.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.sharing.PluginCatalog;
-import com.botmaker.studio.sharing.PluginRegistry;
+import com.botmaker.core.sharing.PluginRegistry;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;

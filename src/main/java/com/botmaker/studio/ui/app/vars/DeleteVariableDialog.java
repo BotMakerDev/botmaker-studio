@@ -4,7 +4,7 @@ import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.UseFix;
 import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
-import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
