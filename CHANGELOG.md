@@ -14,6 +14,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (edits by id)
 
+- Running and debugging report through `botmaker-core`'s events and a few ports, bridged to Studio's bus by `RunOnBus`
+  and `DebugOnBus` (2026-11-05); nothing a user sees changes. Window grabs are `Capture`, apart from the overlay's.
+
 - The canvas is redrawn from what `botmaker-core` announces, and ↶/↷ are the core's history (2026-11-05). An undo now
   keeps the blocks it did not change, as an edit does, instead of drawing the whole file again.
 

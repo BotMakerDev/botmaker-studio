@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayFrame;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
-import com.botmaker.studio.services.capture.TargetCapture;
+import com.botmaker.studio.services.capture.Capture;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
@@ -47,7 +47,7 @@ public final class WatchedScreen {
     }
 
     private final String label;
-    private final TargetCapture.WindowRef window;
+    private final Capture.WindowRef window;
     private final Rectangle region;
     private final LiveSession session;
     /** The plugin's own frames ({@code OverlayPart.frames}); null when it has none. */
@@ -55,7 +55,7 @@ public final class WatchedScreen {
     /** The last frame {@link #frames} gave, whose area {@link #area()} answers without grabbing again. */
     private volatile OverlayFrame lastOwn;
 
-    private WatchedScreen(String label, TargetCapture.WindowRef window, Rectangle region, LiveSession session,
+    private WatchedScreen(String label, Capture.WindowRef window, Rectangle region, LiveSession session,
                           OverlayPart.FrameSource frames) {
         this.label = label;
         this.window = window;
@@ -79,14 +79,14 @@ public final class WatchedScreen {
     }
 
     /** The window {@code ref} names, captioned {@code label}. */
-    public static WatchedScreen window(TargetCapture.WindowRef ref, String label) {
+    public static WatchedScreen window(Capture.WindowRef ref, String label) {
         return new WatchedScreen(label, ref, null, null, null);
     }
 
     /** The private display session, shown on the desktop by the window whose id is {@code windowId}. */
     public static WatchedScreen session(long windowId, LiveSession session) {
         return new WatchedScreen("the private display session",
-                new TargetCapture.WindowRef("private session", windowId), null, Objects.requireNonNull(session), null);
+                new Capture.WindowRef("private session", windowId), null, Objects.requireNonNull(session), null);
     }
 
     /**
@@ -103,8 +103,8 @@ public final class WatchedScreen {
                 yield id == 0 ? Optional.empty() : Optional.of(session(id, session));
             }
             case WINDOW -> watched.title().flatMap(title -> {
-                TargetCapture.WindowRef ref = new TargetCapture.WindowRef(title);
-                return TargetCapture.windowBounds(ref) == null ? Optional.empty()
+                Capture.WindowRef ref = new Capture.WindowRef(title);
+                return Capture.windowBounds(ref) == null ? Optional.empty()
                         : Optional.of(window(ref, "\"" + title + "\""));
             });
             case REGION -> watched.area().map(a -> new WatchedScreen(
@@ -119,7 +119,7 @@ public final class WatchedScreen {
     }
 
     /** The window, when this is one; for the session, the window showing it. */
-    public Optional<TargetCapture.WindowRef> windowRef() {
+    public Optional<Capture.WindowRef> windowRef() {
         return Optional.ofNullable(window);
     }
 
@@ -130,7 +130,7 @@ public final class WatchedScreen {
 
     /** Where it is on the desktop now, in desktop pixels; {@code null} when its window has closed. */
     public Rectangle bounds() {
-        return window == null ? new Rectangle(region) : TargetCapture.windowBounds(window);
+        return window == null ? new Rectangle(region) : Capture.windowBounds(window);
     }
 
     /**
@@ -167,8 +167,8 @@ public final class WatchedScreen {
             if (own.isPresent()) return Optional.of(own.get().image());
         }
         if (session != null) return Optional.ofNullable(session.capture());
-        if (window == null) return Optional.ofNullable(TargetCapture.grabArea(region));
-        TargetCapture.WindowShot shot = TargetCapture.peekWindow(window);
+        if (window == null) return Optional.ofNullable(Capture.grabArea(region));
+        Capture.WindowShot shot = Capture.peekWindow(window);
         return shot == null ? Optional.empty() : Optional.ofNullable(shot.image());
     }
 

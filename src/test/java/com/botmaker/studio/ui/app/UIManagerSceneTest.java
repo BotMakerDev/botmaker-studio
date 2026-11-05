@@ -9,6 +9,7 @@ import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
+import com.botmaker.studio.services.RunOnBus;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
@@ -95,7 +96,7 @@ class UIManagerSceneTest extends FxHeadlessTest {
         DiagnosticsManager diagnostics = new DiagnosticsManager();
         BlockDragAndDropManager dnd = new BlockDragAndDropManager(bus);
         ProjectAnalyzer analyzer = new ProjectAnalyzer(new TypeSummaryManager(Set.of()), state);
-        execution = new CodeExecutionService(diagnostics, config, state, bus);
+        execution = RunOnBus.service(diagnostics, config, state, bus);
 
         StudioContext ctx = new StudioContext(config, state, bus, diagnostics, dnd, analyzer,
                 new LibraryService(config, state, new TypeSummaryManager(Set.of()), bus),

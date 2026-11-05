@@ -7,6 +7,7 @@ import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.studio.services.RunOnBus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
 import org.junit.jupiter.api.DisplayNameGenerator.ReplaceUnderscores;
@@ -76,7 +77,7 @@ class HostRunsTest {
                 new TelemetryEvent.Target("Diablo IV", 0, 0, 1920, 1080), 640, 480, 1, 12);
         byte[] frame = encode(original);
         EventBus bus = new EventBus();
-        CodeExecutionService execution = new CodeExecutionService(null, null, null, bus);
+        CodeExecutionService execution = RunOnBus.service(null, null, null, bus);
         try {
             HostRuns.install(bus, execution, null);
             List<byte[]> first = new ArrayList<>();
@@ -101,7 +102,7 @@ class HostRunsTest {
     @Test
     void a_trace_line_reaches_its_listeners_until_they_unregister() throws Exception {
         EventBus bus = new EventBus();
-        CodeExecutionService execution = new CodeExecutionService(null, null, null, bus);
+        CodeExecutionService execution = RunOnBus.service(null, null, null, bus);
         try {
             HostRuns.install(bus, execution, null);
             List<TraceLine> heard = new ArrayList<>();

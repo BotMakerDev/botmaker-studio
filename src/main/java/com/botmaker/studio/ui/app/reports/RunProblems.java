@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.reports;
 
+import com.botmaker.core.runtime.RunFolders;
 import com.botmaker.runlog.Problem;
 import com.botmaker.runlog.Problems;
 import com.botmaker.runlog.ReportTarget;
@@ -18,11 +19,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * A project's runs as reports (run reports spec §3), free of JavaFX: each run's problems as the issue texts they
@@ -49,17 +48,12 @@ public final class RunProblems {
 
     /** The project's runs that kept a log, newest first. */
     public static List<Path> runs(Path project) {
-        try (Stream<Path> list = Files.list(project.resolve(RunLog.FOLDER))) {
-            return list.filter(p -> Files.isRegularFile(p.resolve(RunLog.FILE)))
-                    .sorted(Comparator.comparing((Path p) -> p.getFileName().toString()).reversed()).toList();
-        } catch (IOException e) {
-            return List.of();
-        }
+        return RunFolders.runs(project);
     }
 
     /** The project's newest run, when one kept a log. */
     public static Optional<Path> latest(Path project) {
-        return runs(project).stream().findFirst();
+        return RunFolders.latest(project);
     }
 
     /** {@code run}'s problems as reports; none when its log does not read. */

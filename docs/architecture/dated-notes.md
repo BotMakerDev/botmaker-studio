@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **A run speaks the core's events since 2026-11-05** (phase 7 of the same plan; the classes move in 7a).
+> `CodeExecutionService` reports through a `Consumer<CoreEvent>` (`RunState`, `RunOutput`, `RunLogged`, `InputAsked`,
+> `Status`), checks before a run through a `RunCheck`, and hands trace lines and telemetry frames to a
+> `RunTelemetry.Listener`; it subscribes nothing. `services.RunOnBus` builds it and turns all three into the bus events
+> Studio's listeners take, and the bus's run requests into calls. `DebuggingService` shows through `DebugView`, which
+> `services.DebugOnBus` implements with the block lookup and file switch it used to hold. `TargetCapture` keeps only the
+> monitor grab; window refs and window or area grabs are `services.capture.Capture`, which has no JavaFX.
+
 > **Studio redraws from `MethodsChanged` and undoes through the core since 2026-11-05** (phase 6e of the same plan).
 > `CodeEditorService.announced` adopts the file text the event carries and renders it with reuse; `CodeUpdatedEvent` is
 > now a two-field notice published after that, which drives no redraw and no history (the overlay and Edit Variable

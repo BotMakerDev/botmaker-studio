@@ -1,8 +1,9 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.studio.services.capture.Capture;
+import com.botmaker.studio.services.capture.Capture.WindowRef;
 import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
-import com.botmaker.studio.services.capture.TargetCapture.WindowRef;
 
 import javafx.scene.image.Image;
 import javafx.stage.Window;
@@ -35,7 +36,8 @@ import java.util.function.Consumer;
  * holds (raise, resize, capture, bounds, the title list) and the screen.
  *
  * <p>So: <b>add nothing here.</b> A new overlay behaviour belongs on {@link ScreenOverlay}, and anything
- * that needs a native window handle belongs on {@link TargetCapture}.
+ * that needs a native window handle belongs on {@link Capture} (since plan phase 7; {@link TargetCapture} keeps only
+ * the overlay's monitor grab).
  */
 public final class ScreenCaptureService {
 
@@ -110,23 +112,23 @@ public final class ScreenCaptureService {
      * Brings the window matching {@code target} to the front and captures its pixels, or {@code null} when no
      * window matches or capture fails.
      */
-    public TargetCapture.WindowShot captureWindow(WindowRef windowTarget) {
-        return target.captureWindow(windowTarget);
+    public Capture.WindowShot captureWindow(WindowRef windowTarget) {
+        return Capture.captureWindow(windowTarget);
     }
 
     /** The current absolute bounds of the window matching {@code target}, or {@code null}. Cheap; FX-safe. */
     public static java.awt.Rectangle windowBounds(WindowRef windowTarget) {
-        return TargetCapture.windowBounds(windowTarget);
+        return Capture.windowBounds(windowTarget);
     }
 
     /** Brings the window matching {@code target} to the front without capturing. Best-effort. */
     public void raiseWindow(WindowRef windowTarget) {
-        target.raiseWindow(windowTarget);
+        Capture.raiseWindow(windowTarget);
     }
 
     /** Enumerates the titles of the currently open windows (for the target chooser). Best-effort. */
     public static List<String> listWindowTitles() {
-        return TargetCapture.listWindowTitles();
+        return Capture.listWindowTitles();
     }
 
     // ── Neither half ────────────────────────────────────────────────────────────────────────────────────

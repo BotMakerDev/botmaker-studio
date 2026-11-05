@@ -1,12 +1,13 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.core.event.CoreEvent;
+import com.botmaker.core.events.EventBus;
 import com.botmaker.core.runtime.JavacRelease;
+import com.botmaker.core.runtime.RunFolders;
 import com.botmaker.java.grammar.ParamValues;
 import com.botmaker.java.grammar.ParamsFitter;
 import com.botmaker.shared.ipc.TelemetryServer;
 import com.botmaker.core.project.ProjectConfig;
-import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;
 import com.botmaker.core.project.ProjectFile;
@@ -15,11 +16,8 @@ import com.botmaker.java.index.BotIndex;
 import com.botmaker.studio.runtime.tryhost.TryHost;
 import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.trial.TrialCaller;
-import com.botmaker.studio.ui.app.reports.RunProblems;
 import com.botmaker.session.launch.BackgroundLauncher;
 import com.botmaker.core.util.ClassPathManager;
-import com.botmaker.studio.validation.DiagnosticsManager;
-import javafx.application.Platform;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -30,15 +28,25 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+/**
+ * Compiles, runs and tries the open bot, and says how it goes as {@link CoreEvent}s: {@code RunState},
+ * {@code RunOutput}, {@code Status}, {@code RunLogged} and the bot's questions as {@code InputAsked} (plan phase 7). It
+ * names nothing a client draws: what the bot's code may not run with is the {@link RunCheck}'s to say, and the editor's
+ * copies of what a compile wrote change on {@code stateThread}, the thread that owns {@link ProjectState}.
+ */
 public class CodeExecutionService {
 
-    private final DiagnosticsManager diagnosticsManager;
+    private final RunCheck check;
     private final ProjectConfig config;
     private final ProjectState state;
-    private final EventBus eventBus;
+    private final EventBus.UiThread stateThread;
+    private final Consumer<CoreEvent> events;
+    private final RunTelemetry.Listener telemetry;
 
     private volatile Process currentRunningProcess;
     private volatile ConsoleBatcher activeConsole;
@@ -64,7 +72,7 @@ public class CodeExecutionService {
 
     /**
      * What a run's JVM starts: the bot's {@code main} (no {@code title}), or a plugin's declared run
-     * ({@link CoreApplicationEvents.EntryRunRequestedEvent}) with the bot's value holders as {@code args}.
+     * ({@link #runEntry}) with the bot's value holders as {@code args}.
      */
     public record Launch(String title, String mainClass, List<String> args) {
 
@@ -80,32 +88,20 @@ public class CodeExecutionService {
         }
     }
 
-    public CodeExecutionService(
-            DiagnosticsManager diagnosticsManager,
-            ProjectConfig config,
-            ProjectState state,
-            EventBus eventBus) {
-        this.diagnosticsManager = diagnosticsManager;
+    /**
+     * @param stateThread where the editor's copies of a file a compile or a run rewrote are changed
+     * @param events      what every client hears of a compile, a run or a try, told from the thread doing it
+     * @param telemetry   who hears the run's trace lines and the frames relayed to plugins
+     */
+    public CodeExecutionService(ProjectConfig config, ProjectState state, EventBus.UiThread stateThread,
+                                RunCheck check, Consumer<CoreEvent> events, RunTelemetry.Listener telemetry) {
+        this.check = check;
         this.config = config;
         this.state = state;
-        this.eventBus = eventBus;
-        setupEventHandlers();
+        this.stateThread = stateThread;
+        this.events = events;
+        this.telemetry = telemetry;
         Runtime.getRuntime().addShutdownHook(shutdownHook);
-    }
-
-    private void setupEventHandlers() {
-        eventBus.subscribe(CoreApplicationEvents.CompilationRequestedEvent.class,
-                e -> compileCode(state.snapshot()), false);
-        eventBus.subscribe(CoreApplicationEvents.ExecutionRequestedEvent.class,
-                e -> runCode(state.snapshot()), false);
-        eventBus.subscribe(CoreApplicationEvents.EntryRunRequestedEvent.class,
-                e -> runEntry(state.snapshot(), e.title(), e.mainClass()), false);
-        eventBus.subscribe(CoreApplicationEvents.TrialRunRequestedEvent.class,
-                e -> tryCode(state.snapshot(), e.caller(), e.label()), false);
-        eventBus.subscribe(CoreApplicationEvents.StopRunRequestedEvent.class,
-                e -> stopRunningProgram(), false);
-        eventBus.subscribe(CoreApplicationEvents.InputAnsweredEvent.class,
-                e -> answer(e.id(), e.value()), false);
     }
 
     /**
@@ -118,7 +114,11 @@ public class CodeExecutionService {
     }
 
     private void status(String message) {
-        Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(message)));
+        events.accept(new CoreEvent.Status(message));
+    }
+
+    private void phase(CoreEvent.RunState.Phase phase) {
+        events.accept(new CoreEvent.RunState(phase, ""));
     }
 
     /**
@@ -160,24 +160,9 @@ public class CodeExecutionService {
     /** {@code run} is what a run (not a try) starts, asked for off the FX thread once the compile passed. */
     private void launch(ProjectState.Snapshot snapshot, TrialCaller.Source trial, String label,
                         Supplier<Launch> run) {
-        // Pre-compile block validation: a slot still waiting on one of the user's variables (a red "Choose a
-        // variable…" chip) would only surface as a raw javac error. Detect it via SourceChecks, surface it in
-        // the Errors panel, and abort before compiling. Always publish (an empty list clears any previously
-        // shown slot errors). Every *value* slot now seeds a compiling default, so this fires only for the
-        // positions that need a name — see UnfilledSlot.
-        List<org.eclipse.lsp4j.Diagnostic> emptySlotIssues = diagnosticsManager.validateBlocks();
-        // Deprecated SDK calls ride along in the same panel but never gate the run: they compile and work
-        // today, and the warning IS the deprecation cycle (see DiagnosticsManager.deprecationWarnings).
-        List<org.eclipse.lsp4j.Diagnostic> published = new java.util.ArrayList<>(emptySlotIssues);
-        published.addAll(diagnosticsManager.deprecationWarnings());
-        published.addAll(diagnosticsManager.entryPointHints());
-        eventBus.publish(new CoreApplicationEvents.DiagnosticsUpdatedEvent(published));
-        if (!emptySlotIssues.isEmpty()) {
-            status("Run aborted: choose a variable for the highlighted slot(s) — see the Errors tab.");
-            return;
-        }
-        if (diagnosticsManager.hasErrors()) {
-            status("Run aborted due to errors.");
+        Optional<String> refused = check.refusal();
+        if (refused.isPresent()) {
+            status(refused.get());
             return;
         }
         // Claimed before the compile, not after it: a second request during the compile (a double click, an
@@ -193,7 +178,7 @@ public class CodeExecutionService {
             Map<Path, String> paramsAtStart = Map.of();
             try {
                 status("Compiling...");
-                Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputClearedEvent()));
+                phase(CoreEvent.RunState.Phase.COMPILING);
 
                 if (!compileAndWait(snapshot, config.compiledOutputPath())) {
                     status((trial == null ? "Run" : "Try") + " aborted due to build failure.");
@@ -215,7 +200,7 @@ public class CodeExecutionService {
                     }
                     status("Trying " + label + "… (Press Stop to end it)");
                     trying = true;
-                    eventBus.publish(new CoreApplicationEvents.ProgramStartedEvent());
+                    phase(CoreEvent.RunState.Phase.RUNNING);
                     // The bot's classes load per try, beside the caller; the warm JVM holds the dependencies.
                     int code = tries().run(tryHostCommand(snapshot), tracePlanText(), config.projectPath(),
                             List.of(classes, config.compiledOutputPath()), trial.className());
@@ -239,7 +224,7 @@ public class CodeExecutionService {
                 }
 
                 // Tell UI the program has started so the Stop button becomes clickable.
-                eventBus.publish(new CoreApplicationEvents.ProgramStartedEvent());
+                phase(CoreEvent.RunState.Phase.RUNNING);
 
                 // Run the compiled main class directly:
                 // java [bot options] [session hand-off] -cp <classes:deps> <mainClass> [args]
@@ -282,7 +267,7 @@ public class CodeExecutionService {
             } finally {
                 trying = false;
                 // This run's folder, read while no next run can have made its own.
-                Path endedRun = ran ? RunProblems.latest(config.projectPath()).orElse(null) : null;
+                String endedRun = ran ? RunFolders.latest(config.projectPath()).map(Path::toString).orElse("") : "";
                 // While this still counts as running: a next run compiles the editor's copies, values merged.
                 if (ran) takeRunsValues(paramsAtStart);
                 isRunning.set(false);
@@ -290,8 +275,8 @@ public class CodeExecutionService {
                 closeConsole();
                 stopTelemetry();
                 // Tell UI the program has finished so the Stop button disables.
-                eventBus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
-                if (ran) eventBus.publish(new CoreApplicationEvents.BotRunEndedEvent(endedRun));
+                phase(CoreEvent.RunState.Phase.ENDED);
+                if (ran) events.accept(new CoreEvent.RunLogged(endedRun));
             }
         }, "CodeRunner").start();
     }
@@ -303,7 +288,7 @@ public class CodeExecutionService {
      */
     private void takeRunsValues(Map<Path, String> atStart) {
         Map<Path, String> written = paramSources();
-        Platform.runLater(() -> written.forEach((file, text) -> state.getFile(file).ifPresent(open -> {
+        stateThread.later(() -> written.forEach((file, text) -> state.getFile(file).ifPresent(open -> {
             String merged = ParamValues.withRunsValues(state.level(), open.getContent(), atStart.getOrDefault(file, ""), text);
             if (!merged.equals(open.getContent())) open.setContent(merged);
         })));
@@ -331,7 +316,7 @@ public class CodeExecutionService {
             // One console for the JVM's life: its pipes stay open between tries.
             ConsoleBatcher console = console();
             tryConsole = console;
-            tries = new WarmTries(console::append, console::flushNow, pb -> RunTelemetry.start(eventBus, pb));
+            tries = new WarmTries(console::append, console::flushNow, pb -> RunTelemetry.start(events, telemetry, pb));
         }
         return tries;
     }
@@ -436,7 +421,7 @@ public class CodeExecutionService {
     public void compileCode(ProjectState.Snapshot snapshot) {
         new Thread(() -> {
             try {
-                Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputClearedEvent()));
+                phase(CoreEvent.RunState.Phase.COMPILING);
                 status("Compiling...");
                 if (compileAndWait(snapshot, config.compiledOutputPath())) {
                     status("Compilation successful.");
@@ -474,7 +459,7 @@ public class CodeExecutionService {
                 Files.copy(file, pass.resolve(relative), StandardCopyOption.REPLACE_EXISTING);
                 String reset = Files.readString(starting);
                 Files.writeString(file, reset);
-                Platform.runLater(() -> state.getFile(file).ifPresent(open -> open.setContent(reset)));
+                stateThread.later(() -> state.getFile(file).ifPresent(open -> open.setContent(reset)));
                 warn("WARN " + config.projectPath().relativize(file) + " did not compile and was reset to its"
                         + " starting copy. A copy is in " + config.projectPath().relativize(pass) + ".");
             }
@@ -505,7 +490,7 @@ public class CodeExecutionService {
         }
         if (fitted.isEmpty()) return;
         fitted.forEach(each -> warn("WARN params/" + each.sentence() + " A copy is in " + VALUES_BACKUPS + "."));
-        Platform.runLater(() -> fitted.forEach(each -> {
+        stateThread.later(() -> fitted.forEach(each -> {
             Path file = params.resolve(each.file());
             each.source().ifPresentOrElse(text -> state.getFile(file).ifPresentOrElse(open -> open.setContent(text),
                             () -> state.addFile(new ProjectFile(file, text))),
@@ -530,7 +515,11 @@ public class CodeExecutionService {
     }
 
     private void warn(String line) {
-        Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(line + "\n")));
+        print(line + "\n");
+    }
+
+    private void print(String text) {
+        events.accept(new CoreEvent.RunOutput(CoreEvent.RunOutput.Stream.OUT, text));
     }
 
     private boolean compileSources(ProjectState.Snapshot snapshot, Path compiledOutputPath, StringBuilder output)
@@ -538,7 +527,7 @@ public class CodeExecutionService {
 
         List<String> sourceFiles = ClassPathManager.findJavaFiles(config.sourceRoot());
         if (sourceFiles.isEmpty()) {
-            Platform.runLater(() -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent("No source files to compile.\n")));
+            print("No source files to compile.\n");
             return false;
         }
 
@@ -559,7 +548,7 @@ public class CodeExecutionService {
             synchronized (output) {
                 output.append(text);
             }
-            eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(text));
+            print(text);
         })) {
             console.pump(process.getInputStream(), "javac-output");
             int exitCode = process.waitFor();
@@ -573,7 +562,7 @@ public class CodeExecutionService {
      * three reach the console the same way.
      */
     public ConsoleBatcher console() {
-        return new ConsoleBatcher(text -> eventBus.publish(new CoreApplicationEvents.OutputAppendedEvent(text)));
+        return new ConsoleBatcher(this::print);
     }
 
     public void stopRunningProgram() {
@@ -595,7 +584,7 @@ public class CodeExecutionService {
         stopTelemetry();
         // Force state update immediately on hard kill
         isRunning.set(false);
-        eventBus.publish(new CoreApplicationEvents.ProgramStoppedEvent());
+        phase(CoreEvent.RunState.Phase.ENDED);
     }
 
     /**
@@ -649,7 +638,7 @@ public class CodeExecutionService {
      */
     private void startTelemetry(ProcessBuilder pb) {
         stopTelemetry();
-        this.telemetryServer = RunTelemetry.start(eventBus, pb);
+        this.telemetryServer = RunTelemetry.start(events, telemetry, pb);
     }
 
     private void stopTelemetry() {

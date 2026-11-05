@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.core.events.ApplicationEvent;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
+import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
@@ -24,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class RunConsoleTest extends FxHeadlessTest {
 
-    private final EventBus bus = new EventBus();
+    private final EventBus bus = new EventBus(false, FxThread.INSTANCE);
     private final AtomicInteger raised = new AtomicInteger();
     private final List<ApplicationEvent> stops = new CopyOnWriteArrayList<>();
     private RunConsole console;

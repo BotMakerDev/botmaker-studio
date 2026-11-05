@@ -1,7 +1,5 @@
 package com.botmaker.studio.runtime;
 
-import javafx.application.Platform;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -13,8 +11,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * What a process prints, on its way to the Run tab: read off its pipes in chunks, held here, and handed to the
- * FX thread at most once every {@link #FLUSH_MS}.
+ * What a process prints, on its way to the Run tab: read off its pipes in chunks, held here, and handed to its sink
+ * at most once every {@link #FLUSH_MS}, on the batcher's own thread (a sink that draws hops to its UI thread; since
+ * plan phase 7 Studio's {@code RunOnBus} does).
  *
  * <p>One per run, debug session or compile, and the only path from a pipe to the console. It exists because
  * there were two: a run was batched and a debug session posted one {@code Platform.runLater} per line, so a
@@ -38,7 +37,7 @@ public final class ConsoleBatcher implements AutoCloseable {
     private final ScheduledExecutorService flusher;
     private long skipped;
 
-    /** @param sink receives each flush, on the FX thread */
+    /** @param sink receives each flush, one at a time, off the caller's thread */
     public ConsoleBatcher(Consumer<String> sink) {
         this.sink = sink;
         this.flusher = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -108,9 +107,10 @@ public final class ConsoleBatcher implements AutoCloseable {
         flusher.shutdownNow();
     }
 
-    private void flush() {
+    /** Synchronized: a timer's flush and {@link #finish()}'s hand their text over in the order they drained it. */
+    private synchronized void flush() {
         String text = drain();
-        if (text != null) Platform.runLater(() -> sink.accept(text));
+        if (text != null) sink.accept(text);
     }
 
     private void read(InputStream stream) {

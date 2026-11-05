@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.core.project.BotIcon;
 import com.botmaker.core.project.PomInfo;
 import com.botmaker.studio.services.capture.ScreenOverlay;
-import com.botmaker.studio.services.capture.TargetCapture;
+import com.botmaker.studio.services.capture.Capture;
 import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -160,7 +160,7 @@ public final class BotInfoSection {
     private void cutFromGame() {
         note.setText("Listing the open windows…");
         Thread list = new Thread(() -> {
-            List<String> titles = TargetCapture.listWindowTitles().stream()
+            List<String> titles = Capture.listWindowTitles().stream()
                     .filter(t -> t != null && !t.isBlank()).map(String::strip).distinct().toList();
             Platform.runLater(() -> askWindow(titles));
         }, "bot-icon-windows");
@@ -184,7 +184,7 @@ public final class BotInfoSection {
         if (title.isEmpty()) return;
         note.setText("Grabbing " + title.get() + "…");
         Thread grab = new Thread(() -> {
-            TargetCapture.WindowShot shot = new TargetCapture().captureWindow(new TargetCapture.WindowRef(title.get()));
+            Capture.WindowShot shot = Capture.captureWindow(new Capture.WindowRef(title.get()));
             Platform.runLater(() -> {
                 if (shot == null || shot.image() == null) {
                     note.setText("That window could not be captured.");

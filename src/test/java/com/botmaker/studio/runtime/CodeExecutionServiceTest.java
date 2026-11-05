@@ -5,6 +5,7 @@ import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
+import com.botmaker.studio.services.RunOnBus;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.stage.Stage;
@@ -87,7 +88,7 @@ class CodeExecutionServiceTest extends FxHeadlessTest {
         bus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> started.countDown());
 
         return new Harness(
-                new CodeExecutionService(new DiagnosticsManager(), config, state, bus), bus, state,
+                RunOnBus.service(new DiagnosticsManager(), config, state, bus), bus, state,
                 output, stopped, started);
     }
 

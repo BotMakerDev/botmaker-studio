@@ -5,8 +5,7 @@ import com.botmaker.shared.ipc.IpcEnv;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.shared.ipc.TelemetryServer;
-import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.core.events.EventBus;
+import com.botmaker.core.event.CoreEvent;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -15,6 +14,7 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * A run's telemetry channel, as Studio listens to it: the one place a Run and a Debug start the loopback server
@@ -32,14 +32,36 @@ public final class RunTelemetry {
     private RunTelemetry() {}
 
     /**
+     * Who hears the run's trace lines and the frames relayed to plugins, both in-process (plan phase 7: the Trace tab
+     * and plugins' {@code Runs} listeners). A question is no frame for it: it is the protocol's
+     * {@link CoreEvent.InputAsked}, which any client answers.
+     */
+    public interface Listener {
+        Listener NONE = new Listener() {
+            @Override
+            public void trace(TraceLine line) {
+            }
+
+            @Override
+            public void frame(byte[] payload) {
+            }
+        };
+
+        void trace(TraceLine line);
+
+        /** A frame the host does not read, without the wire's length prefix. */
+        void frame(byte[] payload);
+    }
+
+    /**
      * Starts the server and tells the bot where it is through {@code pb}'s environment; null when it could not
      * bind, in which case the bot runs without telemetry (the SDK opens no socket when the variables are absent).
-     * Events are published from the server's own thread; a subscriber that draws asks for the FX thread.
+     * Both are told from the server's own thread; one that draws hops to its UI thread.
      */
-    public static TelemetryServer start(EventBus eventBus, ProcessBuilder pb) {
+    public static TelemetryServer start(Consumer<CoreEvent> events, Listener listener, ProcessBuilder pb) {
         try {
             String token = UUID.randomUUID().toString();
-            TelemetryServer server = TelemetryServer.relaying(token, frame -> publish(eventBus, frame), null);
+            TelemetryServer server = TelemetryServer.relaying(token, frame -> publish(events, listener, frame), null);
             pb.environment().put(IpcEnv.PORT, String.valueOf(server.port()));
             pb.environment().put(IpcEnv.TOKEN, token);
             return server;
@@ -50,21 +72,23 @@ public final class RunTelemetry {
     }
 
     /**
-     * A debug line becomes a {@link CoreApplicationEvents.TraceLineEvent} and stops there: a plugin reads it
+     * A debug line becomes a {@link Listener#trace} and stops there: a plugin reads it
      * through {@code onTrace}, so relaying it as bytes as well would hand every telemetry listener a frame it
      * only has to skip. A line this Studio cannot read is dropped, which costs one row of the trace.
      */
-    static void publish(EventBus eventBus, byte[] frame) {
+    static void publish(Consumer<CoreEvent> events, Listener listener, byte[] frame) {
         if (TelemetryFrame.isLog(frame)) {
-            traceLine(frame).ifPresent(line -> eventBus.publish(new CoreApplicationEvents.TraceLineEvent(line)));
+            traceLine(frame).ifPresent(listener::trace);
             return;
         }
         Optional<TelemetryEvent.Ask> ask = TelemetryFrame.ask(frame);
         if (ask.isPresent()) {
-            // A question is Studio's to answer (it draws the dialog), so it is read here and never relayed.
-            eventBus.publish(new CoreApplicationEvents.InputRequestedEvent(ask.get()));
+            // A question is a client's to answer (it draws the dialog), so it is read here and never relayed.
+            TelemetryEvent.Ask question = ask.get();
+            events.accept(new CoreEvent.InputAsked(question.id(), question.kind(), question.prompt(),
+                    question.choices(), question.line()));
         } else {
-            eventBus.publish(new CoreApplicationEvents.TelemetryFrameEvent(payload(frame)));
+            listener.frame(payload(frame));
         }
     }
 

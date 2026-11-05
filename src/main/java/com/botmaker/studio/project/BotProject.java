@@ -23,7 +23,9 @@ import com.botmaker.studio.ui.app.run.RunOverlay;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.core.services.ContractDependency;
 import com.botmaker.studio.services.ApiDocsService;
+import com.botmaker.studio.services.DebugOnBus;
 import com.botmaker.studio.services.DebuggingService;
+import com.botmaker.studio.services.RunOnBus;
 import com.botmaker.core.services.EditorCompanions;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.services.MavenService;
@@ -295,17 +297,13 @@ public class BotProject {
                 apiDocsService
         );
 
-        // Execution (subscribes to compile/run/stop events in its constructor)
-        CodeExecutionService codeExec = new CodeExecutionService(
-                diagnosticsManager, config, state, eventBus
-        );
+        // Execution, its compile/run/stop requests and its events on the bus (RunOnBus)
+        CodeExecutionService codeExec = RunOnBus.service(diagnosticsManager, config, state, eventBus);
         this.codeExecutionService = codeExec;
         // On open, params/ is fitted to starting-params/: a fresh copy gets its starting values (2026-11-04).
         codeExec.fitParams();
 
-        this.debuggingService = new DebuggingService(
-                state, eventBus, codeExec, config
-        );
+        this.debuggingService = DebugOnBus.service(state, config, codeExec, eventBus);
 
         // A key that stops the run from anywhere on the desktop, listening only while something runs.
         this.stopKey = StopKey.install(eventBus);

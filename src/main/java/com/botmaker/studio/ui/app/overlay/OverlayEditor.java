@@ -42,7 +42,7 @@ import com.botmaker.studio.services.CursorNavigator;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.studio.services.capture.ScreenOverlay;
-import com.botmaker.studio.services.capture.TargetCapture;
+import com.botmaker.studio.services.capture.Capture;
 import com.botmaker.studio.services.overlay.OverlayCalls;
 import com.botmaker.studio.services.overlay.OverlayTargets;
 import com.botmaker.studio.services.overlay.ProbeCalls;
@@ -333,7 +333,7 @@ public final class OverlayEditor {
     /** The window the user picks among {@code candidates}; null when they cancel. */
     private static WatchedScreen pickWindow(Window owner, List<String> candidates) {
         String title = OverlayWindowPicker.ask(owner, candidates);
-        return title == null ? null : WatchedScreen.window(new TargetCapture.WindowRef(title), "\"" + title + "\"");
+        return title == null ? null : WatchedScreen.window(new Capture.WindowRef(title), "\"" + title + "\"");
     }
 
     /** Off the FX thread: raise the watched window, read where it is, then show the panel beside it. */
@@ -845,7 +845,7 @@ public final class OverlayEditor {
      */
     private ActionContext itemContext() {
         return new HostOverlayContext(context::getConfig,
-                () -> watched.windowRef().map(TargetCapture.WindowRef::titleSubstring).orElse(null),
+                () -> watched.windowRef().map(Capture.WindowRef::titleSubstring).orElse(null),
                 () -> watched.placed().orElse(null));
     }
 

@@ -5,6 +5,7 @@ import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
+import com.botmaker.studio.services.RunOnBus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,8 +42,8 @@ class RunTelemetryTest {
                 new TelemetryEvent.Rect(1, 2, 3, 4), "com.example.Collect", "body", "com.example.Collect", 14));
         byte[] click = frame(new TelemetryEvent.Click(new TelemetryEvent.Target(null, 0, 0, 0, 0), 5, 6, 1));
 
-        RunTelemetry.publish(bus, log);
-        RunTelemetry.publish(bus, click);
+        publish(bus, log);
+        publish(bus, click);
 
         TraceLine line = assertInstanceOf(CoreApplicationEvents.TraceLineEvent.class, published.get(0)).line();
         assertEquals(new TraceLine(Instant.ofEpochMilli(1_000L), TraceLine.Level.WARN, "Vision", "no ore", 3,
@@ -62,10 +63,15 @@ class RunTelemetryTest {
         bus.subscribe(CoreApplicationEvents.TelemetryFrameEvent.class, published::add);
         TelemetryEvent.Ask ask = new TelemetryEvent.Ask(3, "yes-no", "Sell?", List.of(), 9);
 
-        RunTelemetry.publish(bus, frame(ask));
+        publish(bus, frame(ask));
 
         assertEquals(List.of(new CoreApplicationEvents.InputRequestedEvent(ask)), published);
         assertFalse(RunTelemetry.answer(null, 3, "true"), "no run, nowhere to send it");
+    }
+
+    /** A frame as a run hands it on: its events and listener are Studio's bridges onto {@code bus}. */
+    private static void publish(EventBus bus, byte[] frame) {
+        RunTelemetry.publish(RunOnBus.events(bus), RunOnBus.telemetry(bus), frame);
     }
 
     /**
