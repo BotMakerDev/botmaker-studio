@@ -28,6 +28,7 @@ import com.botmaker.studio.sharing.ProgramEntries;
 import com.botmaker.studio.sharing.UnpackedBots;
 import com.botmaker.studio.project.migration.ProjectSchema;
 import com.botmaker.studio.project.migration.ProjectSchemaTooNew;
+import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.app.CommunityPluginPrompt;
 import com.botmaker.studio.ui.app.ForceX11Notice;
 import com.botmaker.studio.ui.app.ProjectWindow;
@@ -384,7 +385,7 @@ public class BotMakerStudio extends Application {
         Task<OpenedProject> openTask = new Task<>() {
             @Override
             protected OpenedProject call() {
-                BotProject project = BotProject.open(projectDir, false, progress);
+                BotProject project = BotProject.open(projectDir, false, progress, FxThread.INSTANCE);
                 try {
                     // Reading the sources belongs here rather than in finishOpen: it is a disk walk plus one
                     // readString per file, and on FX it ran with the main window already shown — a project with a

@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app.overlay;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.project.InsertionCursor;
+import com.botmaker.studio.core.InsertionCursor;
 import com.botmaker.studio.services.CursorNavigator;
 import org.junit.jupiter.api.Test;
 

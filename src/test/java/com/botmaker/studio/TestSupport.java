@@ -9,7 +9,7 @@ import org.eclipse.jdt.core.dom.FileASTRequestor;
 
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.parser.BlockConverter;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 
 import java.io.File;
@@ -133,7 +133,7 @@ public final class TestSupport {
      * reader can never walk a half-built one. Going through here keeps every fixture on the production path.
      */
     public static BlockConverter.ConvertResult convertAndPublish(
-            BlockConverter converter, ProjectState state, String source,
+            BlockConverter converter, EditorState state, String source,
             BlockDragAndDropManager dragAndDrop,
             boolean suppressInteraction, boolean markNewIdentifiersAsUnedited) {
         Map<ASTNode, CodeBlock> registry = new HashMap<>();

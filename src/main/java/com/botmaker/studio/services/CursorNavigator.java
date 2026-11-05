@@ -5,7 +5,7 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BranchingBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
-import com.botmaker.studio.project.InsertionCursor;
+import com.botmaker.studio.core.InsertionCursor;
 
 import java.util.ArrayList;
 import java.util.List;

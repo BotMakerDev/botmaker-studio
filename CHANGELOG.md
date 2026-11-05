@@ -12,6 +12,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (the project and its history no longer need JavaFX)
+
+- Nothing the user sees (2026-11-05). `EventBus` delivers a UI subscriber through `EventBus.UiThread`, inline unless
+  Studio passes `ui.FxThread`; `SnapshotHistory` tells plain listeners and answers `canUndo`/`undoLabel` itself; a
+  plugin's filled type is a plain `FilledType`, its pill drawn by `FilledPills`; the drawn blocks, the selected block
+  and the overlay's caret moved from `ProjectState` to `core.EditorState`, and `ProjectState.Snapshot` no longer
+  carries the block map. The way is clear for the project and the plugin host to move to `botmaker-core`.
+
 ### Changed (the parser leaves the view)
 
 - Every parse and tree knows the bot's Java version (2026-11-05): `ProjectState.level()` is read from the pom's

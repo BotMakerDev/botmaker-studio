@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.migrate.ApiCache;
@@ -48,7 +49,7 @@ public class BotProject {
     private final ProjectConfig config;
 
     // --- State ---
-    private final ProjectState state;
+    private final EditorState state;
     private final EventBus eventBus;
 
     // --- Services ---
@@ -68,7 +69,7 @@ public class BotProject {
     private BlockConverter blockConverter;
 
     private BotProject(ProjectConfig config,
-                       ProjectState state,
+                       EditorState state,
                        EventBus eventBus,
                        DiagnosticsManager diagnosticsManager,
                        BlockDragAndDropManager dragAndDropManager,
@@ -94,25 +95,21 @@ public class BotProject {
      *
      * @param projectDir The project's own directory — under the default root or anywhere else
      * @param enableEventLogging Whether to log events for debugging
+     * @param progress told each {@link OpenStep} as it starts (dependencies, libraries, project), and real
+     *                 download percentages during dependency resolution; may be invoked from worker threads
+     * @param uiThread where the project's bus delivers a UI-bound handler; {@link EventBus.UiThread#INLINE}
+     *                 when nothing draws it
      * @return Fully initialized BotProject
-     */
-    public static BotProject open(Path projectDir, boolean enableEventLogging) {
-        return open(projectDir, enableEventLogging, ProgressReporter.NONE);
-    }
-
-    /**
-     * As {@link #open(Path, boolean)}, but reports progress via {@code progress}: each {@link OpenStep} as it
-     * starts (dependencies, libraries, project), and real download percentages during dependency resolution.
-     * May be invoked from worker threads.
      */
     public static BotProject open(Path projectDir,
                                   boolean enableEventLogging,
-                                  ProgressReporter progress) {
+                                  ProgressReporter progress,
+                                  EventBus.UiThread uiThread) {
         // 1. Create config
         ProjectConfig config = ProjectConfig.forDirectory(projectDir);
 
         // 2. Create state
-        ProjectState state = new ProjectState();
+        EditorState state = new EditorState();
         state.setSourcePath(config.sourceRoot());
         // The remotes' git names first: everything below reads origin and upstream (2026-10-25).
         try {
@@ -124,7 +121,7 @@ public class BotProject {
         state.setReaderMode(ProjectMode.isReader(config.projectPath()));
 
         // 3. Create event bus
-        EventBus eventBus = new EventBus(enableEventLogging);
+        EventBus eventBus = new EventBus(enableEventLogging, uiThread);
 
         // 4. Create infrastructure services
         DiagnosticsManager diagnosticsManager = new DiagnosticsManager();
@@ -277,7 +274,7 @@ public class BotProject {
     }
 
     private void initializeServices(ProjectConfig config,
-                                    ProjectState state,
+                                    EditorState state,
                                     EventBus eventBus,
                                     DiagnosticsManager diagnosticsManager,
                                     BlockDragAndDropManager dragAndDropManager,
@@ -349,7 +346,7 @@ public class BotProject {
     }
 
     public ProjectConfig getConfig() { return config; }
-    public ProjectState getState() { return state; }
+    public EditorState getState() { return state; }
     public EventBus getEventBus() { return eventBus; }
     public DiagnosticsManager getDiagnosticsManager() { return diagnosticsManager; }
     public BlockDragAndDropManager getDragAndDropManager() { return dragAndDropManager; }

@@ -4,7 +4,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.nav.SourceNavigation;
 import com.botmaker.java.index.nav.TextSearch;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -32,14 +32,14 @@ import java.util.Map;
  */
 final class FindBar {
 
-    private final ProjectState state;
+    private final EditorState state;
     private final EditorCanvas canvas;
     private final TextField field = new TextField();
     private final Label count = new Label();
     private final HBox bar;
     private int index;
 
-    FindBar(ProjectState state, EditorCanvas canvas) {
+    FindBar(EditorState state, EditorCanvas canvas) {
         this.state = state;
         this.canvas = canvas;
 

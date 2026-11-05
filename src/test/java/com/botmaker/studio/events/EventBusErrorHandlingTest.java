@@ -1,5 +1,6 @@
 package com.botmaker.studio.events;
 
+import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.application.Platform;
 import javafx.stage.Stage;
@@ -141,10 +142,15 @@ class EventBusErrorHandlingTest extends FxHeadlessTest {
 
     // ---- The FX branch ----
 
+    /** Studio's bus: a UI subscriber is delivered on the FX thread (2026-11-05, the bus's own default is inline). */
+    private static EventBus fxBus() {
+        return new EventBus(false, FxThread.INSTANCE);
+    }
+
     /** The FX branch delivers, which is the precondition for the gap below being about errors and not wiring. */
     @Test
     void anFxSubscriberIsDeliveredOnTheFxThread() throws InterruptedException {
-        EventBus bus = new EventBus();
+        EventBus bus = fxBus();
         List<Boolean> onFx = new ArrayList<>();
         CountDownLatch delivered = new CountDownLatch(1);
 
@@ -167,7 +173,7 @@ class EventBusErrorHandlingTest extends FxHeadlessTest {
      */
     @Test
     void anFxSubscriberPublishedFromTheFxThreadIsStillGuarded() throws InterruptedException {
-        EventBus bus = new EventBus();
+        EventBus bus = fxBus();
         bus.subscribe(Ping.class, e -> { throw new IllegalStateException("panel blew up"); }, true);
 
         onFxAndSettle(() -> bus.publish(new Ping("one")));
@@ -185,7 +191,7 @@ class EventBusErrorHandlingTest extends FxHeadlessTest {
      */
     @Test
     void anFxSubscriberThatThrowsIsLoggedToo() throws InterruptedException {
-        EventBus bus = new EventBus();
+        EventBus bus = fxBus();
         bus.subscribe(Ping.class, e -> { throw new IllegalStateException("panel blew up"); }, true);
 
         bus.publish(new Ping("one")); // from the test thread → the runLater branch
@@ -207,7 +213,7 @@ class EventBusErrorHandlingTest extends FxHeadlessTest {
      */
     @Test
     void anFxSubscriberThatThrowsDoesNotStopTheOnesBehindIt() throws InterruptedException {
-        EventBus bus = new EventBus();
+        EventBus bus = fxBus();
         List<String> reached = new ArrayList<>();
 
         bus.subscribe(Ping.class, e -> { throw new IllegalStateException("panel blew up"); }, true);

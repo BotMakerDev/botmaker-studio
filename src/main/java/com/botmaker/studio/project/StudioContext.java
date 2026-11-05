@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
@@ -25,10 +26,11 @@ import com.botmaker.studio.validation.DiagnosticsManager;
  * let nothing reach it statically.
  *
  * <p>The {@code Stage} is deliberately <b>not</b> in here: a window is not a project service, and keeping it
- * out is what lets this record — and the package it lives in — stay free of JavaFX.
+ * out is what keeps the window out of the project's services. Its {@code state} is Studio's {@link EditorState}, the
+ * drawn blocks beside the project (2026-11-05), so this record stays Studio's when the project moves to the core.
  */
 public record StudioContext(ProjectConfig config,
-                            ProjectState state,
+                            EditorState state,
                             EventBus eventBus,
                             DiagnosticsManager diagnosticsManager,
                             BlockDragAndDropManager dragAndDropManager,

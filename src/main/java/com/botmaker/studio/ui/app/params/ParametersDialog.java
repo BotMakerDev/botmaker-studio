@@ -1324,10 +1324,12 @@ public final class ParametersDialog {
 
     private Button undoButton() {
         Button undo = new Button("↶");
-        undo.disableProperty().bind(history.canUndoProperty().not());
-        undo.tooltipProperty().bind(javafx.beans.binding.Bindings.createObjectBinding(
-                () -> new Tooltip(labelled("Undo", history.undoLabelProperty().get())),
-                history.undoLabelProperty()));
+        Runnable shown = () -> {
+            undo.setDisable(!history.canUndo());
+            undo.setTooltip(new Tooltip(labelled("Undo", history.undoLabel())));
+        };
+        shown.run();
+        history.addListener(shown);
         // What is on screen but not yet recorded is part of what ↶ takes back, so it becomes a step first —
         // otherwise the number you just typed would survive the undo of the edit before it.
         undo.setOnAction(e -> {
@@ -1339,10 +1341,12 @@ public final class ParametersDialog {
 
     private Button redoButton() {
         Button redo = new Button("↷");
-        redo.disableProperty().bind(history.canRedoProperty().not());
-        redo.tooltipProperty().bind(javafx.beans.binding.Bindings.createObjectBinding(
-                () -> new Tooltip(labelled("Redo", history.redoLabelProperty().get())),
-                history.redoLabelProperty()));
+        Runnable shown = () -> {
+            redo.setDisable(!history.canRedo());
+            redo.setTooltip(new Tooltip(labelled("Redo", history.redoLabel())));
+        };
+        shown.run();
+        history.addListener(shown);
         redo.setOnAction(e -> history.redo());
         return redo;
     }

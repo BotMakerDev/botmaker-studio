@@ -4,7 +4,7 @@ import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
@@ -29,7 +29,7 @@ public class VarargsArgumentEditTest {
 
     /** Runs {@code edit} against the named call in {@code source} and returns the rewritten source. */
     private String rewrite(String source, String call, Consumer<Edit> edit) {
-        ProjectState state = new ProjectState();
+        EditorState state = new EditorState();
         Path p = Paths.get("Subject.java").toAbsolutePath();
         state.addFile(new ProjectFile(p, source));
         state.setActiveFile(p);

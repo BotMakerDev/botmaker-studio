@@ -111,8 +111,14 @@ public final class PluginHost {
      */
     private static volatile ValueGrammar grammar = compose(List.of()).grammar();
 
-    /** Memoised beside the value catalog, and rebuilt on the same bind, for the same reason. */
-    private static volatile List<OwnedEditor> ownedSlotEditors = List.of();
+    /**
+     * Memoised beside the value catalog, and rebuilt on the same bind, for the same reason: every slot claimant
+     * in plugin order, the editors and the {@code @Fills} types a UI draws, each in its plugin's place.
+     */
+    private static volatile List<OwnedSlot> ownedSlots = List.of();
+
+    /** The editors alone, derived on the same bind. */
+    private static volatile List<OwnedEditor> ownedSlotEditors = editorsIn(ownedSlots);
 
     /** The same editors without their owner — derived, so the two can never disagree. See {@link #slotEditors()}. */
     private static volatile List<SlotEditor> slotEditors = strip(ownedSlotEditors);
@@ -437,7 +443,8 @@ public final class PluginHost {
         loader = opened;
         plugins = bound;
         grammar = merged;
-        ownedSlotEditors = mergeOwnedSlotEditors(bound);
+        ownedSlots = mergeOwnedSlots(bound);
+        ownedSlotEditors = editorsIn(ownedSlots);
         slotEditors = strip(ownedSlotEditors);
         ownedToolbarItems = mergeOwnedToolbarItems(bound);
         toolbarItems = strip(ownedToolbarItems, OwnedItem::item);
@@ -548,9 +555,15 @@ public final class PluginHost {
      *
      * <p>{@link SlotEditor} carries no id — correctly, since an editor is a widget and not a contribution
      * record — so ownership is the merge's to remember. Nothing needed it until a user had to be shown
-     * <em>which</em> plugin is drawing their value; see {@link EditorContest}.
+     * <em>which</em> plugin is drawing their value, in the UI's <i>Edit with</i> menu.
      */
-    public record OwnedEditor(PluginCoordinate plugin, String pluginName, SlotEditor editor) {
+    /** What claims a slot, with the plugin it came from: an editor, or a filled type a UI draws. */
+    public sealed interface OwnedSlot permits OwnedEditor, OwnedFilled {
+        PluginCoordinate plugin();
+        String pluginName();
+    }
+
+    public record OwnedEditor(PluginCoordinate plugin, String pluginName, SlotEditor editor) implements OwnedSlot {
 
         /** The plugin as a verdict names it ({@link #preferredEditorFor}): {@code groupId:artifactId}. */
         public String pluginKey() {
@@ -558,20 +571,46 @@ public final class PluginHost {
         }
     }
 
+    /** A type the host declares for one plugin's {@code @Fills} method, with that plugin. */
+    public record OwnedFilled(PluginCoordinate plugin, String pluginName, FilledType<?> type) implements OwnedSlot {}
+
     /** Every loaded plugin's slot editors with their owner, in plugin order. */
     public static List<OwnedEditor> ownedSlotEditors() {
         return ownedSlotEditors;
     }
 
     /**
-     * Each plugin's {@link StudioPlugin#slotEditors()} first — the editors chosen by the call, and overrides
-     * of somebody else's type, which are narrower matches — and then one editor per type it declares
-     * <em>and draws</em>, an {@link EditableType}. A declared type is named once, in its {@code PluginType}, so
-     * this is where it becomes an editor rather than the plugin listing it a second time. A plain
-     * {@code PluginType} (2026-09-27) is drawn by another plugin's {@code forType} or the host's fallback.
+     * Every slot claimant, in plugin order, a filled type in its plugin's place: what a UI turns into the editors
+     * a contest orders (a filled type's pill is drawn by the UI; the host draws nothing, so it runs with no UI).
+     * The same list until the next bind, so a UI may cache what it builds from it by identity.
      */
+    public static List<OwnedSlot> ownedSlots() {
+        return ownedSlots;
+    }
+
+    /** {@link #mergeOwnedSlots} without the filled types. */
     static List<OwnedEditor> mergeOwnedSlotEditors(List<LoadedPlugin> set) {
-        List<OwnedEditor> merged = new ArrayList<>();
+        return editorsIn(mergeOwnedSlots(set));
+    }
+
+    private static List<OwnedEditor> editorsIn(List<OwnedSlot> slots) {
+        List<OwnedEditor> editors = new ArrayList<>();
+        for (OwnedSlot slot : slots) {
+            if (slot instanceof OwnedEditor editor) editors.add(editor);
+        }
+        return List.copyOf(editors);
+    }
+
+    /**
+     * Each plugin's {@link StudioPlugin#slotEditors()} first — the editors chosen by the call, and overrides
+     * of somebody else's type, which are narrower matches — and then, in declaration order, one editor per type
+     * it declares <em>and draws</em>, an {@link EditableType}, and each {@link FilledType} for the UI to draw. A
+     * declared type is named once, in its {@code PluginType}, so this is where it becomes an editor rather than
+     * the plugin listing it a second time. A plain {@code PluginType} (2026-09-27) is drawn by another plugin's
+     * {@code forType} or the host's fallback.
+     */
+    static List<OwnedSlot> mergeOwnedSlots(List<LoadedPlugin> set) {
+        List<OwnedSlot> merged = new ArrayList<>();
         for (LoadedPlugin loaded : set) {
             StudioPlugin plugin = loaded.plugin();
             List<SlotEditor> offered = quietly(loaded, "offer slot editors", plugin::slotEditors);
@@ -583,6 +622,10 @@ public final class PluginHost {
             List<PluginType<?>> types = quietly(loaded, "declare types", () -> typesOf(plugin));
             if (types == null) continue;
             for (PluginType<?> type : types) {
+                if (type instanceof FilledType<?> filled) {
+                    merged.add(new OwnedFilled(loaded.coordinate(), loaded.name(), filled));
+                    continue;
+                }
                 if (!(type instanceof EditableType<?> drawn)) continue;   // a plain type: somebody else draws it
                 Class<?> cls = quietly(loaded, "name a type", drawn::type);
                 if (cls == null) continue;

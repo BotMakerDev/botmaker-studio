@@ -1,14 +1,13 @@
 package com.botmaker.studio.state;
 
-import javafx.beans.property.ReadOnlyBooleanProperty;
-import javafx.beans.property.ReadOnlyBooleanWrapper;
-import javafx.beans.property.ReadOnlyStringProperty;
-import javafx.beans.property.ReadOnlyStringWrapper;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Undo/redo for one editing session, by <em>whole-state snapshots</em> rather than per-mutation inverses.
@@ -42,6 +41,8 @@ import java.util.function.Supplier;
  */
 public final class SnapshotHistory<S> {
 
+    private static final Logger LOG = Logger.getLogger(SnapshotHistory.class.getName());
+
     /** Past a hundred steps this is a memory question with no user behind it — nobody undoes that far. */
     private static final int LIMIT = 100;
 
@@ -53,10 +54,8 @@ public final class SnapshotHistory<S> {
     private final Deque<Step<S>> done = new ArrayDeque<>();
     private final Deque<Step<S>> undone = new ArrayDeque<>();
 
-    private final ReadOnlyBooleanWrapper canUndo = new ReadOnlyBooleanWrapper(false);
-    private final ReadOnlyBooleanWrapper canRedo = new ReadOnlyBooleanWrapper(false);
-    private final ReadOnlyStringWrapper undoLabel = new ReadOnlyStringWrapper("");
-    private final ReadOnlyStringWrapper redoLabel = new ReadOnlyStringWrapper("");
+    /** Told whenever what undo or redo would do changes, cleared included: what draws the two buttons. */
+    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
     /** Fired after anything is recorded, undone or redone — this is what autosave listens to. */
     private Runnable onChanged = () -> {};
@@ -87,14 +86,15 @@ public final class SnapshotHistory<S> {
         this.onChanged = onChanged;
     }
 
-    public ReadOnlyBooleanProperty canUndoProperty() { return canUndo.getReadOnlyProperty(); }
-
-    public ReadOnlyBooleanProperty canRedoProperty() { return canRedo.getReadOnlyProperty(); }
-
-    /** What the next undo would take back, for a tooltip; blank when there is nothing to take back. */
-    public ReadOnlyStringProperty undoLabelProperty() { return undoLabel.getReadOnlyProperty(); }
-
-    public ReadOnlyStringProperty redoLabelProperty() { return redoLabel.getReadOnlyProperty(); }
+    /**
+     * Runs {@code listener} after every change to {@link #canUndo}, {@link #canRedo} or either label, on the thread
+     * that made it. A UI adapts it to its own properties; one that outlives neither the history nor its window may
+     * drop the answer, any other runs it to stop listening.
+     */
+    public Runnable addListener(Runnable listener) {
+        listeners.add(listener);
+        return () -> listeners.remove(listener);
+    }
 
     /** Runs {@code change} and records it as one undoable step named {@code label}. */
     public void mutate(String label, Runnable change) {
@@ -174,19 +174,23 @@ public final class SnapshotHistory<S> {
         published();
     }
 
-    /** What the next undo would take back, for a caller that reads it rather than binding to it. */
-    public String undoLabel() { return undoLabel.get(); }
+    /** What the next undo would take back, for a tooltip; blank when there is nothing to take back. */
+    public String undoLabel() { return done.isEmpty() ? "" : done.peek().label(); }
 
-    public String redoLabel() { return redoLabel.get(); }
+    public String redoLabel() { return undone.isEmpty() ? "" : undone.peek().label(); }
 
-    public boolean canUndo() { return canUndo.get(); }
+    public boolean canUndo() { return !done.isEmpty(); }
 
-    public boolean canRedo() { return canRedo.get(); }
+    public boolean canRedo() { return !undone.isEmpty(); }
 
+    /** Each listener on its own: one that throws is logged and costs neither the others nor the step's autosave. */
     private void published() {
-        canUndo.set(!done.isEmpty());
-        canRedo.set(!undone.isEmpty());
-        undoLabel.set(done.isEmpty() ? "" : done.peek().label());
-        redoLabel.set(undone.isEmpty() ? "" : undone.peek().label());
+        for (Runnable listener : listeners) {
+            try {
+                listener.run();
+            } catch (RuntimeException e) {
+                LOG.log(Level.SEVERE, "An undo listener failed", e);
+            }
+        }
     }
 }

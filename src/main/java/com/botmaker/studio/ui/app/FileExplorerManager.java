@@ -8,6 +8,7 @@ import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectConfig;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.java.index.BotIndex;
@@ -97,7 +98,7 @@ public class FileExplorerManager {
 
     private final ProjectConfig config;
     private final CodeEditorService codeEditorService;
-    private final ProjectState state;
+    private final EditorState state;
     private final EventBus eventBus;
     private final ClassFiles classFiles;
     private final TreeView<ExplorerNode> fileTree = new TreeView<>();

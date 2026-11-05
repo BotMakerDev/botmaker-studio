@@ -12,6 +12,7 @@ import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.runtime.ConsoleBatcher;
 import com.botmaker.studio.runtime.RunTelemetry;
 import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.Checkpoints;
 import com.botmaker.studio.project.vcs.VersionOrigin;
@@ -64,7 +65,7 @@ public class DebuggingService {
      */
     private static final long FILE_SWITCH_GAP_MS = 1_500;
 
-    private final ProjectState state;
+    private final EditorState state;
     private final EventBus eventBus;
     private final CodeExecutionService codeExecutionService;
     private final ProjectConfig config;
@@ -96,7 +97,7 @@ public class DebuggingService {
     private Map<Integer, CodeBlock> lineIndex = Map.of();
 
     public DebuggingService(
-            ProjectState state,
+            EditorState state,
             EventBus eventBus,
             CodeExecutionService codeExecutionService,
             ProjectConfig config) {

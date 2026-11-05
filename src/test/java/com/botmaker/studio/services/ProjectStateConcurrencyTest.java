@@ -1,6 +1,7 @@
 package com.botmaker.studio.services;
 
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import org.eclipse.jdt.core.dom.AST;
@@ -45,8 +46,8 @@ class ProjectStateConcurrencyTest {
 
     private static final Path FILE = Paths.get("Subject.java").toAbsolutePath();
 
-    private static ProjectState stateWithAFile() {
-        ProjectState state = new ProjectState();
+    private static EditorState stateWithAFile() {
+        EditorState state = new EditorState();
         state.addFile(new ProjectFile(FILE, "class Subject {}"));
         state.setActiveFile(FILE);
         return state;
@@ -70,7 +71,7 @@ class ProjectStateConcurrencyTest {
 
     @Test
     void theBlockMapIsHandedOutAsAnUnmodifiableView() {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         state.setNodeToBlockMap(mapOver(nodes(3)));
 
         Map<ASTNode, CodeBlock> handed = state.getNodeToBlockMap();
@@ -80,7 +81,7 @@ class ProjectStateConcurrencyTest {
 
     @Test
     void settingTheBlockMapCopiesRatherThanAliasingTheCaller() {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         Map<ASTNode, CodeBlock> caller = mapOver(nodes(2));
         state.setNodeToBlockMap(caller);
 
@@ -96,7 +97,7 @@ class ProjectStateConcurrencyTest {
      */
     @Test
     void replacingTheClasspathLeavesAnEarlierReadersListIntact() {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         state.setResolvedClasspath(List.of("a.jar", "b.jar"));
 
         List<String> readEarlier = state.getResolvedClasspath();
@@ -122,7 +123,7 @@ class ProjectStateConcurrencyTest {
      */
     @Test
     void theRegistryYouWereHandedIsFinishedAndStaysThatWay() throws Exception {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         List<ASTNode> keys = nodes(400);
         state.setNodeToBlockMap(mapOver(keys));
 
@@ -170,7 +171,7 @@ class ProjectStateConcurrencyTest {
     /** Each publish is a distinct map, so holding one cannot be holding the next. */
     @Test
     void eachPublishedRegistryIsItsOwnMap() {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         List<ASTNode> keys = nodes(2);
 
         state.setNodeToBlockMap(mapOver(keys));
@@ -198,7 +199,7 @@ class ProjectStateConcurrencyTest {
      */
     @Test
     void aSnapshotTakenOnTheEditorsThreadIsAlwaysOneRevision() throws Exception {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         ConcurrentLinkedQueue<ProjectState.Snapshot> published = new ConcurrentLinkedQueue<>();
         AtomicReference<String> torn = new AtomicReference<>();
         AtomicBoolean stop = new AtomicBoolean(false);
@@ -244,21 +245,18 @@ class ProjectStateConcurrencyTest {
     /** A snapshot is detached: the edits that land while a run is in flight cannot reach into it. */
     @Test
     void aSnapshotDoesNotChangeWhenTheProjectDoes() {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         state.setCurrentCode("before");
         state.setResolvedClasspath(List.of("before.jar"));
-        state.setNodeToBlockMap(mapOver(nodes(3)));
 
         ProjectState.Snapshot snapshot = state.snapshot();
 
         state.setCurrentCode("after");
         state.setResolvedClasspath(List.of("after.jar"));
-        state.setNodeToBlockMap(mapOver(nodes(7)));
         state.addFile(new ProjectFile(Paths.get("Later.java").toAbsolutePath(), "class Later {}"));
 
         assertEquals("before", snapshot.code());
         assertEquals(List.of("before.jar"), snapshot.resolvedClasspath());
-        assertEquals(3, snapshot.nodeToBlockMap().size());
         assertEquals(1, snapshot.files().size(), "a file added later is not in an earlier snapshot");
         assertEquals("before", snapshot.files().getFirst().content());
     }
@@ -270,7 +268,7 @@ class ProjectStateConcurrencyTest {
      */
     @Test
     void aSnapshotCopiesFileContentsRatherThanHoldingTheMutableFile() {
-        ProjectState state = stateWithAFile();
+        EditorState state = stateWithAFile();
         ProjectState.Snapshot snapshot = state.snapshot();
 
         state.getFile(FILE).orElseThrow().setContent("class Subject { void typedSince() {} }");
@@ -288,7 +286,6 @@ class ProjectStateConcurrencyTest {
         assertNull(snapshot.compilationUnit());
         assertEquals(List.of(), snapshot.files());
         assertEquals(List.of(), snapshot.resolvedClasspath());
-        assertEquals(Map.of(), snapshot.nodeToBlockMap());
         assertNull(snapshot.template());
     }
 

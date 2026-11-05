@@ -4,6 +4,7 @@ import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.config.VersionInfo;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
@@ -95,7 +96,7 @@ public class UIManager implements ProjectWindow {
     private final DiagnosticsManager diagnosticsManager;
     private final Stage primaryStage;
     private final ProjectConfig config;
-    private final ProjectState state;
+    private final EditorState state;
 
     private final ProjectSettingsService projectSettingsService;
     // The SDK surface was held here and handed to the canvas, for a version-floor banner deleted on

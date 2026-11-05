@@ -16,6 +16,7 @@ import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.java.edit.helpers.BlockNodes;
 import com.botmaker.studio.project.LockResolver;
 import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
@@ -56,7 +57,7 @@ import java.util.stream.Stream;
 public class CodeEditorService {
 
     private final ProjectConfig config;
-    private final ProjectState state;
+    private final EditorState state;
     private Path firstFile;
     private final EventBus eventBus;
     private final BlockConverter blockConverter;
@@ -120,7 +121,7 @@ public class CodeEditorService {
 
     public CodeEditorService(
             ProjectConfig config,
-            ProjectState state,
+            EditorState state,
             EventBus eventBus,
             BlockConverter blockConverter,
             BlockDragAndDropManager dragAndDropManager,
@@ -889,7 +890,7 @@ public class CodeEditorService {
     public Optional<CodeBlock> getRootBlock() { return Optional.ofNullable(lastRootBlock); }
 
     public CodeEditor getCodeEditor() { return codeEditor; }
-    public ProjectState getState() { return state; }
+    public EditorState getState() { return state; }
 
     public EventBus getEventBus() { return eventBus; }
     public BlockDragAndDropManager getDragAndDropManager() { return dragAndDropManager; }

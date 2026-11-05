@@ -11,6 +11,7 @@ import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.managed.ManagedConstants;
+import com.botmaker.studio.ui.render.components.pickers.FilledPills;
 import javafx.scene.Node;
 import javafx.scene.control.Control;
 import javafx.scene.layout.Region;
@@ -158,7 +159,7 @@ public final class ValueEditors {
      * not carry. So the canvas asks, and this window honours the answer.
      */
     private static List<SlotEditor> claimants(Type leaf, HostValueContext context) {
-        List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
+        List<PluginHost.OwnedEditor> editors = FilledPills.withEditors();
         if (editors.isEmpty()) return List.of();
 
         List<PluginHost.OwnedEditor> claiming = new ArrayList<>();

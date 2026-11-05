@@ -9,7 +9,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
@@ -87,7 +87,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
         // Nodes are built directly; ApplicationTest only needs to have started the FX runtime.
     }
 
-    private record Rendered(AbstractCodeBlock root, CodeEditorService context, ProjectState state) {}
+    private record Rendered(AbstractCodeBlock root, CodeEditorService context, EditorState state) {}
 
     private Rendered render(Path file, String source) {
         return render(file, source, false);
@@ -99,7 +99,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
      * (this flag) and bundled library source (the path).
      */
     private Rendered render(Path file, String source, boolean readerMode) {
-        ProjectState state = new ProjectState();
+        EditorState state = new EditorState();
         state.setReaderMode(readerMode);
         state.addFile(new ProjectFile(file, source));
         state.setActiveFile(file);

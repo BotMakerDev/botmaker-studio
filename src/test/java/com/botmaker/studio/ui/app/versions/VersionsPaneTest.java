@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app.versions;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.project.vcs.ProjectVcs;
 import com.botmaker.studio.project.vcs.SyncModel;
@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class VersionsPaneTest extends FxHeadlessTest {
 
     private Path file;
-    private ProjectState state;
+    private EditorState state;
     private VersionsPane pane;
 
     @Override
@@ -52,7 +52,7 @@ class VersionsPaneTest extends FxHeadlessTest {
             Files.writeString(file, "class MyBot {}");
             new ProjectVcs(config.projectPath()).init();
 
-            state = new ProjectState();
+            state = new EditorState();
             state.addFile(new ProjectFile(file, "class MyBot {}"));
             state.setActiveFile(file);
             StudioContext ctx = new StudioContext(config, state, new EventBus(false), null, null, null, null,

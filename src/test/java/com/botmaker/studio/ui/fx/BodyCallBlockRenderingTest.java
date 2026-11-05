@@ -9,7 +9,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;
@@ -96,7 +96,7 @@ class BodyCallBlockRenderingTest extends FxHeadlessTest {
     private static Rendered bodyCall(String source) {
         Path file = Paths.get("Subject.java").toAbsolutePath();
 
-        ProjectState state = new ProjectState();
+        EditorState state = new EditorState();
         state.addFile(new ProjectFile(file, source));
         state.setActiveFile(file);
         state.setSourcePath(Paths.get("src", "main", "java").toAbsolutePath());

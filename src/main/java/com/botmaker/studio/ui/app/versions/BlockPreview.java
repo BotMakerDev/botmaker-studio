@@ -5,10 +5,12 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.BlockDiff;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import javafx.css.PseudoClass;
 import javafx.scene.Node;
@@ -41,7 +43,7 @@ final class BlockPreview {
 
     /** Draws {@code source} as the file {@code file} of the project {@code live} describes. */
     BlockPreview(ProjectConfig config, ProjectState live, Path file, String source) {
-        ProjectState staged = new ProjectState();
+        EditorState staged = new EditorState();
         staged.setReaderMode(true);
         staged.addFile(new ProjectFile(file, source));
         staged.setActiveFile(file);
@@ -52,7 +54,7 @@ final class BlockPreview {
         if (live.getSettings() != null) staged.setSettings(live.getSettings());
         staged.setCurrentCode(source);
 
-        EventBus bus = new EventBus(false);
+        EventBus bus = new EventBus(false, FxThread.INSTANCE);
         BlockConverter converter = new BlockConverter(config, staged);
         BlockDragAndDropManager dnd = new BlockDragAndDropManager(bus);
         BlockConverter.ConvertResult result = converter.convert(source, registry, dnd, true, false);

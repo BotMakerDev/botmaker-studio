@@ -5,12 +5,12 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.BranchingBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
-import com.botmaker.studio.project.InsertionCursor;
+import com.botmaker.studio.core.InsertionCursor;
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +43,7 @@ class CursorNavigatorStepIntoTest {
                     }
                 }
                 """.formatted(runBody);
-        ProjectState state = new ProjectState();
+        EditorState state = new EditorState();
         Path path = Paths.get("Mining.java").toAbsolutePath();
         state.addFile(new ProjectFile(path, source));
         state.setActiveFile(path);

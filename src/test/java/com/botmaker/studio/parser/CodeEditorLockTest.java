@@ -12,7 +12,7 @@ import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
@@ -119,7 +119,7 @@ class CodeEditorLockTest {
     /** A CodeEditor over {@code source} at {@code file}, plus the block tree and the code it last published. */
     private static final class Fixture {
         final CodeEditor editor;
-        final ProjectState state;
+        final EditorState state;
         final AbstractCodeBlock root;
         String lastCode;
         final List<String> statusMessages = new ArrayList<>();
@@ -129,7 +129,7 @@ class CodeEditorLockTest {
         }
 
         Fixture(Path file, String source, boolean readerMode) {
-            state = new ProjectState();
+            state = new EditorState();
             state.setReaderMode(readerMode);
             state.addFile(new ProjectFile(file, source));
             state.setActiveFile(file);
@@ -408,7 +408,7 @@ class CodeEditorLockTest {
     void withNoProjectEverythingIsStillEditable() {
         // Tests and no-project editor paths construct CodeEditor with a null config; the guard must not turn
         // that into a locked editor.
-        ProjectState state = new ProjectState();
+        EditorState state = new EditorState();
         Path file = Paths.get("Subject.java").toAbsolutePath();
         state.addFile(new ProjectFile(file, FLOW_DRIVER));
         state.setActiveFile(file);
@@ -437,7 +437,7 @@ class CodeEditorLockTest {
      * lock under test is on that write. {@code CodeEditor.renameMethod} renamed the declaration alone and is
      * gone (2026-09-27).
      */
-    private static void renamed(CodeEditor editor, ProjectState state, MethodDeclaration method, String newName) {
+    private static void renamed(CodeEditor editor, EditorState state, MethodDeclaration method, String newName) {
         String code = state.getCurrentCode();
         String renamed = AstRewriteHelper.renameSimpleName((CompilationUnit) method.getRoot(), code,
                 method.getName(), newName);

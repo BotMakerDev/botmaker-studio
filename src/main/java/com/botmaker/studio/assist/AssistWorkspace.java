@@ -2,6 +2,7 @@ package com.botmaker.studio.assist;
 
 import com.botmaker.java.index.LibraryIndex;
 import com.botmaker.java.parse.JavaLevel;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueGrammar;
@@ -88,9 +89,9 @@ public record AssistWorkspace(ProjectConfig config,
         return new ManagedConstants.Lookup(constants, grammar);
     }
 
-    /** A fresh {@link ProjectState} holding {@code source} as this workspace's file — one step of a turn. */
-    ProjectState stage(String source) {
-        ProjectState staged = new ProjectState();
+    /** A fresh {@link EditorState} holding {@code source} as this workspace's file — one step of a turn. */
+    EditorState stage(String source) {
+        EditorState staged = new EditorState();
         others.forEach(each -> staged.addFile(new ProjectFile(each.getPath(), each.getContent())));
         staged.addFile(new ProjectFile(file, source));
         staged.setActiveFile(file);

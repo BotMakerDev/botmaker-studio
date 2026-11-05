@@ -1,13 +1,11 @@
-package com.botmaker.studio.project;
+package com.botmaker.studio.core;
 
-import com.botmaker.studio.core.BodyBlock;
-import com.botmaker.studio.core.StatementBlock;
 
 /**
  * An <em>insertion caret</em> into the block tree: a position <em>inside a {@link BodyBlock}</em>, before the
  * statement at {@code index} (with {@code index == body.getStatements().size()} meaning "at the very end").
  *
- * <p>Unlike {@link ProjectState}'s {@code highlightedBlock} (which marks a <em>selected</em> block), the cursor
+ * <p>Unlike {@link EditorState}'s {@code highlightedBlock} (which marks a <em>selected</em> block), the cursor
  * marks <em>where the next block will be inserted</em>. It is the anchor the overlay authoring toolbar's
  * step / step-into / step-out buttons move around, and where its "add below" / palette inserts write to
  * (see {@code CursorNavigator} and {@code OverlayEditor}).

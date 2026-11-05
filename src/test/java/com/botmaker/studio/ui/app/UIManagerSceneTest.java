@@ -4,7 +4,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.index.TypeSummaryManager;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.studio.project.ProjectConfig;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.runtime.CodeExecutionService;
 import com.botmaker.studio.services.LibraryService;
@@ -90,7 +90,7 @@ class UIManagerSceneTest extends FxHeadlessTest {
         ProjectConfig config = ProjectConfig.forProject("MyBot", projects);
 
         EditorFixture fixture = new EditorFixture(SOURCE, config.sourceRoot().resolve("MyBot.java"));
-        ProjectState state = fixture.state;
+        EditorState state = fixture.state;
         EventBus bus = new EventBus(false);
         DiagnosticsManager diagnostics = new DiagnosticsManager();
         BlockDragAndDropManager dnd = new BlockDragAndDropManager(bus);

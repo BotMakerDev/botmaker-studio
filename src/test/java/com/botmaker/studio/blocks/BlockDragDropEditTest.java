@@ -12,7 +12,7 @@ import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.parser.CodeEditor;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.edit.palette.BotType;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
@@ -53,14 +53,14 @@ public class BlockDragDropEditTest {
             }
             """;
 
-    private ProjectState state;
+    private EditorState state;
     private CodeEditor editor;
     private AbstractCodeBlock root;
     private String lastCode;
 
     @BeforeEach
     void setUp() {
-        state = new ProjectState();
+        state = new EditorState();
         Path path = Paths.get("Subject.java").toAbsolutePath();
         ProjectFile file = new ProjectFile(path, SOURCE);
         state.addFile(file);
@@ -138,7 +138,7 @@ public class BlockDragDropEditTest {
 
     /** Parses {@code code} and asserts a standardized {@link com.botmaker.studio.blocks.func.ExternalCallBlock} is present. */
     private void assertRoundTripsToLibraryCall(String code, String message) {
-        ProjectState s = new ProjectState();
+        EditorState s = new EditorState();
         Path path = Paths.get("Subject.java").toAbsolutePath();
         s.addFile(new ProjectFile(path, code));
         s.setActiveFile(path);
@@ -197,7 +197,7 @@ public class BlockDragDropEditTest {
                     }
                 }
                 """;
-        ProjectState s = new ProjectState();
+        EditorState s = new EditorState();
         Path path = Paths.get("Subject.java").toAbsolutePath();
         s.addFile(new ProjectFile(path, source));
         s.setActiveFile(path);

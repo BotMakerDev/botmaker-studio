@@ -10,7 +10,7 @@ import com.botmaker.java.edit.palette.ApiDocs;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.MavenService;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
@@ -45,18 +45,18 @@ import java.util.stream.Stream;
  * The Navigate menu's popups (2026-09-26): Find and Find in Project (2026-09-29), Go to Line, Go to File, File
  * Structure, Go to Declaration and Quick Documentation. Each reads the open file's tree through {@link SourceNavigation} and lands on a block with
  * {@link EditorCanvas#scrollToBlock}, which also selects it — so arriving somewhere looks the same as clicking
- * an error row. "The selected block" is the one the user last clicked ({@link ProjectState#getHighlightedBlock}).
+ * an error row. "The selected block" is the one the user last clicked ({@link EditorState#getHighlightedBlock}).
  */
 final class NavigationPopups {
 
     private final Stage owner;
     private final ProjectConfig config;
-    private final ProjectState state;
+    private final EditorState state;
     private final CodeEditorService editor;
     private final EditorCanvas canvas;
     private final CenterTabs tabs;
 
-    NavigationPopups(Stage owner, ProjectConfig config, ProjectState state, CodeEditorService editor,
+    NavigationPopups(Stage owner, ProjectConfig config, EditorState state, CodeEditorService editor,
                      EditorCanvas canvas, CenterTabs tabs) {
         this.owner = owner;
         this.config = config;

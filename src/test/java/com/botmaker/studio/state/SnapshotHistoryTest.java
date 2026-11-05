@@ -37,12 +37,12 @@ public class SnapshotHistoryTest {
         assertEquals("a", cell.value);
         cell.history.undo();
         assertEquals("start", cell.value);
-        assertFalse(cell.history.canUndoProperty().get(), "nothing left to undo at the baseline");
+        assertFalse(cell.history.canUndo(), "nothing left to undo at the baseline");
 
         cell.history.redo();
         cell.history.redo();
         assertEquals("b", cell.value);
-        assertFalse(cell.history.canRedoProperty().get());
+        assertFalse(cell.history.canRedo());
     }
 
     @Test
@@ -52,7 +52,7 @@ public class SnapshotHistoryTest {
         // anything the user could see.
         Cell cell = new Cell();
         cell.history.mutate("a drag that went nowhere", () -> cell.value = "start");
-        assertFalse(cell.history.canUndoProperty().get());
+        assertFalse(cell.history.canUndo());
     }
 
     @Test
@@ -67,7 +67,7 @@ public class SnapshotHistoryTest {
         assertEquals("ab", cell.value);
         cell.history.undo();
         assertEquals("start", cell.value, "one undo takes back both halves");
-        assertFalse(cell.history.canUndoProperty().get());
+        assertFalse(cell.history.canUndo());
     }
 
     @Test
@@ -75,10 +75,10 @@ public class SnapshotHistoryTest {
         Cell cell = new Cell();
         cell.history.mutate("first", () -> cell.value = "a");
         cell.history.undo();
-        assertTrue(cell.history.canRedoProperty().get());
+        assertTrue(cell.history.canRedo());
 
         cell.history.mutate("a different first", () -> cell.value = "z");
-        assertFalse(cell.history.canRedoProperty().get(), "the abandoned future is not offered back");
+        assertFalse(cell.history.canRedo(), "the abandoned future is not offered back");
         cell.history.redo();
         assertEquals("z", cell.value, "redo with nothing to redo does nothing");
     }
@@ -123,21 +123,43 @@ public class SnapshotHistoryTest {
         cell.history.setOnChanged(() -> told.set(true));
 
         cell.history.clear();
-        assertFalse(cell.history.canUndoProperty().get());
-        assertFalse(cell.history.canRedoProperty().get());
+        assertFalse(cell.history.canUndo());
+        assertFalse(cell.history.canRedo());
         assertEquals("a", cell.value, "clearing forgets the steps, not the state");
         assertFalse(told.get());
     }
 
     @Test
+    void aListenerHearsEveryChangeToTheArrowsAndOneThatThrowsCostsNothing() {
+        // What the Parameters window's ↶/↷ redraw from, since the history has no JavaFX properties (2026-11-05).
+        Cell cell = new Cell();
+        List<String> heard = new ArrayList<>();
+        List<String> saves = new ArrayList<>();
+        cell.history.addListener(() -> { throw new IllegalStateException("a closed window's button"); });
+        Runnable stop = cell.history.addListener(() -> heard.add(cell.history.undoLabel()));
+        cell.history.setOnChanged(() -> saves.add(cell.value));
+
+        cell.history.mutate("first", () -> cell.value = "a");
+        cell.history.undo();
+        cell.history.redo();
+        cell.history.clear();
+        assertEquals(List.of("first", "", "first", ""), heard);
+        assertEquals(List.of("a", "start", "a"), saves, "a throwing listener does not stop autosave");
+
+        stop.run();
+        cell.history.mutate("second", () -> cell.value = "b");
+        assertEquals(4, heard.size(), "a removed listener hears nothing");
+    }
+
+    @Test
     void theArrowsSayWhatTheyWouldTakeBack() {
         Cell cell = new Cell();
-        assertEquals("", cell.history.undoLabelProperty().get());
+        assertEquals("", cell.history.undoLabel());
         cell.history.mutate("wire A to B", () -> cell.value = "a");
-        assertEquals("wire A to B", cell.history.undoLabelProperty().get());
+        assertEquals("wire A to B", cell.history.undoLabel());
         cell.history.undo();
-        assertEquals("wire A to B", cell.history.redoLabelProperty().get());
-        assertEquals("", cell.history.undoLabelProperty().get());
+        assertEquals("wire A to B", cell.history.redoLabel());
+        assertEquals("", cell.history.undoLabel());
     }
 
     @Test

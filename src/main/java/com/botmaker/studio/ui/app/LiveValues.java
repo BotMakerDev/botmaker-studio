@@ -5,7 +5,7 @@ import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.services.debug.DebugSnapshot;
 import com.botmaker.studio.services.debug.LiveScope;
 import com.botmaker.studio.services.debug.ValueSummary;
@@ -17,9 +17,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.util.Duration;
-import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.core.dom.SimpleName;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -41,12 +39,12 @@ final class LiveValues {
 
     static final String CHIP_CLASS = "live-value-chip";
 
-    private final ProjectState state;
+    private final EditorState state;
     private final List<Label> chips = new ArrayList<>();
     private DebugSnapshot snapshot;
     private boolean paused;
 
-    LiveValues(EventBus bus, ProjectState state) {
+    LiveValues(EventBus bus, EditorState state) {
         this.state = state;
         bus.subscribe(CoreApplicationEvents.DebugSnapshotEvent.class, e -> snapshot = e.snapshot(), true);
         bus.subscribe(CoreApplicationEvents.DebugSessionPausedEvent.class, e -> {

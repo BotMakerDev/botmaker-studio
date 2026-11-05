@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -22,7 +21,7 @@ class CheckpointsTest {
         Files.writeString(bot, "class Bot {}");
         new ProjectVcs(dir).init();
 
-        ProjectState.Snapshot editor = new ProjectState.Snapshot("", null, Map.of(), List.of(),
+        ProjectState.Snapshot editor = new ProjectState.Snapshot("", null, List.of(),
                 List.of(new ProjectState.SourceFile(bot, "class Bot { int edited; }")), null);
         Checkpoints.take(dir, editor, VersionOrigin.AI, "AI: Claude Code");
 

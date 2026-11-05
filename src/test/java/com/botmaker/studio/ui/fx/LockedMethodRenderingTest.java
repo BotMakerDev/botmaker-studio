@@ -52,7 +52,7 @@ class LockedMethodRenderingTest extends FxHeadlessTest {
         // needed at click time, which is exactly what a locked header must never get to.
         com.botmaker.studio.events.EventBus eventBus = new com.botmaker.studio.events.EventBus(false);
         context = new CodeEditorService(
-                null, new com.botmaker.studio.project.ProjectState(), eventBus, null,
+                null, new com.botmaker.studio.core.EditorState(), eventBus, null,
                 new com.botmaker.studio.ui.dnd.BlockDragAndDropManager(eventBus),
                 new com.botmaker.studio.validation.DiagnosticsManager(), null, null);
 

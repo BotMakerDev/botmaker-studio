@@ -1,7 +1,5 @@
 package com.botmaker.studio.events;
 
-import javafx.application.Platform;
-
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,7 +16,9 @@ import java.util.logging.Logger;
  * family (e.g. {@code DebugControlRequest}) receives all of its members, and subscribing to
  * {@link ApplicationEvent} receives every event.
  *
- * <p>Thread-safe; each subscription chooses whether its handler runs on the JavaFX thread.
+ * <p>Thread-safe; each subscription chooses whether its handler runs on the UI thread. Which thread that is, and
+ * how a delivery reaches it, is the {@link UiThread} the bus is built with: Studio passes its JavaFX thread, a
+ * headless owner none, and then every handler runs on the publishing thread.
  *
  * <p>A handler that throws is logged at {@code SEVERE} with the event's name and the cause, and the
  * publish continues — <em>on both branches</em>, whichever thread the handler ends up running on.
@@ -28,13 +28,44 @@ public class EventBus {
 
     private final Map<Class<? extends ApplicationEvent>, List<EventHandler<?>>> handlers = new ConcurrentHashMap<>();
     private final boolean enableLogging;
+    private final UiThread uiThread;
 
+    /**
+     * The thread a UI-bound handler runs on. {@link #INLINE} is no UI: such a handler runs where the event was
+     * published, as every other one does.
+     */
+    public interface UiThread {
+        UiThread INLINE = new UiThread() {
+            @Override
+            public boolean isCurrent() {
+                return true;
+            }
+
+            @Override
+            public void later(Runnable delivery) {
+                delivery.run();
+            }
+        };
+
+        /** Whether the calling thread is this one, so a delivery can run at once. */
+        boolean isCurrent();
+
+        /** Runs {@code delivery} on this thread, later; may throw when the thread is gone. */
+        void later(Runnable delivery);
+    }
+
+    /** A bus with no UI thread, delivering every event on the publishing thread. */
     public EventBus() {
         this(false);
     }
 
     public EventBus(boolean enableLogging) {
+        this(enableLogging, UiThread.INLINE);
+    }
+
+    public EventBus(boolean enableLogging, UiThread uiThread) {
         this.enableLogging = enableLogging;
+        this.uiThread = uiThread;
     }
 
     /**
@@ -54,15 +85,15 @@ public class EventBus {
         return subscribe(eventType, handler, false);
     }
 
-    /** Subscribe with the option to run the handler on the JavaFX application thread. */
+    /** Subscribe with the option to run the handler on the bus's {@link UiThread}. */
     public <T extends ApplicationEvent> Subscription subscribe(
             Class<T> eventType,
             Consumer<T> handler,
-            boolean runOnFxThread) {
+            boolean onUiThread) {
 
         List<EventHandler<?>> registered =
                 handlers.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>());
-        EventHandler<T> entry = new EventHandler<>(handler, runOnFxThread);
+        EventHandler<T> entry = new EventHandler<>(handler, onUiThread ? uiThread : null);
         registered.add(entry);
 
         if (enableLogging) {
@@ -91,26 +122,27 @@ public class EventBus {
                     handler.handle(event);
                 } catch (Exception e) {
                     // A handler's own failure is caught by the delivery, below; what is left here is a failure
-                    // to *dispatch* — Platform.runLater rejecting the delivery because the toolkit is gone.
+                    // to *dispatch* — the UI thread rejecting the delivery because its toolkit is gone.
                     LOGGER.log(Level.SEVERE, "Error dispatching event: " + eventClass.getSimpleName(), e);
                 }
             }
         }
     }
 
-    private record EventHandler<T extends ApplicationEvent>(Consumer<T> handler, boolean runOnFxThread) {
+    /** {@code uiThread} is null for a handler that runs on the publishing thread. */
+    private record EventHandler<T extends ApplicationEvent>(Consumer<T> handler, UiThread uiThread) {
 
         void handle(ApplicationEvent event) {
-            if (runOnFxThread && !Platform.isFxApplicationThread()) {
-                Platform.runLater(() -> deliver(event));
+            if (uiThread != null && !uiThread.isCurrent()) {
+                uiThread.later(() -> deliver(event));
             } else {
                 deliver(event);
             }
         }
 
         /**
-         * The guard travels with the delivery rather than staying at the call site: on the {@code runLater}
-         * branch the handler runs on the FX thread long after {@code publish} has returned, so a try/catch
+         * The guard travels with the delivery rather than staying at the call site: on the {@code later}
+         * branch the handler runs on the UI thread long after {@code publish} has returned, so a try/catch
          * around {@code handle} cannot see it. That gap covered the UI subscriptions — the half most likely
          * to throw — and it is the whole of Studio's error logging. See {@code docs/refactor} SC4.
          */

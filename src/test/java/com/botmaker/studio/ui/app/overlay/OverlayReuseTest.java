@@ -78,7 +78,7 @@ class OverlayReuseTest extends FxHeadlessTest {
         BodyBlock body = fixture.body("run");
         onFx(() -> tree.render(
                 List.of(body),
-                cursorIndex < 0 ? null : new com.botmaker.studio.project.InsertionCursor(body, cursorIndex),
+                cursorIndex < 0 ? null : new com.botmaker.studio.core.InsertionCursor(body, cursorIndex),
                 stmt -> false));
     }
 

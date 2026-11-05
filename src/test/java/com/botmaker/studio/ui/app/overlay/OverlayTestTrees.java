@@ -7,7 +7,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.services.CursorNavigator;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 
@@ -27,7 +27,7 @@ final class OverlayTestTrees {
 
     /** The block tree for {@code source}. */
     static AbstractCodeBlock treeOf(String source) {
-        ProjectState state = new ProjectState();
+        EditorState state = new EditorState();
         Path path = Paths.get("Mining.java").toAbsolutePath();
         state.addFile(new ProjectFile(path, source));
         state.setActiveFile(path);

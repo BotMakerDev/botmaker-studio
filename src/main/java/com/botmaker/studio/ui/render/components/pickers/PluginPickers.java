@@ -47,7 +47,7 @@ final class PluginPickers {
      * the same source text.
      */
     static Node previewFor(PickerContext ctx) {
-        List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
+        List<PluginHost.OwnedEditor> editors = FilledPills.withEditors();
         if (editors.isEmpty() || ctx == null) return null;
         HostSlotContext context = new HostSlotContext(ctx.context(), ctx.arg(), ctx.paramType(),
                 ctx.call(), ctx.argIndex(),
@@ -87,7 +87,7 @@ final class PluginPickers {
      * discarded — {@code matches} is documented as cheap, {@code create} is not.
      */
     private static Node dispatch(PickerContext ctx, boolean build, SlotRun run) {
-        List<PluginHost.OwnedEditor> editors = PluginHost.ownedSlotEditors();
+        List<PluginHost.OwnedEditor> editors = FilledPills.withEditors();
         if (editors.isEmpty() || ctx == null) return null;
 
         HostSlotContext context = new HostSlotContext(ctx.context(), ctx.arg(), ctx.paramType(),

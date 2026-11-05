@@ -10,7 +10,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.ReadOnlyDecorator;
-import com.botmaker.studio.project.InsertionCursor;
+import com.botmaker.studio.core.InsertionCursor;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.validation.BlockValidator;
 import com.botmaker.studio.validation.DiagnosticsManager;

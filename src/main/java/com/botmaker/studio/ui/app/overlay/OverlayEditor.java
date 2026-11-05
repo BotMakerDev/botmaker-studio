@@ -27,9 +27,9 @@ import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.plugin.HostOverlayContext;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
-import com.botmaker.studio.project.InsertionCursor;
+import com.botmaker.studio.core.InsertionCursor;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.StudioProjectSettings;
 import com.botmaker.studio.project.managed.ManagedConstants;
 import com.botmaker.java.index.BotIndex;
@@ -117,7 +117,7 @@ public final class OverlayEditor {
     private static OverlayEditor active;
 
     private final CodeEditorService context;
-    private final ProjectState state;
+    private final EditorState state;
     private final ProjectSettingsService settings;
     private final ScreenCaptureService capture;
     private final StudioServices services;

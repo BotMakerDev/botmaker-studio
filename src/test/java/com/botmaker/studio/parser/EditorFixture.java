@@ -5,13 +5,13 @@ import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.services.ApiDocsService;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
-import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.ProjectTemplate;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;
@@ -44,7 +44,7 @@ public final class EditorFixture {
             List.of(System.getProperty("java.class.path").split(java.io.File.pathSeparator));
 
     public final CodeEditor editor;
-    public final ProjectState state;
+    public final EditorState state;
     public final AbstractCodeBlock root;
     /** The source this fixture first parsed — what a {@link BlockReuse} over its tree indexes into. */
     public final String source;
@@ -74,7 +74,7 @@ public final class EditorFixture {
      */
     public EditorFixture(String source, Path file, RefusalJournal journal) {
         this.source = source;
-        state = new ProjectState();
+        state = new EditorState();
         state.addFile(new ProjectFile(file, source));
         state.setActiveFile(file);
         // FileRole only compares paths, it never reads them, but the parser needs a real source root and

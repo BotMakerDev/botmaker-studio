@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
@@ -34,6 +35,7 @@ import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.java.parse.BotParser;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;
+import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.java.types.MethodSignature;
@@ -684,7 +686,7 @@ public final class AssistTurn {
      * it would publish is captured instead, for {@link #apply} to judge.
      */
     private final class Stage {
-        final ProjectState state;
+        final EditorState state;
         final CompilationUnit cu;
         final Map<ASTNode, CodeBlock> registry = new HashMap<>();
         final ProjectAnalyzer analyzer;
@@ -694,7 +696,7 @@ public final class AssistTurn {
 
         Stage() {
             state = workspace.stage(source);
-            EventBus bus = new EventBus(false);
+            EventBus bus = new EventBus(false, FxThread.INSTANCE);
             bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> published = e.newCode());
             bus.subscribe(CoreApplicationEvents.StatusMessageEvent.class, e -> status.add(e.message()));
             BlockConverter.ConvertResult result = new BlockConverter(workspace.config(), state)
