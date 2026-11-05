@@ -4,6 +4,7 @@ import com.botmaker.studio.assist.AssistTurn;
 import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.studio.assist.LiveBot;
+import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.BotIndex;
@@ -66,7 +67,7 @@ final class LiveEditorBot implements LiveBot {
             if (source == null) throw new IllegalArgumentException("Studio cannot read " + file + ".");
             EditWorkspace workspace = EditWorkspace.of(ctx.config(), ctx.state(),
                     ctx.projectAnalyzer() == null ? null : ctx.projectAnalyzer().libraryIndex(), path);
-            return Optional.of(new AssistTurn(workspace, source));
+            return Optional.of(new AssistTurn(workspace, source, TypeCatalog::declarable));
         });
     }
 

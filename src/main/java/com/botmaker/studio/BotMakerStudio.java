@@ -6,6 +6,7 @@ import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
 import com.botmaker.studio.assist.BotGuard;
 import com.botmaker.studio.assist.HomeEndpoint;
+import com.botmaker.studio.assist.StudioToolGroup;
 import com.botmaker.studio.assist.UiEvents;
 import com.botmaker.core.config.AppPaths;
 import com.botmaker.core.config.Constants;
@@ -35,6 +36,7 @@ import com.botmaker.studio.ui.app.CommunityPluginPrompt;
 import com.botmaker.studio.ui.app.ForceX11Notice;
 import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.home.BmkFlow;
+import com.botmaker.studio.ui.app.home.HomeShell;
 import com.botmaker.studio.ui.app.home.MyBots;
 import com.botmaker.studio.ui.app.home.RunHome;
 import com.botmaker.studio.ui.app.loading.LoadingPage;
@@ -154,11 +156,11 @@ public class BotMakerStudio extends Application {
         channel = StudioChannel.listen(StudioChannel.socket(), text -> Platform.runLater(() -> openLink(text)));
         LinkScheme.registerOnWindows();
         // A dev Studio's ui tool, from the first window on (BOTMAKER_MCP_UI); nothing otherwise.
-        HomeEndpoint.mainWindow(primaryStage);
-        HomeEndpoint.shell((dir, runner) -> {
+        StudioToolGroup.mainWindow(primaryStage);
+        HomeEndpoint.shell(new HomeShell(primaryStage, (dir, runner) -> {
             if (runner) openAs(primaryStage, dir, true, false);
             else editProject(primaryStage, dir, false);
-        });
+        }));
         HomeEndpoint.serve();
         if (bmk.isPresent()) {
             // A second launch is a Studio of its own (2026-10-25): it opens the file on the loading page (N12).

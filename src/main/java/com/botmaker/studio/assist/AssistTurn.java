@@ -1,45 +1,40 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.edit.DeclarableTypes;
 import com.botmaker.core.edit.EditSession;
 import com.botmaker.core.edit.EditStage;
 import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.core.edit.Outcome;
 import com.botmaker.core.edit.PaletteEntry;
-import com.botmaker.core.events.EventBus;
+import com.botmaker.core.parser.StatementBodies;
+import com.botmaker.core.parser.StatementKind;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.params.BotRecords;
 import com.botmaker.java.edit.BlockId;
+import com.botmaker.java.edit.BodyChildren;
 import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.java.edit.refactor.MethodReferences;
 import com.botmaker.java.edit.refactor.SignatureMigration;
-import com.botmaker.studio.core.BlockWithChildren;
-import com.botmaker.studio.core.BodyBlock;
-import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.core.EditorState;
-import com.botmaker.studio.core.StatementBlock;
-import com.botmaker.studio.parser.BlockConverter;
-import com.botmaker.studio.ui.FxThread;
-import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
-import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.*;
 
 import javax.lang.model.SourceVersion;
 import java.lang.reflect.Type;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * One assistant turn over one file: the core's {@link EditSession}, which does its edits, with what still needs Studio
- * around it. {@link #tree} reads the file as blocks are drawn (it leaves for the core with the block tree, plan phase 9);
- * {@link #editVariable}, {@link #addMethod} and {@link #editSignature} choose from what Studio's dialogs offer.
+ * One assistant turn over one file: the core's {@link EditSession}, which does its edits, with what the dialogs offer
+ * around it. {@link #tree} reads the file as blocks are drawn, through the core's {@link StatementKind} and
+ * {@link StatementBodies}, which Studio's block converter draws by too (2026-11-05); {@link #editVariable} retypes to
+ * one of the {@link DeclarableTypes} it was given, {@link #addMethod} and {@link #editSignature} to a type the
+ * signature dialog offers.
  *
  * <p>Not thread-confined: nothing here reads {@code ProjectState}'s live instance, so a turn may run on the thread that
  * talks to the model. The turn lands through {@code CoreEditor.commit}, on the FX thread.
@@ -51,10 +46,13 @@ public final class AssistTurn {
 
     private final EditWorkspace workspace;
     private final EditSession session;
+    private final DeclarableTypes types;
 
-    public AssistTurn(EditWorkspace workspace, String source) {
+    /** A turn over {@code source}, whose {@link #editVariable} retypes to one of {@code types}. */
+    public AssistTurn(EditWorkspace workspace, String source, DeclarableTypes types) {
         this.workspace = workspace;
         this.session = new EditSession(workspace, source);
+        this.types = types;
     }
 
     /** The session the core lands. */
@@ -102,25 +100,27 @@ public final class AssistTurn {
     /** The file's methods, bodies, statements and slots: the ids every edit tool takes. */
     public List<BlockView.Method> tree() {
         String source = session.source();
-        EditorState state = workspace.fill(new EditorState(), source);
-        EventBus bus = new EventBus(false, FxThread.INSTANCE);
-        Map<ASTNode, CodeBlock> registry = new HashMap<>();
-        CompilationUnit cu = new BlockConverter(workspace.config(), state)
-                .convert(source, registry, new BlockDragAndDropManager(bus), false, false).cu();
+        Path file = workspace.file();
+        CompilationUnit cu = ProjectAnalyzer.createCompilationUnit(workspace.level(), workspace.classpath(), source,
+                workspace.sourceRoot(), file == null ? null : file.toAbsolutePath().toString());
         List<BlockView.Method> methods = new ArrayList<>();
-        if (cu == null) return methods;
-        cu.accept(new ASTVisitor() {
-            @Override
-            public boolean visit(MethodDeclaration method) {
-                if (method.getBody() != null && registry.get(method.getBody()) instanceof BodyBlock body) {
-                    String owner = method.getParent() instanceof AbstractTypeDeclaration type
-                            ? type.getName().getIdentifier() : "";
-                    methods.add(new BlockView.Method(method.getName().getIdentifier(), owner, view(body, source)));
-                }
-                return true;
-            }
-        });
+        // The methods the canvas draws: the file's first type's, and its nested classes' and records', in order.
+        if (cu.types().isEmpty()) return methods;
+        methodsOf((AbstractTypeDeclaration) cu.types().getFirst(), BodyChildren.nonJavadoc(cu), source, methods);
         return methods;
+    }
+
+    private void methodsOf(AbstractTypeDeclaration type, List<Comment> comments, String source,
+                           List<BlockView.Method> out) {
+        if (!(type instanceof TypeDeclaration || type instanceof RecordDeclaration)) return;
+        for (Object member : type.bodyDeclarations()) {
+            if (member instanceof MethodDeclaration method && method.getBody() != null) {
+                out.add(new BlockView.Method(method.getName().getIdentifier(), type.getName().getIdentifier(),
+                        view(StatementBodies.of(method.getBody(), comments), comments, source)));
+            } else if (member instanceof AbstractTypeDeclaration nested) {
+                methodsOf(nested, comments, source, out);
+            }
+        }
     }
 
     // ---- editing -----------------------------------------------------------------------------------------
@@ -172,12 +172,11 @@ public final class AssistTurn {
         // Both or neither: a rename refused after the retype must not leave the retype for the turn to commit.
         int keptBefore = session.acceptedEdits();
         if (!newType.isEmpty()) {
-            List<TypeCatalog.Entry> offered = TypeCatalog.current(TypeCatalog.Purpose.DECLARATION,
-                    BotRecords.scan(workspace.config(), stage.state, workspace.grammar())).groups().stream()
-                    .flatMap(g -> g.entries().stream()).toList();
+            List<DeclarableTypes.Offered> offered =
+                    types.offered(BotRecords.scan(workspace.config(), stage.state, workspace.grammar()));
             Optional<Type> chosen = offered.stream()
                     .filter(e -> e.label().equals(newType) || simpleName(e.type()).equals(newType))
-                    .map(TypeCatalog.Entry::type).findFirst();
+                    .map(DeclarableTypes.Offered::type).findFirst();
             if (chosen.isEmpty()) {
                 return Outcome.Refused.because("A variable cannot be declared as " + newType + ". The types are "
                         + offered.stream().map(e -> simpleName(e.type())).distinct().toList() + ".");
@@ -330,30 +329,21 @@ public final class AssistTurn {
 
     // ---- views -------------------------------------------------------------------------------------------
 
-    private BlockView.Body view(BodyBlock body, String source) {
+    /** {@code body} as the canvas draws it: each line's kind and the bodies inside it, by the core's classifier. */
+    private BlockView.Body view(StatementBodies.Body body, List<Comment> comments, String source) {
         List<BlockView.Statement> statements = new ArrayList<>();
-        for (StatementBlock statement : body.getStatements()) {
-            ASTNode node = statement.getAstNode();
+        for (ASTNode line : body.lines()) {
             List<BlockView.Body> nested = new ArrayList<>();
-            collectBodies(statement, nested, source);
-            statements.add(new BlockView.Statement(BlockId.of(node), kindOf(statement),
-                    EditSession.oneLine(node, source), slots(node, source), nested));
+            if (line instanceof Statement statement) {
+                for (StatementBodies.Body inner : StatementBodies.inside(statement, comments)) {
+                    nested.add(view(inner, comments, source));
+                }
+            }
+            ASTNode at = StatementBodies.addressOf(line);
+            statements.add(new BlockView.Statement(BlockId.of(at), StatementKind.of(line).id(),
+                    EditSession.oneLine(at, source), slots(at, source), nested));
         }
-        return new BlockView.Body(BlockId.of(body.getAstNode()), statements);
-    }
-
-    /** The bodies directly inside {@code block} — not their statements' bodies, which those statements list. */
-    private void collectBodies(CodeBlock block, List<BlockView.Body> out, String source) {
-        if (!(block instanceof BlockWithChildren parent)) return;
-        for (CodeBlock child : parent.getChildren()) {
-            if (child instanceof BodyBlock body) out.add(view(body, source));
-            else collectBodies(child, out, source);
-        }
-    }
-
-    private static String kindOf(StatementBlock block) {
-        String name = block.getClass().getSimpleName();
-        return name.endsWith("Block") ? name.substring(0, name.length() - "Block".length()) : name;
+        return new BlockView.Body(BlockId.of(body.anchor()), statements);
     }
 
     /** The positions on {@code statement} a value may be written into. */

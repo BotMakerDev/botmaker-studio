@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (edits by id)
 
+- The assistant's `read_tree` reads the file's Java through `botmaker-core`'s `StatementKind` and `StatementBodies`, which
+  the canvas draws by too, instead of building blocks (2026-11-05). It now also lists a body inside a variable's value, a
+  lambda's or an arrow switch's. The home's tools ask a `HomeShell`; the Edit Variable types reach the assistant as
+  `DeclarableTypes`.
 - Sharing (`sharing`, `LocalBuilds`), `ClassFiles.Kind` (now `ClassKind`) and `RunEntries` moved to `botmaker-core`
   (2026-11-05). The assistant's run log is told by `RunLogOnBus`, and its `ui` tool and the questions on screen reach
   the MCP as `StudioToolGroup`; nothing a user sees changes.

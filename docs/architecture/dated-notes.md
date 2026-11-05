@@ -1,5 +1,11 @@
 # Dated notes — read these before the other files here
 
+> **What a statement is, and which bodies it holds, is `botmaker-core`'s since 2026-11-05** (phase 9a of the same plan):
+> `BlockConverter` dispatches on the core's `parser.StatementKind` and builds bodies and switch cases from
+> `parser.StatementBodies`; `blocks.func.CallOwner` is the core's `parser.CallOwner`. `AssistTurn.tree` reads the JDT
+> tree through the same two, building no block. `HomeTools` asks `HomeEndpoint.Shell` (Studio's `ui.app.home.HomeShell`);
+> `quit_studio`'s window is `StudioToolGroup.mainWindow`'s.
+
 > **Sharing is `botmaker-core`'s since 2026-11-05** (phase 9 of the same plan): `sharing` is `com.botmaker.core.sharing`,
 > `services.LocalBuilds` `com.botmaker.core.services`, `ClassFiles.Kind` the core's `project.ClassKind` and
 > `services.run.RunEntries` the core's `run.RunEntries`. The MCP's `RunLog` subscribes nothing (`RunLogOnBus` tells it),

@@ -316,9 +316,17 @@ final class UiTools {
         return Choosers.answerNext(picked);
     }
 
+    /** Studio's main window, which {@code quit_studio} closes; set once Studio's first window is up. */
+    private static volatile Window mainWindow;
+
+    /** Studio's main window, which {@link #quit} closes (held here since 2026-11-05, not by the home endpoint). */
+    static void mainWindow(Window window) {
+        mainWindow = window;
+    }
+
     /** {@code quit_studio} on the home endpoint: Studio's main window asked to close, a moment after the answer. */
     static String quit() {
-        Window main = HomeEndpoint.mainWindow();
+        Window main = mainWindow;
         if (main == null || !onFx(main::isShowing)) throw new IllegalArgumentException("Studio's window is not shown.");
         Thread.ofVirtual().start(() -> {
             try {

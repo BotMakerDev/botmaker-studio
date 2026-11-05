@@ -3,6 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.core.edit.PaletteEntry;
 import com.botmaker.core.edit.Outcome;
 import com.botmaker.core.edit.EditWorkspace;
+import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.plugin.api.value.Drawn;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.core.parser.guard.RefusalJournal;
@@ -53,7 +54,7 @@ public class AssistTurnTest {
     }
 
     private static AssistTurn turn(String source) {
-        return new AssistTurn(workspace(), source);
+        return new AssistTurn(workspace(), source, TypeCatalog::declarable);
     }
 
     private static BlockView.Body runBody(AssistTurn turn) {
@@ -139,7 +140,7 @@ public class AssistTurnTest {
         EditWorkspace base = workspace();
         AssistTurn turn = new AssistTurn(new EditWorkspace(base.config(), base.file(), base.classpath(),
                 base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), base.grammar(),
-                constants), source);
+                constants), source, TypeCatalog::declarable);
         String slot = statement(turn, "System.out.println").slots().getFirst().id();
 
         assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "Subject.NAME"), "a String is not an int");
@@ -196,7 +197,7 @@ public class AssistTurnTest {
         EditWorkspace base = workspace();
         AssistTurn turn = new AssistTurn(new EditWorkspace(base.config(), base.file(), base.classpath(),
                 base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), grammar,
-                constants), source);
+                constants), source, TypeCatalog::declarable);
         String slot = statement(turn, Pics.class.getCanonicalName()).slots().getFirst().id();
 
         Outcome.Refused near = assertInstanceOf(Outcome.Refused.class, turn.setSlot(slot, "Pics.none()"));
@@ -229,7 +230,7 @@ public class AssistTurnTest {
         EditWorkspace base = workspace();
         AssistTurn turn = new AssistTurn(new EditWorkspace(base.config(), base.file(), base.classpath(),
                 base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), grammar,
-                constants), source);
+                constants), source, TypeCatalog::declarable);
         String slot = statement(turn, pics + ".take").slots().getFirst().id();
 
         Outcome set = turn.setSlot(slot, "Subject.BOTH");

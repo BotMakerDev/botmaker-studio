@@ -4,11 +4,13 @@ import com.botmaker.plugin.api.assist.AssistantTool;
 import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import javafx.stage.Window;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * The MCP endpoint of a dev Studio with no project's endpoint up (2026-10-25): on the bot list, in the Run window,
@@ -29,14 +31,38 @@ public final class HomeEndpoint {
     private static final int BIND_TRIES = 20;
     private static final long BIND_PAUSE_MS = 250;
 
-    /** What the home's tools ask of Studio's shell ({@link HomeTools}); {@code BotMakerStudio} sets it. */
+    /**
+     * What the home's tools ask of the client that shows the bot list ({@link HomeTools}); Studio's is
+     * {@code HomeShell}, which {@code BotMakerStudio} sets. Every method may be called from any thread.
+     */
     public interface Shell {
-        /** Opens {@code dir} in the Runner when {@code run}, else in the editor. FX thread. */
+        /** Opens {@code dir} in the Runner when {@code run}, else in the editor, on the client's own thread. */
         void open(Path dir, boolean run);
+
+        /** My bots as the bot list shows them, newest first. */
+        List<Listed> bots();
+
+        /** The published bots a project can start from, a line each, for the model to read. */
+        String publishedBots();
+
+        /**
+         * Makes the project {@code name}, blank or from the published {@code bot}, with {@code plugins}, asking on
+         * screen what needs the user's yes, then hands its folder to {@code opened}, whose answer this returns.
+         *
+         * @throws IllegalArgumentException with the sentence that says why it was not made
+         */
+        String create(String name, String bot, List<String> plugins, Function<Path, String> opened);
+
+        /** What a question on screen waits for, or empty when none is up. */
+        String busy();
+
+        /** One of My bots: its folder and name, whose, its version, when it was used, and what state it is in. */
+        record Listed(Path dir, String name, Optional<String> owner, Optional<String> version, LocalDateTime lastUsed,
+                      boolean gone, boolean unpacked, Optional<String> available) {
+        }
     }
 
     private static McpEndpoint running;
-    private static Window main;
     /** Null until the shell is set: the home then serves {@code ui} and {@code quit_studio} only. */
     private static Shell shell;
     /** Bumped by every {@link #yieldPort}: a start that finishes after one lets go at once. */
@@ -61,15 +87,6 @@ public final class HomeEndpoint {
         generation++;
         if (running != null) running.close();
         running = null;
-    }
-
-    /** Studio's main window, which {@code quit_studio} closes. */
-    public static synchronized void mainWindow(Window window) {
-        main = window;
-    }
-
-    static synchronized Window mainWindow() {
-        return main;
     }
 
     /** Whether this is a dev Studio Claude drives ({@link UiTools#enabled}): it serves each project it opens too. */

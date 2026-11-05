@@ -2,6 +2,7 @@ package com.botmaker.studio.assist;
 
 import com.botmaker.plugin.api.assist.AssistantTool;
 import javafx.application.Platform;
+import javafx.stage.Window;
 
 import java.util.List;
 import java.util.Set;
@@ -15,6 +16,11 @@ public final class StudioToolGroup implements ToolGroup {
     public static final StudioToolGroup INSTANCE = new StudioToolGroup();
 
     private StudioToolGroup() {}
+
+    /** Studio's main window, which {@code quit_studio} closes. */
+    public static void mainWindow(Window window) {
+        UiTools.mainWindow(window);
+    }
 
     @Override
     public List<AssistantTool<?>> tools() {

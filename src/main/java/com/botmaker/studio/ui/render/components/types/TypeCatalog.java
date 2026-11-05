@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.render.components.types;
 
+import com.botmaker.core.edit.DeclarableTypes;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaNames;
@@ -70,6 +71,12 @@ public final class TypeCatalog {
     public static TypeCatalog current(Purpose purpose, BotRecords project) {
         return of(purpose, PluginHost.grammar(), PluginHost.ownedTypes(),
                 project == null ? List.of() : project.shapes());
+    }
+
+    /** What the Edit Variable dialog offers, as an assistant's retype chooses from it ({@link DeclarableTypes}). */
+    public static List<DeclarableTypes.Offered> declarable(BotRecords project) {
+        return current(Purpose.DECLARATION, project).groups().stream().flatMap(g -> g.entries().stream())
+                .map(e -> new DeclarableTypes.Offered(e.label(), e.type())).toList();
     }
 
     /** The same from explicit parts — the seam a test uses. */

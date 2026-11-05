@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.assist.AssistTurn;
+import com.botmaker.core.edit.DeclarableTypes;
 import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.studio.assist.BlockView;
 import com.botmaker.core.edit.Outcome;
@@ -96,7 +97,7 @@ class PaletteCompilesTest {
             if (!type.isStatement() || NEEDS_A_SWITCH_VALUE.contains(type.id())) continue;
             for (Place place : places) {
                 if (!place.loop() && NEEDS_A_LOOP.contains(type.id())) continue;
-                AssistTurn turn = new AssistTurn(workspace(), SOURCE);
+                AssistTurn turn = new AssistTurn(workspace(), SOURCE, DeclarableTypes.NONE);
                 BlockView.Body body = place.body().apply(turn);
                 Outcome outcome = turn.insert(body.id(), body.statements().size(), "block:" + type.id());
                 if (!(outcome instanceof Outcome.Accepted)) {
@@ -165,7 +166,7 @@ class PaletteCompilesTest {
 
     @Test
     void aJumpOutsideALoopIsRefusedRatherThanWritten() {
-        AssistTurn turn = new AssistTurn(workspace(), SOURCE);
+        AssistTurn turn = new AssistTurn(workspace(), SOURCE, DeclarableTypes.NONE);
         BlockView.Body main = method(turn, "main");
         Outcome outcome = turn.insert(main.id(), main.statements().size(), "block:BREAK");
         assertTrue(outcome instanceof Outcome.Refused, outcome.toString());

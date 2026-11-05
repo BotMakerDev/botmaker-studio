@@ -1,6 +1,8 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.core.parser.SlotVacancy;
+import com.botmaker.core.parser.StatementBodies;
+import com.botmaker.core.parser.StatementKind;
+import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.edit.BodyChildren;
 import com.botmaker.java.edit.BlockId;
 
@@ -11,7 +13,6 @@ import com.botmaker.studio.blocks.TypeBlock;
 import com.botmaker.studio.blocks.expr.*;
 import com.botmaker.studio.blocks.flow.*;
 import com.botmaker.studio.blocks.func.ConstructorBlock;
-import com.botmaker.studio.blocks.func.CallOwner;
 import com.botmaker.studio.blocks.func.ExternalCallBlock;
 import com.botmaker.studio.blocks.func.ProjectCallBlock;
 import com.botmaker.studio.blocks.func.MainBlock;
@@ -389,18 +390,10 @@ public class BlockConverter {
         applyReadOnly(bodyBlock, ctx);
         ctx.nodeToBlockMap().put(astBlock, bodyBlock);
 
-        List<CodeBlock> allChildren = new ArrayList<>();
-        for (Object statementObj : astBlock.statements()) {
-            parseStatement((Statement) statementObj, ctx).ifPresent(allChildren::add);
-        }
-
-        for (Comment comment : BodyChildren.commentsOf(astBlock, ctx.comments())) {
-            allChildren.add(parseCommentBlock(comment, ctx));
-        }
-
-        allChildren.sort(Comparator.comparingInt(b -> b.getAstNode().getStartPosition()));
-        for (CodeBlock cb : allChildren) {
-            if (cb instanceof StatementBlock) bodyBlock.addStatement((StatementBlock) cb);
+        // The lines read_tree lists too (StatementBodies), statements and comments in source order.
+        for (ASTNode line : StatementBodies.of(astBlock, ctx.comments()).lines()) {
+            if (line instanceof Comment comment) bodyBlock.addStatement(parseCommentBlock(comment, ctx));
+            else parseStatement((Statement) line, ctx).ifPresent(bodyBlock::addStatement);
         }
         return bodyBlock;
     }
@@ -453,42 +446,48 @@ public class BlockConverter {
                 : Optional.of(sourceStatement(stmt, ctx, "This statement has no block of its own yet."));
     }
 
+    /**
+     * The block for {@code stmt}, by its {@link StatementKind} — the kind read_tree names, so the canvas and the
+     * assistant cannot disagree on what a statement is (2026-11-05).
+     */
     private Optional<StatementBlock> dispatchModelled(Statement stmt, ParseContext ctx) {
-        if (stmt instanceof Block b) return Optional.of(parseBodyBlock(b, ctx));
-        if (stmt instanceof TypeDeclarationStatement t) return parseTypeDeclaration(t, ctx);
-        if (stmt instanceof VariableDeclarationStatement v) return parseVariableDecl(v, ctx);
-        // A body that is one bare statement is braced when the file opens (SwitchNormalizer); a file that is
-        // not normalised — locked, read-only — still arrives with one, and drawing the block without its body
-        // would hide that statement. It is drawn as written instead.
-        if (hasBareBody(stmt)) {
-            return Optional.of(sourceStatement(stmt, ctx,
-                    "Its body is a single statement without braces, and this file is not rewritten to add them."));
-        }
-        if (stmt instanceof IfStatement i) return parseIf(i, ctx);
-        if (stmt instanceof WhileStatement w) return parseWhile(w, ctx);
-        if (stmt instanceof EnhancedForStatement f) return parseFor(f, ctx);
-        if (stmt instanceof ForStatement f) return parseClassicFor(f, ctx);
-        if (stmt instanceof DoStatement d) return parseDoWhile(d, ctx);
-        // A try arm stood here until 2026-09-13 that matched one shape — `try { Thread.sleep(n) } catch …` —
-        // and drew it as a bespoke WaitBlock. Waiting is a plugin's verb (`Wait.time(Duration)`), so that went;
-        // this arm draws every try as the try it is, the raw sleep included.
-        if (stmt instanceof TryStatement t) return parseTry(t, ctx);
-        if (stmt instanceof ThrowStatement t) return parseThrow(t, ctx);
-        if (stmt instanceof SynchronizedStatement s) return parseSynchronized(s, ctx);
-        if (stmt instanceof AssertStatement a) return parseAssert(a, ctx);
-        if (stmt instanceof LabeledStatement l) return parseLabeled(l, ctx);
-        if (stmt instanceof YieldStatement y) return parseYield(y, ctx);
-        if (stmt instanceof ConstructorInvocation c) return parseConstructorCall(c, c.arguments(), ctx);
-        if (stmt instanceof SuperConstructorInvocation c) return parseConstructorCall(c, c.arguments(), ctx);
-        // A guarded arrow switch had its own arm here until 2026-09-01, ahead of this one. Nothing composes one
-        // now — branching on what was found is a chain of calls (BranchChainHandler) — so a switch of any form
-        // is an ordinary switch again, which is what this arm always handled.
-        if (stmt instanceof SwitchStatement s) return parseSwitch(s, ctx);
-        if (stmt instanceof BreakStatement b) return Optional.of(new BreakBlock(BlockId.of(b), b));
-        if (stmt instanceof ContinueStatement c) return Optional.of(new ContinueBlock(BlockId.of(c), c));
-        if (stmt instanceof ReturnStatement r) return parseReturn(r, ctx);
-        if (stmt instanceof ExpressionStatement e) return parseExprStmt(e, ctx);
-        return Optional.empty();
+        // A try arm stood here until 2026-09-13 that matched one shape — `try { Thread.sleep(n) } catch …` — and
+        // drew it as a bespoke WaitBlock. Waiting is a plugin's verb (`Wait.time(Duration)`), so that went; TRY
+        // draws every try as the try it is, the raw sleep included. A guarded arrow switch had its own arm until
+        // 2026-09-01; branching on what was found is a chain of calls (BranchChainHandler), so a switch of any
+        // form is an ordinary switch.
+        return switch (StatementKind.of(stmt)) {
+            case SOURCE -> Optional.of(sourceStatement(stmt, ctx, StatementKind.drawnAsSource(stmt).orElseThrow()));
+            case BODY -> Optional.of(parseBodyBlock((Block) stmt, ctx));
+            case DECLARE_ENUM -> parseTypeDeclaration((TypeDeclarationStatement) stmt, ctx);
+            case VARIABLE_DECLARATION -> parseVariableDecl((VariableDeclarationStatement) stmt, ctx);
+            case IF -> parseIf((IfStatement) stmt, ctx);
+            case WHILE -> parseWhile((WhileStatement) stmt, ctx);
+            case FOR -> parseFor((EnhancedForStatement) stmt, ctx);
+            case CLASSIC_FOR -> parseClassicFor((ForStatement) stmt, ctx);
+            case DO_WHILE -> parseDoWhile((DoStatement) stmt, ctx);
+            case TRY -> parseTry((TryStatement) stmt, ctx);
+            case THROW -> parseThrow((ThrowStatement) stmt, ctx);
+            case SYNCHRONIZED -> parseSynchronized((SynchronizedStatement) stmt, ctx);
+            case ASSERT -> parseAssert((AssertStatement) stmt, ctx);
+            case LABELED -> parseLabeled((LabeledStatement) stmt, ctx);
+            case YIELD -> parseYield((YieldStatement) stmt, ctx);
+            case CONSTRUCTOR_CALL -> parseConstructorCall(stmt, stmt instanceof ConstructorInvocation c
+                    ? c.arguments() : ((SuperConstructorInvocation) stmt).arguments(), ctx);
+            case SWITCH -> parseSwitch((SwitchStatement) stmt, ctx);
+            case BREAK -> Optional.of(new BreakBlock(BlockId.of(stmt), (BreakStatement) stmt));
+            case CONTINUE -> Optional.of(new ContinueBlock(BlockId.of(stmt), (ContinueStatement) stmt));
+            case RETURN -> parseReturn((ReturnStatement) stmt, ctx);
+            case PRINT -> parsePrint((ExpressionStatement) stmt, ctx);
+            case ASSIGNMENT -> parseAssignment((ExpressionStatement) stmt, ctx);
+            case BRANCH_CHAIN -> parseBranchChain((ExpressionStatement) stmt,
+                    (MethodInvocation) ((ExpressionStatement) stmt).getExpression(), ctx);
+            case BODY_CALL -> parseBodyCall((ExpressionStatement) stmt,
+                    (MethodInvocation) ((ExpressionStatement) stmt).getExpression(), ctx);
+            case EXTERNAL_CALL, PROJECT_CALL -> parseCallStatement((ExpressionStatement) stmt, ctx);
+            case EXPRESSION_STATEMENT -> parseExpressionStatement((ExpressionStatement) stmt, ctx);
+            case COMMENT -> Optional.empty();
+        };
     }
 
     /** {@code stmt} drawn as its own source text; see {@link SourceStatementBlock}. */
@@ -502,20 +501,6 @@ public class BlockConverter {
         SourceStatementBlock block = new SourceStatementBlock(BlockId.of(stmt), stmt, source, reason);
         ctx.nodeToBlockMap().put(stmt, block);
         return block;
-    }
-
-    /** Whether {@code stmt} is an if or a loop with a one-statement body (or else) written without braces. */
-    private static boolean hasBareBody(Statement stmt) {
-        return switch (stmt) {
-            case IfStatement i -> !(i.getThenStatement() instanceof Block)
-                    || (i.getElseStatement() != null && !(i.getElseStatement() instanceof Block)
-                    && !(i.getElseStatement() instanceof IfStatement));
-            case WhileStatement w -> !(w.getBody() instanceof Block);
-            case DoStatement d -> !(d.getBody() instanceof Block);
-            case ForStatement f -> !(f.getBody() instanceof Block);
-            case EnhancedForStatement f -> !(f.getBody() instanceof Block);
-            default -> false;
-        };
     }
 
     private Optional<StatementBlock> parseClassicFor(ForStatement stmt, ParseContext ctx) {
@@ -604,67 +589,33 @@ public class BlockConverter {
         return Optional.of(block);
     }
 
+    /** A local enum; a local class is SOURCE ({@link StatementKind#drawnAsSource}). */
     private Optional<StatementBlock> parseTypeDeclaration(TypeDeclarationStatement stmt, ParseContext ctx) {
-        if (stmt.getDeclaration() instanceof EnumDeclaration enumDecl) {
-            DeclareEnumBlock block = new DeclareEnumBlock(BlockId.of(stmt), stmt);
-            ctx.nodeToBlockMap().put(stmt, block);
-            ctx.nodeToBlockMap().put(enumDecl, block);
-            return Optional.of(block);
-        }
-        // A local class, record or interface: a type's members are not statements, and no block draws them.
-        return Optional.of(sourceStatement(stmt, ctx,
-                "A class declared inside a method is shown as written."));
+        DeclareEnumBlock block = new DeclareEnumBlock(BlockId.of(stmt), stmt);
+        ctx.nodeToBlockMap().put(stmt, block);
+        ctx.nodeToBlockMap().put(stmt.getDeclaration(), block);
+        return Optional.of(block);
     }
 
-    private Optional<StatementBlock> parseExprStmt(ExpressionStatement stmt, ParseContext ctx) {
+    /**
+     * A call run for its effect. A branch chain and a call ending in a { … } lambda are their own kinds, ahead of
+     * this ({@link StatementKind}): a body call sits outside the facade test on purpose, since its block reads its
+     * captions and slot types from the source and the bot's classpath. Activity.disable/enable("X") and Bot.stop()
+     * are ordinary facade calls — one block for every call.
+     */
+    private Optional<StatementBlock> parseCallStatement(ExpressionStatement stmt, ParseContext ctx) {
+        MethodInvocation mi = (MethodInvocation) stmt.getExpression();
+        MethodInvocationBlock block = callBlock(BlockId.of(stmt), stmt, mi);
+        ctx.nodeToBlockMap().put(stmt, block);
+        for (Object arg : mi.arguments()) {
+            parseExpression((Expression) arg, ctx).ifPresent(block::addArgument);
+        }
+        return Optional.of(block);
+    }
+
+    /** Any other expression run for its effect — `new Worker(queue);`, `super.stop();`. */
+    private Optional<StatementBlock> parseExpressionStatement(ExpressionStatement stmt, ParseContext ctx) {
         Expression expr = stmt.getExpression();
-
-        if (SlotVacancy.isPrintStatement(expr)) {
-            return parsePrint(stmt, ctx);
-        }
-        if (expr instanceof Assignment) {
-            return parseAssignment(stmt, ctx);
-        }
-        if (expr instanceof PostfixExpression || expr instanceof PrefixExpression) {
-            AssignmentBlock block = new AssignmentBlock(BlockId.of(stmt), stmt);
-            ctx.nodeToBlockMap().put(stmt, block);
-            if (expr instanceof PostfixExpression pe) {
-                parseExpression(pe.getOperand(), ctx).ifPresent(block::setLeftHandSide);
-            }
-            if (expr instanceof PrefixExpression pe) {
-                parseExpression(pe.getOperand(), ctx).ifPresent(block::setLeftHandSide);
-            }
-            return Optional.of(block);
-        }
-        if (expr instanceof MethodInvocation mi) {
-            // Ahead of everything else a method invocation can be: a branch chain is a call whose arguments
-            // are all lambdas, chained leftward, and every arm below would draw only its outermost link —
-            // LibraryCallBlock its receiver as a scope string, MethodInvocationBlock its two lambdas as
-            // arguments. Anything that is not exactly that shape falls through unchanged.
-            if (BranchChainHandler.isBranchChain(mi)) {
-                return parseBranchChain(stmt, mi, ctx);
-            }
-
-            // A call whose last argument is a { … } lambda, on any receiver at all. It sits outside the
-            // isLibraryClass arm below on purpose: the block it builds reads its captions and its slot types
-            // out of the source and the bot's own classpath, so it has no reason to require that the receiver
-            // be a class some plugin catalogues. Before 2026-09-01 it was inside that arm, because the block
-            // it built hardcoded one SDK facade and could not have drawn anything else.
-            if (LambdaCallHandler.isLambdaCall(mi)) {
-                return parseBodyCall(stmt, mi, ctx);
-            }
-
-            String scope = mi.getExpression() != null ? mi.getExpression().toString() : "";
-
-            // Activity.disable/enable("X") and Bot.stop() are ordinary facade calls — one block for every call.
-            MethodInvocationBlock block = callBlock(BlockId.of(stmt), stmt, mi, scope);
-            ctx.nodeToBlockMap().put(stmt, block);
-            for (Object arg : mi.arguments()) {
-                parseExpression((Expression) arg, ctx).ifPresent(block::addArgument);
-            }
-            return Optional.of(block);
-        }
-        // Any other expression run for its effect — `new Worker(queue);`, `super.stop();`.
         ExpressionStatementBlock block = new ExpressionStatementBlock(BlockId.of(stmt), stmt);
         ctx.nodeToBlockMap().put(stmt, block);
         parseExpression(expr, ctx).ifPresent(block::setExpression);
@@ -719,13 +670,8 @@ public class BlockConverter {
         return Optional.of(block);
     }
 
+    /** One variable; several in one declaration are SOURCE ({@link StatementKind#drawnAsSource}). */
     private Optional<StatementBlock> parseVariableDecl(VariableDeclarationStatement stmt, ParseContext ctx) {
-        // The declare block draws one name and one value. `int a = 1, b;` drew as `a = 1` and hid `b`, which
-        // an edit to the block then rewrote from what it showed.
-        if (stmt.fragments().size() > 1) {
-            return Optional.of(sourceStatement(stmt, ctx,
-                    "It declares several variables at once; the variable block holds one."));
-        }
         VariableDeclarationBlock block = new VariableDeclarationBlock(BlockId.of(stmt), stmt);
         ctx.nodeToBlockMap().put(stmt, block);
         VariableDeclarationFragment frag = (VariableDeclarationFragment) stmt.fragments().getFirst();
@@ -771,69 +717,37 @@ public class BlockConverter {
         SwitchBlock block = new SwitchBlock(BlockId.of(stmt), stmt, ctx.manager());
         ctx.nodeToBlockMap().put(stmt, block);
         if (stmt.getExpression() != null) parseExpression(stmt.getExpression(), ctx).ifPresent(block::setExpression);
-        List<?> statements = stmt.statements();
-        BodyBlock currentBody = null;
-        SwitchBlock.SwitchCaseBlock currentCase = null;
-        // An arrow rule's body is one Block that follows its label; having become the case's BodyBlock below,
-        // it must not also be parsed as a child statement of itself.
-        Statement consumedRuleBody = null;
-        for (int i = 0; i < statements.size(); i++) {
-            Statement s = (Statement) statements.get(i);
-            if (s == consumedRuleBody) continue;
-            if (s instanceof SwitchCase sc) {
-                currentCase = new SwitchBlock.SwitchCaseBlock(BlockId.of(sc), sc);
-                applyReadOnly(currentCase, ctx);
-                ctx.nodeToBlockMap().put(sc, currentCase);
-                if (!sc.isDefault() && !sc.expressions().isEmpty()) parseExpression((Expression) sc.expressions().getFirst(), ctx).ifPresent(currentCase::setCaseExpression);
-                // Which node backs the body decides where an inserted statement goes, and the two label forms
-                // disagree. A colon case's statements are siblings of its label in the switch's own list, so
-                // the label is the anchor. An arrow rule's are inside a Block of their own — anchoring on the
-                // label there inserted the statement *in front of* that Block, as a bare block among arrow
-                // rules, which doesn't parse. The deleted matches-switch arm already backed its branches with
-                // the Block; this is the same rule for every arrow switch.
-                Block ruleBody = labeledRuleBody(sc, statements, i);
-                if (ruleBody != null) {
-                    consumedRuleBody = ruleBody;
-                    currentBody = parseBodyBlock(ruleBody, ctx);
-                } else {
-                    currentBody = new BodyBlock(BlockId.of(sc), sc, ctx.manager());
+        // Which node backs a case's body decides where an inserted statement goes, and the two label forms
+        // disagree (StatementBodies.cases). A colon case's statements are siblings of its label in the switch's
+        // own list, so the label is the anchor. An arrow rule's are inside a Block of their own — anchoring on the
+        // label there inserted the statement *in front of* that Block, as a bare block among arrow rules, which
+        // doesn't parse. `case X -> foo();` has no block until SwitchNormalizer gives it one when the file opens;
+        // until then it falls back to the label, and an insert there is refused by the edit guard.
+        for (StatementBodies.Case each : StatementBodies.cases(stmt, ctx.comments())) {
+            SwitchCase sc = each.label();
+            SwitchBlock.SwitchCaseBlock currentCase = new SwitchBlock.SwitchCaseBlock(BlockId.of(sc), sc);
+            applyReadOnly(currentCase, ctx);
+            ctx.nodeToBlockMap().put(sc, currentCase);
+            if (!sc.isDefault() && !sc.expressions().isEmpty()) parseExpression((Expression) sc.expressions().getFirst(), ctx).ifPresent(currentCase::setCaseExpression);
+            BodyBlock currentBody;
+            if (each.body().anchor() instanceof Block ruleBody) {
+                currentBody = parseBodyBlock(ruleBody, ctx);
+            } else {
+                currentBody = new BodyBlock(BlockId.of(sc), sc, ctx.manager());
+                for (ASTNode line : each.body().lines()) {
+                    parseStatement((Statement) line, ctx).ifPresent(currentBody::addStatement);
                 }
-                applyReadOnly(currentBody, ctx);
-                currentCase.setBody(currentBody);
-                block.addCase(currentCase);
-            } else if (currentBody != null) {
-                // A case's closing break is the case's own chrome, not a statement in it: leaving it out of the
-                // BodyBlock is what makes it undeletable and undraggable (there is no block to grab), and it
-                // also makes "append to this case" land before it — insertIntoList offsets from the case label,
-                // so the end of the visible body is exactly the break's slot.
-                if (s instanceof BreakStatement && endsCase(statements, i)) {
-                    currentCase.setClosingBreak(true);
-                    continue;
-                }
-                BodyBlock target = currentBody;
-                parseStatement(s, ctx).ifPresent(target::addStatement);
             }
+            // A case's closing break is the case's own chrome, not a statement in it: leaving it out of the
+            // BodyBlock is what makes it undeletable and undraggable (there is no block to grab), and it also
+            // makes "append to this case" land before it — insertIntoList offsets from the case label, so the end
+            // of the visible body is exactly the break's slot.
+            if (each.closingBreak()) currentCase.setClosingBreak(true);
+            applyReadOnly(currentBody, ctx);
+            currentCase.setBody(currentBody);
+            block.addCase(currentCase);
         }
         return Optional.of(block);
-    }
-
-    /**
-     * The braced body of the arrow rule labelled at {@code i}, or {@code null} when {@code sc} isn't an arrow
-     * rule or its body isn't a single {@link Block}.
-     *
-     * <p>{@code case X -> foo();} has no block to put anything into; {@code SwitchNormalizer} gives it one when
-     * the file is opened, so by the time a user can drop into it there is a Block here. Returning null in the
-     * meantime falls back to the colon-form anchor, which is wrong for an arrow rule but is what it has always
-     * done — an insert there is refused by the edit guard rather than corrupting the switch.
-     */
-    private static Block labeledRuleBody(SwitchCase sc, List<?> statements, int i) {
-        if (!sc.isSwitchLabeledRule() || i + 1 >= statements.size()) return null;
-        return statements.get(i + 1) instanceof Block body ? body : null;
-    }
-
-    /** Whether the statement at {@code i} is the last one before the next {@code case} label (or the switch's end). */
-    private static boolean endsCase(List<?> statements, int i) {
-        return i == statements.size() - 1 || statements.get(i + 1) instanceof SwitchCase;
     }
 
     private Optional<StatementBlock> parsePrint(ExpressionStatement stmt, ParseContext ctx) {
@@ -851,9 +765,16 @@ public class BlockConverter {
     private Optional<StatementBlock> parseAssignment(ExpressionStatement stmt, ParseContext ctx) {
         AssignmentBlock block = new AssignmentBlock(BlockId.of(stmt), stmt);
         ctx.nodeToBlockMap().put(stmt, block);
-        Assignment a = (Assignment) stmt.getExpression();
-        parseExpression(a.getLeftHandSide(), ctx).ifPresent(block::setLeftHandSide);
-        parseExpression(a.getRightHandSide(), ctx).ifPresent(block::setRightHandSide);
+        switch (stmt.getExpression()) {
+            case Assignment a -> {
+                parseExpression(a.getLeftHandSide(), ctx).ifPresent(block::setLeftHandSide);
+                parseExpression(a.getRightHandSide(), ctx).ifPresent(block::setRightHandSide);
+            }
+            // `i++;` and `--i;`: an assignment of its operand.
+            case PostfixExpression pe -> parseExpression(pe.getOperand(), ctx).ifPresent(block::setLeftHandSide);
+            case PrefixExpression pe -> parseExpression(pe.getOperand(), ctx).ifPresent(block::setLeftHandSide);
+            default -> { }
+        }
         return Optional.of(block);
     }
 
@@ -968,8 +889,7 @@ public class BlockConverter {
             }
         }
         if (expr instanceof MethodInvocation mi) {
-            String scope = mi.getExpression() != null ? mi.getExpression().toString() : "";
-            MethodInvocationBlock block = callBlock(BlockId.of(expr), expr, mi, scope);
+            MethodInvocationBlock block = callBlock(BlockId.of(expr), expr, mi);
             map.put(expr, block);
             for (Object arg : mi.arguments()) {
                 parseExpression((Expression) arg, ctx).ifPresent(block::addArgument);
@@ -1197,21 +1117,16 @@ public class BlockConverter {
     // PURE PREDICATES / HELPERS
     // =========================================================================
 
-    private static boolean isLibraryClass(String name) {
-        return com.botmaker.core.plugin.PluginHost.isFacadeClass(name);
-    }
-
     /**
-     * The block for a call, by whose code it runs: a call written on a plugin's facade class, or one whose
-     * binding lands outside the bot's source, is an {@link ExternalCallBlock}; the bot's own (or an unresolved
-     * call) a {@link ProjectCallBlock}. Deciding from the source every time is what makes switching a call's
-     * class rebuild the right block.
+     * The block for a call, by whose code it runs ({@link StatementKind#ofCall}): a call written on a plugin's
+     * facade class, or one whose binding lands outside the bot's source, is an {@link ExternalCallBlock}; the
+     * bot's own (or an unresolved call) a {@link ProjectCallBlock}. Deciding from the source every time is what
+     * makes switching a call's class rebuild the right block.
      */
-    private static MethodInvocationBlock callBlock(String id, ASTNode node, MethodInvocation mi, String scope) {
-        if (isLibraryClass(scope)) return new ExternalCallBlock(id, node, scope);
-        return CallOwner.of(mi.resolveMethodBinding()) == CallOwner.PROJECT
-                ? new ProjectCallBlock(id, node)
-                : new ExternalCallBlock(id, node, null);
+    private static MethodInvocationBlock callBlock(String id, ASTNode node, MethodInvocation mi) {
+        if (StatementKind.ofCall(mi) == StatementKind.PROJECT_CALL) return new ProjectCallBlock(id, node);
+        String scope = mi.getExpression() != null ? mi.getExpression().toString() : "";
+        return new ExternalCallBlock(id, node, PluginHost.isFacadeClass(scope) ? scope : null);
     }
 
     private static boolean isComparisonOperator(InfixExpression.Operator op) {

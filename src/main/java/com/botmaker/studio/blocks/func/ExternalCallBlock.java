@@ -1,5 +1,6 @@
 package com.botmaker.studio.blocks.func;
 
+import com.botmaker.core.parser.CallOwner;
 import org.eclipse.jdt.core.dom.ASTNode;
 
 /**

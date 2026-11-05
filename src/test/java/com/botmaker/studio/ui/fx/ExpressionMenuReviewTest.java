@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.fx;
 
-import com.botmaker.studio.blocks.func.CallOwner;
+import com.botmaker.core.parser.CallOwner;
 import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.studio.services.CodeEditorService;

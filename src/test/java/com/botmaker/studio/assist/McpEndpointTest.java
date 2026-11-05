@@ -1,6 +1,7 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.core.edit.EditWorkspace;
+import com.botmaker.studio.ui.render.components.types.TypeCatalog;
 import com.botmaker.studio.services.RunLogOnBus;
 import com.botmaker.plugin.api.History;
 import com.botmaker.plugin.api.StudioServices;
@@ -91,7 +92,7 @@ class McpEndpointTest {
                     List.of(System.getProperty("java.class.path").split(File.pathSeparator)), ROOT,
                     ProjectTemplate.GAME_BOT, null, null,
                     RefusalJournal.in(Path.of(System.getProperty("java.io.tmpdir"), "botmaker-test-refusals")),
-                    ValueGrammar.empty(), List.of()), files.get(path)));
+                    ValueGrammar.empty(), List.of()), files.get(path), TypeCatalog::declarable));
         }
 
         @Override
