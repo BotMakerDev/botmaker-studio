@@ -3,7 +3,7 @@ package com.botmaker.studio.parser;
 import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.grammar.SourceParser;
 import org.eclipse.jdt.core.dom.Block;
 import org.eclipse.jdt.core.dom.SwitchCase;

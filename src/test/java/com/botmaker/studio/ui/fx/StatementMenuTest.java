@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.fx;
 
-import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.ui.render.menu.PinnedStatements;

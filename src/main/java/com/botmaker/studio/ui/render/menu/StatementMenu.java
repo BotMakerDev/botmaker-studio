@@ -1,11 +1,11 @@
 package com.botmaker.studio.ui.render.menu;
 
-import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.java.edit.palette.PaletteDescriptions;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
-import com.botmaker.studio.parser.StatementPlacement;
+import com.botmaker.java.edit.StatementPlacement;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.studio.plugin.EntryPoints;
 import com.botmaker.studio.plugin.PaletteCuration;

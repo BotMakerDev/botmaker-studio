@@ -1,14 +1,16 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.plugin.api.assist.Describe;
-import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.SignatureType;
+import com.botmaker.java.edit.palette.BotType;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.SignatureType;
+import com.botmaker.java.edit.palette.SignatureTypes;
 import com.botmaker.java.grammar.SourceNames;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.parse.BotParser;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.services.BotSources;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
@@ -68,7 +70,7 @@ final class SignatureNames {
             }
             if (own.size() == 1) {
                 ValueTypes.BotClass bot = new ValueTypes.BotClass(own.getFirst(), List.of());
-                return new SignatureType.Typed(list ? ValueTypes.listOf(bot) : bot);
+                return SignatureTypes.of(list ? ValueTypes.listOf(bot) : bot, PluginHost.grammar());
             }
         }
         BotType type = offered.orElseThrow(() -> new IllegalArgumentException("Studio offers no type "
@@ -148,7 +150,7 @@ final class SignatureNames {
     }
 
     private static Optional<BotType> find(String name) {
-        List<BotType> all = BotType.values();
+        List<BotType> all = BotType.values(PluginHost.grammar());
         return all.stream().filter(t -> name.equals(t.typeName()) || name.equals(t.boxedName())).findFirst()
                 .or(() -> all.stream().filter(t -> simple(t.typeName()).equals(name)).findFirst())
                 .or(() -> all.stream().filter(t -> t.label().toLowerCase(Locale.ROOT)
@@ -156,7 +158,7 @@ final class SignatureNames {
     }
 
     private static List<String> offered() {
-        return BotType.values().stream().filter(t -> t != BotType.NOTHING).map(t -> simple(t.typeName())).toList();
+        return BotType.values(PluginHost.grammar()).stream().filter(t -> t != BotType.NOTHING).map(t -> simple(t.typeName())).toList();
     }
 
     private static String simple(String typeName) {

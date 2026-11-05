@@ -7,21 +7,21 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.palette.BlockType;
-import com.botmaker.studio.palette.ExpressionCatalog;
+import com.botmaker.java.edit.palette.ExpressionCatalog;
 import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.parse.JavaLevel;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.java.edit.refactor.MethodReferences;
-import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.studio.parser.BlockConverter;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.parser.CodeEditor;
 import com.botmaker.java.edit.ExpressionChoice;
-import com.botmaker.studio.parser.StatementPlacement;
+import com.botmaker.java.edit.StatementPlacement;
 import com.botmaker.java.edit.guard.CompileGuard;
 import com.botmaker.studio.plugin.PaletteCuration;
 import com.botmaker.studio.plugin.PluginHost;
@@ -509,7 +509,7 @@ public final class AssistTurn {
         }
         java.util.Set<String> taken = new java.util.HashSet<>();
         for (MethodDeclaration method : type.get().getMethods()) {
-            MethodSignatures.draftOf(method).ifPresent(d -> taken.add(d.signatureKey()));
+            MethodSignatures.draftOf(method, PluginHost.grammar()).ifPresent(d -> taken.add(d.signatureKey()));
         }
         Optional<String> problem = draft.problem(taken);
         if (problem.isPresent()) return Outcome.Refused.because(problem.get());
@@ -565,7 +565,7 @@ public final class AssistTurn {
                     + "which. Rename one first.");
         }
         MethodDeclaration declaration = found.getFirst();
-        Optional<FunctionDraft> current = MethodSignatures.draftOf(declaration);
+        Optional<FunctionDraft> current = MethodSignatures.draftOf(declaration, PluginHost.grammar());
         if (current.isEmpty()) return Outcome.Refused.because(method + "'s signature is not one Studio can edit.");
         List<String> names = current.get().parameters().stream().map(FunctionDraft.Parameter::name).toList();
         FunctionDraft draft;
@@ -581,7 +581,7 @@ public final class AssistTurn {
         java.util.Set<String> taken = new java.util.HashSet<>();
         if (declaration.getParent() instanceof TypeDeclaration owner) {
             for (MethodDeclaration other : owner.getMethods()) {
-                if (other != declaration) MethodSignatures.draftOf(other).ifPresent(d -> taken.add(d.signatureKey()));
+                if (other != declaration) MethodSignatures.draftOf(other, PluginHost.grammar()).ifPresent(d -> taken.add(d.signatureKey()));
             }
         }
         Optional<String> problem = draft.problem(taken);

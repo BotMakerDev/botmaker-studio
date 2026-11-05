@@ -4,7 +4,7 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.TypeDelete;
 import com.botmaker.java.index.nav.TypeRename;
-import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.project.FileRole;
 import com.botmaker.studio.project.LockResolver;

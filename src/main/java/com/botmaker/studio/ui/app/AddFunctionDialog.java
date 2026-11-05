@@ -1,12 +1,13 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.SignatureType;
-import com.botmaker.studio.palette.SignatureTypes;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.SignatureType;
+import com.botmaker.java.edit.palette.SignatureTypes;
 import com.botmaker.java.edit.palette.TypeNames;
 import com.botmaker.studio.project.params.BotRecords;
 import com.botmaker.studio.ui.render.components.types.TypeCatalog;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.ui.render.components.types.TypeChooser;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
@@ -139,12 +140,12 @@ public final class AddFunctionDialog {
      */
     private void prefill(FunctionDraft draft) {
         nameField.setText(draft.name());
-        if (!draft.returnType().isKept()) returnPicker.setType(SignatureTypes.typeOf(draft.returnType()));
+        if (!draft.returnType().isKept()) returnPicker.setType(SignatureTypes.typeOf(draft.returnType(), PluginHost.grammar()));
         for (FunctionDraft.Parameter parameter : draft.parameters()) {
             addParameter();
             ParameterRow row = rows.getLast();
             if (parameter.type().isKept()) row.keep(parameter.type());
-            else row.picker.setType(SignatureTypes.typeOf(parameter.type()));
+            else row.picker.setType(SignatureTypes.typeOf(parameter.type(), PluginHost.grammar()));
             row.nameField.setText(parameter.name());
             // The row *is* that parameter from here on, wherever the ▲▼ take it — see FunctionDraft.Parameter.
             row.origin = parameter.origin();
@@ -262,7 +263,7 @@ public final class AddFunctionDialog {
                 .map(r -> new FunctionDraft.Parameter(r.nameField.getText(), r.type(), r.origin))
                 .toList();
         SignatureType returns =
-                keptReturnType != null ? keptReturnType : SignatureTypes.of(returnPicker.type());
+                keptReturnType != null ? keptReturnType : SignatureTypes.of(returnPicker.type(), PluginHost.grammar());
         return new FunctionDraft(nameField.getText(), returns, params);
     }
 
@@ -317,7 +318,7 @@ public final class AddFunctionDialog {
 
         /** This row's type: the picked one, or the one being carried through unchanged. */
         private SignatureType type() {
-            return kept != null ? kept : SignatureTypes.of(picker.type());
+            return kept != null ? kept : SignatureTypes.of(picker.type(), PluginHost.grammar());
         }
 
         private void keep(SignatureType type) {

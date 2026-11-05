@@ -1,9 +1,9 @@
 package com.botmaker.studio.blocks.func;
 
 import com.botmaker.java.edit.palette.BlockCategory;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.SignatureType;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.SignatureType;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.studio.blocks.misc.AnnotationRow;
 import com.botmaker.studio.ui.app.AddFunctionDialog;
 import com.botmaker.studio.ui.app.SignatureEdits;
@@ -17,6 +17,7 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.studio.ui.render.components.TypeChip;
 import javafx.css.PseudoClass;
@@ -313,7 +314,7 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
                     newType -> SignatureEdits.edit(context, windowOf(typeLabel),
                             (MethodDeclaration) this.astNode,
                             draft -> withParameter(draft, index, p -> new FunctionDraft.Parameter(p.name(),
-                                    MethodSignatures.signatureTypeOf(newType.simpleName()), p.origin()))));
+                                    MethodSignatures.signatureTypeOf(newType.simpleName(), PluginHost.grammar()), p.origin()))));
         }
 
         String currentName = param.getName().getIdentifier();
@@ -409,7 +410,7 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
 
         edit.setOnAction(e -> {
             Window owner = edit.getScene() == null ? null : edit.getScene().getWindow();
-            Optional<FunctionDraft> current = MethodSignatures.draftOf(method);
+            Optional<FunctionDraft> current = MethodSignatures.draftOf(method, PluginHost.grammar());
             if (current.isEmpty()) {
                 SignatureEdits.explainUneditable(owner, method);
                 return;

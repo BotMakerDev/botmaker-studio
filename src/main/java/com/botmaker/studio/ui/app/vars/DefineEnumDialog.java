@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app.vars;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.palette.EnumDraft;
+import com.botmaker.java.edit.palette.EnumDraft;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

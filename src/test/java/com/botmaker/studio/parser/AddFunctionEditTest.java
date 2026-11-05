@@ -1,12 +1,13 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.java.edit.EditContext;
+import com.botmaker.studio.plugin.PluginHost;
 
 import com.botmaker.studio.TestSupport;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.BotType;
+import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
@@ -123,9 +124,9 @@ class AddFunctionEditTest {
         java.lang.reflect.Type mapOfLists = com.botmaker.java.grammar.ValueTypes.mapOf(
                 String.class, com.botmaker.java.grammar.ValueTypes.listOf(int.class));
         editor.addFunctionToClass(subject(), new FunctionDraft("table",
-                com.botmaker.studio.palette.SignatureTypes.of(void.class),
+                com.botmaker.java.edit.palette.SignatureTypes.of(void.class, PluginHost.grammar()),
                 List.of(new FunctionDraft.Parameter("rows",
-                        com.botmaker.studio.palette.SignatureTypes.of(mapOfLists)))), 1);
+                        com.botmaker.java.edit.palette.SignatureTypes.of(mapOfLists, PluginHost.grammar())))), 1);
 
         assertTrue(lastCode.contains("void table(Map<String, List<Integer>> rows)"), lastCode);
         assertTrue(lastCode.contains("import java.util.Map;"), lastCode);

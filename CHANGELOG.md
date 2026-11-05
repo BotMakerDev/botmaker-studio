@@ -37,6 +37,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   `ReviewMarks`, `ExpressionFactory` and the palette's block and expression kinds are `botmaker-java`'s (2026-11-04).
   The open project's index is `BotSources.index` and `prepareIndex`, which were `BotIndex.of` and `prepare` over the
   config and the state. Nothing changes in the window.
+- The palette model (`BotType`, `SignatureType`, `SignatureTypes`, `FunctionDraft`, `EnumDraft`, `BlockCatalog`,
+  `ExpressionCatalog`), `StatementPlacement`, `MethodSignatures` and `SignatureMigration` are `botmaker-java`'s
+  (2026-11-05). Studio passes the bound plugins' grammar (`PluginHost.grammar()`) where they read one. Nothing changes
+  in the window.
 
 ### Changed (one parser)
 

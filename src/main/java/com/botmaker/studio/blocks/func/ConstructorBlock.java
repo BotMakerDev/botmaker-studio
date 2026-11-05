@@ -1,10 +1,11 @@
 package com.botmaker.studio.blocks.func;
 
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.app.SignatureEdits;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.ui.render.components.BlockUIComponents;
 import com.botmaker.java.edit.DefaultNames;
 import javafx.scene.Node;
@@ -76,7 +77,7 @@ public class ConstructorBlock extends MethodDeclarationBlock {
                     addParamBtn, null, context, null, false, false,
                     type -> SignatureEdits.edit(context, windowOf(addParamBtn), md,
                             draft -> withAddedParameter(draft, DefaultNames.forType(type.simpleName()),
-                                    MethodSignatures.signatureTypeOf(type.simpleName())))));
+                                    MethodSignatures.signatureTypeOf(type.simpleName(), PluginHost.grammar())))));
             paramRowBuilder.addNode(addParamBtn);
         }
 

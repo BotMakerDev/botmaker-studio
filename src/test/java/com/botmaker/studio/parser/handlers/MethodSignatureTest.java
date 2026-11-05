@@ -1,12 +1,13 @@
 package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.java.edit.EditContext;
+import com.botmaker.studio.plugin.PluginHost;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.SignatureType;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.palette.BotType;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.SignatureType;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -87,7 +88,7 @@ class MethodSignatureTest {
 
     /** The signature this file declares, as a draft, so a test can change one field of it. */
     private static FunctionDraft draftFor(CompilationUnit cu, String name) {
-        return MethodSignatures.draftOf(method(cu, name))
+        return MethodSignatures.draftOf(method(cu, name), PluginHost.grammar())
                 .orElseThrow(() -> new AssertionError(name + "() should be representable as a draft"));
     }
 
@@ -186,7 +187,7 @@ class MethodSignatureTest {
         Env e = new Env(cu, new ProjectAnalyzer(null, new ProjectState()));
 
         MethodDeclaration size = method(cu, "size");
-        FunctionDraft draft = MethodSignatures.draftOf(size).orElseThrow();
+        FunctionDraft draft = MethodSignatures.draftOf(size, PluginHost.grammar()).orElseThrow();
         String result = MethodHandler.applyFunctionSignature(e.ctx(), source, size,
                 new FunctionDraft(draft.name(), SignatureType.of(BotType.TEXT), draft.parameters()));
 
@@ -230,7 +231,7 @@ class MethodSignatureTest {
         Env e = new Env(cu, new ProjectAnalyzer(null, new ProjectState()));
 
         MethodDeclaration constructor = method(cu, "Subject");
-        FunctionDraft draft = MethodSignatures.draftOf(constructor).orElseThrow();
+        FunctionDraft draft = MethodSignatures.draftOf(constructor, PluginHost.grammar()).orElseThrow();
         FunctionDraft.Parameter size = draft.parameters().getFirst();
         String result = MethodHandler.applyFunctionSignature(e.ctx(), source, constructor,
                 withParameters(draft, List.of(

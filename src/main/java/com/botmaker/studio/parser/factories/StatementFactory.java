@@ -10,8 +10,8 @@ import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.java.edit.palette.BlockType;
-import com.botmaker.studio.palette.EnumDraft;
-import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.EnumDraft;
+import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.java.edit.palette.Initializer;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.edit.handlers.LambdaCallHandler;
@@ -619,7 +619,7 @@ public class StatementFactory {
      *
      * <p>A simple name still gets its import; a qualified one is emitted as written and needs none — which
      * matches the declared type those seeds sit under ({@code java.time.LocalDate date = …}) and the reason
-     * {@link com.botmaker.studio.palette.BotType#DATE} spells it out in the first place.
+     * {@link com.botmaker.java.edit.palette.BotType#DATE} spells it out in the first place.
      */
     private static Name seedTypeName(EditContext ctx, String typeName) {
         if (typeName.indexOf('.') < 0) {

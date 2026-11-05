@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StyleClasses;
-import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

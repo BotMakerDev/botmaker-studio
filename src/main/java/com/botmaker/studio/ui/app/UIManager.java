@@ -26,7 +26,7 @@ import com.botmaker.studio.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.studio.services.ProjectSettingsService;
-import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.studio.services.ReviewService;
 import org.eclipse.jdt.core.dom.MethodDeclaration;

@@ -6,7 +6,7 @@ import com.botmaker.studio.ui.render.menu.ExpressionMenu;
 import com.botmaker.studio.core.AbstractStatementBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
-import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;

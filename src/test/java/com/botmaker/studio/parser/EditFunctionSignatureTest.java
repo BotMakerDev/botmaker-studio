@@ -1,11 +1,12 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.TestSupport;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.palette.BotType;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
@@ -183,7 +184,7 @@ class EditFunctionSignatureTest {
 
     @Test
     void aDraftReadOutOfTheFileKnowsWhereItsParametersCameFrom() {
-        FunctionDraft draft = MethodSignatures.draftOf(clickAt()).orElseThrow();
+        FunctionDraft draft = MethodSignatures.draftOf(clickAt(), PluginHost.grammar()).orElseThrow();
 
         assertEquals(0, draft.parameters().getFirst().origin());
         assertEquals(1, draft.parameters().get(1).origin());
@@ -207,7 +208,7 @@ class EditFunctionSignatureTest {
         // Java anyway — so it says LocalDate where the written signature below says java.time.LocalDate.
         assertEquals(Set.of("clickAt(LocalDate,int)", "other()"), MethodSignatures.declaredIn(subject()));
 
-        FunctionDraft draft = MethodSignatures.draftOf(clickAt()).orElseThrow();
+        FunctionDraft draft = MethodSignatures.draftOf(clickAt(), PluginHost.grammar()).orElseThrow();
         assertEquals("boolean clickAt(java.time.LocalDate where, int tries)", draft.signature(),
                 "what the Edit dialog opens on is what the file says");
         assertEquals(MethodSignatures.keyOf(clickAt()), draft.signatureKey(),
@@ -220,7 +221,7 @@ class EditFunctionSignatureTest {
         // String[] to String on the way through would be worse than refusing to open.
         reopen(SOURCE.replace("public void other() {", "public static void main(String[] args) {"));
 
-        Optional<FunctionDraft> draft = MethodSignatures.draftOf(subject().getMethods()[1]);
+        Optional<FunctionDraft> draft = MethodSignatures.draftOf(subject().getMethods()[1], PluginHost.grammar());
         assertTrue(draft.isEmpty(), "a String[] parameter has no BotType to render it with");
     }
 
@@ -231,7 +232,7 @@ class EditFunctionSignatureTest {
         // inputs with it, which is what the user actually came to edit.
         reopen(withOutcomeRun());
 
-        FunctionDraft draft = MethodSignatures.draftOf(subject().getMethods()[1]).orElseThrow();
+        FunctionDraft draft = MethodSignatures.draftOf(subject().getMethods()[1], PluginHost.grammar()).orElseThrow();
         assertTrue(draft.returnType().isKept(), "Outcome is carried, not described");
         assertEquals("Outcome run(int attempts)", draft.signature());
     }
@@ -243,7 +244,7 @@ class EditFunctionSignatureTest {
 
         // The rename the dialog is open for, with the return type left as the file wrote it.
         editor.applyFunctionSignature(run, new FunctionDraft("runOnce",
-                MethodSignatures.draftOf(run).orElseThrow().returnType(),
+                MethodSignatures.draftOf(run, PluginHost.grammar()).orElseThrow().returnType(),
                 List.of(param("tries", BotType.WHOLE_NUMBER, 0))));
 
         assertTrue(lastCode.contains("public Outcome runOnce(int tries)"), lastCode);

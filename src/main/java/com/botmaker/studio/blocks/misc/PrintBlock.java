@@ -6,7 +6,7 @@ import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.render.layout.SentenceLayoutBuilder;
-import com.botmaker.studio.palette.ExpressionCatalog;
+import com.botmaker.java.edit.palette.ExpressionCatalog;
 import com.botmaker.studio.ui.render.layout.BlockLayout;
 import com.botmaker.java.types.ResolvedType;
 import javafx.scene.Node;

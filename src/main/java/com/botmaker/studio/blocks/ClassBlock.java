@@ -3,7 +3,7 @@ package com.botmaker.studio.blocks;
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.studio.ui.app.AddFunctionDialog;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import javafx.geometry.Pos;

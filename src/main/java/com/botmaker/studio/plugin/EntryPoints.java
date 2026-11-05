@@ -2,7 +2,7 @@ package com.botmaker.studio.plugin;
 
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.plugin.api.catalog.MemberEntry;
-import com.botmaker.studio.parser.StatementPlacement;
+import com.botmaker.java.edit.StatementPlacement;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;

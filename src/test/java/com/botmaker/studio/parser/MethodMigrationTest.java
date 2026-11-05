@@ -1,13 +1,14 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.TestSupport;
-import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.SignatureType;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.studio.plugin.PluginHost;
+import com.botmaker.java.edit.palette.BotType;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.SignatureType;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.edit.refactor.MethodReferences;
-import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.types.ProjectAnalyzer;
@@ -114,7 +115,7 @@ class MethodMigrationTest {
     }
 
     private FunctionDraft before() {
-        return MethodSignatures.draftOf(clickAt()).orElseThrow();
+        return MethodSignatures.draftOf(clickAt(), PluginHost.grammar()).orElseThrow();
     }
 
     private static FunctionDraft draft(String name, BotType returns, List<FunctionDraft.Parameter> params) {
@@ -259,7 +260,7 @@ class MethodMigrationTest {
         assertFalse(found.isRefusal(), "a bound reference is certain: " + found.refusal());
         assertEquals(1, found.calls().size());
         assertTrue(found.calls().getFirst().isReference());
-        FunctionDraft before = MethodSignatures.draftOf(body).orElseThrow();
+        FunctionDraft before = MethodSignatures.draftOf(body, PluginHost.grammar()).orElseThrow();
         FunctionDraft renamed = new FunctionDraft("work", before.returnType(), before.parameters());
         assertTrue(SignatureMigration.sameShape(before, renamed));
         SignatureMigration.CallChange change =
@@ -321,7 +322,7 @@ class MethodMigrationTest {
         TypeDeclaration bot = (TypeDeclaration) state.getCompilationUnit().orElseThrow().types().getFirst();
         MethodDeclaration hover = bot.getMethods()[2];
 
-        SignatureMigration.Plan plan = SignatureMigration.of(MethodSignatures.draftOf(hover).orElseThrow(),
+        SignatureMigration.Plan plan = SignatureMigration.of(MethodSignatures.draftOf(hover, PluginHost.grammar()).orElseThrow(),
                 draft("hover", BotType.NOTHING, List.of()), hover, List.of());
 
         assertTrue(plan.rescued().isEmpty());
@@ -503,7 +504,7 @@ class MethodMigrationTest {
 
     private static SignatureMigration.ReturnFate fateOf(String method, BotType now) {
         MethodDeclaration declaration = onlyMethodOf(classAround(method));
-        FunctionDraft before = MethodSignatures.draftOf(declaration).orElseThrow();
+        FunctionDraft before = MethodSignatures.draftOf(declaration, PluginHost.grammar()).orElseThrow();
         return SignatureMigration.returnFate(declaration, before.returnType(), SignatureType.of(now));
     }
 
@@ -566,7 +567,7 @@ class MethodMigrationTest {
     void aReplacedReturnValueIsAnnouncedAndWorthAPreview() {
         MethodDeclaration declaration = onlyMethodOf(classAround(
                 "    public int size() {\n        return 3;\n    }"));
-        FunctionDraft before = MethodSignatures.draftOf(declaration).orElseThrow();
+        FunctionDraft before = MethodSignatures.draftOf(declaration, PluginHost.grammar()).orElseThrow();
 
         SignatureMigration.Plan plan = SignatureMigration.of(before,
                 draft("size", BotType.TEXT, List.of()), declaration, List.of());

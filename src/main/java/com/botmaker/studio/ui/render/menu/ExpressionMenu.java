@@ -1,9 +1,9 @@
 package com.botmaker.studio.ui.render.menu;
 
 import com.botmaker.java.index.LibraryType;
-import com.botmaker.studio.palette.BotType;
+import com.botmaker.java.edit.palette.BotType;
 import com.botmaker.java.edit.handlers.EnumManipulationHandler;
-import com.botmaker.studio.palette.ExpressionCatalog;
+import com.botmaker.java.edit.palette.ExpressionCatalog;
 import com.botmaker.java.edit.palette.ExpressionCategory;
 import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.edit.palette.PaletteDescriptions;

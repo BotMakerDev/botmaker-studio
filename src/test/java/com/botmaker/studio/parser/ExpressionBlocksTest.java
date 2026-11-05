@@ -17,7 +17,7 @@ import com.botmaker.studio.blocks.expr.TypeLiteralBlock;
 import com.botmaker.studio.blocks.expr.UnaryBlock;
 import com.botmaker.studio.blocks.expr.UnknownExpressionBlock;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.palette.ExpressionCatalog;
+import com.botmaker.java.edit.palette.ExpressionCatalog;
 import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.types.ResolvedType;
 import org.eclipse.jdt.core.JavaCore;

@@ -7,7 +7,7 @@ import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.events.EventBus;
-import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.studio.project.ProjectConfig;

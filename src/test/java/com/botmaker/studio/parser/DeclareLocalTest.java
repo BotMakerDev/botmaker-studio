@@ -1,8 +1,8 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.edit.palette.BlockType;
-import com.botmaker.studio.palette.EnumDraft;
+import com.botmaker.java.edit.palette.EnumDraft;
 import com.botmaker.java.grammar.ValueTypes;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.junit.jupiter.api.Test;

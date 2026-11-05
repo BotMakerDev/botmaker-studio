@@ -1,12 +1,12 @@
 package com.botmaker.studio.parser.refactor;
 
-import com.botmaker.studio.palette.SignatureType;
+import com.botmaker.java.edit.palette.SignatureType;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.java.edit.refactor.MethodReferences.CallSite;
-import com.botmaker.studio.parser.refactor.SignatureMigration.ArgumentEdit;
-import com.botmaker.studio.parser.refactor.SignatureMigration.CallChange;
-import com.botmaker.studio.parser.refactor.SignatureMigration.Plan;
-import com.botmaker.studio.parser.refactor.SignatureMigration.ReturnFate;
+import com.botmaker.java.edit.refactor.SignatureMigration.ArgumentEdit;
+import com.botmaker.java.edit.refactor.SignatureMigration.CallChange;
+import com.botmaker.java.edit.refactor.SignatureMigration.Plan;
+import com.botmaker.java.edit.refactor.SignatureMigration.ReturnFate;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;

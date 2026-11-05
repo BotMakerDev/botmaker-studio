@@ -2,13 +2,14 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.Usages;
-import com.botmaker.studio.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.FunctionDraft;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.java.edit.refactor.MethodReferences;
-import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.index.BotIndex;
+import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.services.CodeEditorService;
 import javafx.scene.control.Alert;
 import javafx.stage.Window;
@@ -93,7 +94,7 @@ public final class SignatureEdits {
      */
     public static void edit(CodeEditorService context, Window owner, MethodDeclaration method,
                             UnaryOperator<FunctionDraft> change) {
-        Optional<FunctionDraft> current = MethodSignatures.draftOf(method);
+        Optional<FunctionDraft> current = MethodSignatures.draftOf(method, PluginHost.grammar());
         if (current.isEmpty()) {
             explainUneditable(owner, method);
             return;

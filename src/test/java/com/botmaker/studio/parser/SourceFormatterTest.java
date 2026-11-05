@@ -1,6 +1,6 @@
 package com.botmaker.studio.parser;
 
-import com.botmaker.studio.palette.BlockCatalog;
+import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.grammar.SourceFormatter;
 import com.botmaker.java.grammar.SourceParser;
 import org.junit.jupiter.api.Test;

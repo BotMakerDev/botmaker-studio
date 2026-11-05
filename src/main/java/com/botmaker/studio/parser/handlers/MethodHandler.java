@@ -5,10 +5,10 @@ import com.botmaker.java.edit.handlers.EnumManipulationHandler;
 import com.botmaker.java.edit.handlers.LambdaCallHandler;
 import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.studio.parser.NodeCreator;
-import com.botmaker.studio.palette.BotType;
-import com.botmaker.studio.palette.FunctionDraft;
-import com.botmaker.studio.palette.SignatureType;
-import com.botmaker.studio.palette.SignatureTypes;
+import com.botmaker.java.edit.palette.BotType;
+import com.botmaker.java.edit.palette.FunctionDraft;
+import com.botmaker.java.edit.palette.SignatureType;
+import com.botmaker.java.edit.palette.SignatureTypes;
 import com.botmaker.studio.plugin.ValueWire;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueTypes;
@@ -16,15 +16,16 @@ import com.botmaker.java.edit.factories.InitializerFactory;
 import com.botmaker.studio.parser.factories.StatementFactory;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.edit.helpers.DefaultValueHelper;
-import com.botmaker.studio.parser.helpers.MethodSignatures;
+import com.botmaker.java.edit.helpers.MethodSignatures;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.java.edit.refactor.ReviewMarks;
-import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.java.edit.refactor.SignatureMigration;
 import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.parse.SourceSet;
 import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.studio.plugin.PluginHost;
 import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.dom.rewrite.ASTRewrite;
 import org.eclipse.jdt.core.dom.rewrite.ListRewrite;
@@ -293,7 +294,7 @@ public class MethodHandler {
         if (oldNode != null && oldNode.toString().equals(returnType.sourceName())) return;
 
         SignatureType oldType = oldNode == null
-                ? SignatureType.of(BotType.NOTHING) : MethodSignatures.signatureTypeOf(oldNode.toString());
+                ? SignatureType.of(BotType.NOTHING) : MethodSignatures.signatureTypeOf(oldNode.toString(), PluginHost.grammar());
 
         Type newNode = typeNodeFor(ctx, returnType);
         if (oldNode == null) {
@@ -485,7 +486,7 @@ public class MethodHandler {
      * forces: a primitive's zero, else {@code null}.
      */
     public static Expression defaultValueFor(EditContext ctx, java.lang.reflect.Type type) {
-        Optional<JavaValue> fresh = SignatureTypes.freshValue(type);
+        Optional<JavaValue> fresh = SignatureTypes.freshValue(type, PluginHost.grammar());
         if (fresh.isPresent()) {
             fresh.get().imports().forEach(ctx::addImport);
             return fresh.get().copyInto(ctx.ast());

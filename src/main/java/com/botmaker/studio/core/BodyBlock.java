@@ -193,7 +193,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
         javafx.stage.Window owner = anchor.getScene() == null ? null : anchor.getScene().getWindow();
         // Declare Variable asks for its type and name first, whatever the naming preference: the type is the
         // choice the entry exists to offer.
-        if (type == com.botmaker.studio.palette.BlockCatalog.DECLARE_VARIABLE) {
+        if (type == com.botmaker.java.edit.palette.BlockCatalog.DECLARE_VARIABLE) {
             com.botmaker.studio.ui.app.vars.DeclareVariableDialog.declareInto(context, owner, body, index);
             return;
         }
