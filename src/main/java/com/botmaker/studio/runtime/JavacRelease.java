@@ -1,5 +1,6 @@
 package com.botmaker.studio.runtime;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.services.MavenService;
 
 import java.nio.file.Path;
@@ -12,6 +13,9 @@ import java.util.regex.Pattern;
  * (2026-10-24). Studio compiles with the {@code javac} of the JVM it runs on; without the flag the classes take that
  * JDK's version, so a dev Studio on a newer system JDK wrote classes an installed Studio's own runtime could not read
  * ({@code Unsupported class file version: 70} on Firestone). With it, Studio builds what {@code mvn} builds.
+ *
+ * <p>The same property is the {@link JavaLevel} the bot's source is parsed and written at (2026-11-04), read through
+ * {@link #release(Map)} here too, so the compile and the parse cannot disagree on what the pom says.
  */
 public final class JavacRelease {
 
@@ -35,9 +39,20 @@ public final class JavacRelease {
         return args(MavenService.readProperties(projectDir), Runtime.version().feature());
     }
 
+    /** The Java the bot in {@code projectDir} is written in, as its source is parsed and written. */
+    public static JavaLevel level(Path projectDir) {
+        return JavaLevel.of(release(MavenService.readProperties(projectDir)));
+    }
+
     static List<String> args(Map<String, String> properties, int running) {
-        String release = properties.getOrDefault("maven.compiler.release", "").strip();
-        if (!FEATURE.matcher(release).matches()) return List.of();
+        String release = release(properties);
+        if (release == null) return List.of();
         return List.of("--release", Integer.toString(Math.min(Integer.parseInt(release), running)));
+    }
+
+    /** The pom's {@code maven.compiler.release} when it is a feature release, else {@code null}: the one read of it. */
+    static String release(Map<String, String> properties) {
+        String release = properties.getOrDefault("maven.compiler.release", "").strip();
+        return FEATURE.matcher(release).matches() ? release : null;
     }
 }

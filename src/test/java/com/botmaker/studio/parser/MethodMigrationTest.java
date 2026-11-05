@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -492,7 +493,7 @@ class MethodMigrationTest {
 
     /** The one method of {@code source}, which these fixtures each declare exactly one of. */
     private static MethodDeclaration onlyMethodOf(String source) {
-        TypeDeclaration type = (TypeDeclaration) SourceParser.parse(source).types().getFirst();
+        TypeDeclaration type = (TypeDeclaration) SourceParser.parse(LATEST, source).types().getFirst();
         return type.getMethods()[0];
     }
 

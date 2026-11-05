@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
@@ -287,7 +288,7 @@ public final class ManagedConstants {
         @Override
         public Optional<JavaValue> spell(Object value) {
             if (value == null) return Optional.empty();
-            AST ast = AST.newAST(AST.getJLSLatest(), false);
+            AST ast = JavaLevel.LATEST.newAst();
             for (Constant constant : constants) {
                 if (constant.isGroup() && value.equals(constant.member())) {
                     TypeLiteral literal = ast.newTypeLiteral();
@@ -338,7 +339,7 @@ public final class ManagedConstants {
 
         /** {@code Owner.FIELD} for {@code constant}, with the import of its top-level class. */
         public static JavaValue reference(Constant constant) {
-            AST ast = AST.newAST(AST.getJLSLatest(), false);
+            AST ast = JavaLevel.LATEST.newAst();
             QualifiedName reference = ast.newQualifiedName(ast.newName(constant.simpleOwner()),
                     ast.newSimpleName(constant.field()));
             return JavaValue.built(reference, List.of(constant.topLevel()));

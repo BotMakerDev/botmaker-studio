@@ -14,6 +14,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed (the parser leaves the view)
 
+- Every parse and tree knows the bot's Java version (2026-11-05): `ProjectState.level()` is read from the pom's
+  `maven.compiler.release` by `JavacRelease.level`, the one read javac's `--release` uses too, at open and on each
+  library resolve. An edit the bot's Java cannot hold (a switch expression in a Java 11 bot) is refused in the
+  status bar with a sentence naming the version; a long String in a pre-15 bot is a plain literal, not a text block.
+  `StudioSourcesTest`: no Studio source asks JDT for its newest Java.
+
 - `parser/` reads a project through `SourceSet` and addresses an edit by `BlockId` (2026-11-04): no class under it but
   `BlockConverter` and `BlockReuse` imports the view (`ParserHeadlessTest`). `ParseContext` is nested in
   `BlockConverter`, and the drag-and-drop translation stays in `ui/dnd`. Nothing changes in the window.

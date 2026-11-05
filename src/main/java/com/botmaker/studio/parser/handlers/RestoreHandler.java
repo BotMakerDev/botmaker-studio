@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser.handlers;
 
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.project.vcs.BlockDiff;
 import org.eclipse.jdt.core.dom.AST;
@@ -39,7 +40,7 @@ public final class RestoreHandler {
      * function, or no longer has the type it belonged to.
      */
     public static String replaceMethod(CompilationUnit cu, String code, String versionSource, String signature) {
-        CompilationUnit old = SourceParser.parse(versionSource);
+        CompilationUnit old = SourceParser.parse(JavaLevel.of(cu), versionSource);
         MethodDeclaration from = BlockDiff.methods(old).get(signature);
         if (from == null) return null;
         String text = versionSource.substring(from.getStartPosition(), from.getStartPosition() + from.getLength());

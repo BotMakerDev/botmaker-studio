@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.ImportManager;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
@@ -330,7 +331,7 @@ public final class NestedClasses {
         imports.addAll(value.imports());
         for (String each : imports) ImportManager.addImport(unit, rewrite, each);
         // The rewrite writes new nodes flat: only what it added is laid out.
-        return SourceFormatter.formatValue(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatValue(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /** {@code source} with {@code public final <type> name = <value>;} after the class's last field, or first. */
@@ -384,7 +385,7 @@ public final class NestedClasses {
         ASTRewrite rewrite = ASTRewrite.create(ast);
         rewrite.set(returns, ReturnStatement.EXPRESSION_PROPERTY, value.copyInto(ast), null);
         for (String each : value.imports()) ImportManager.addImport(unit, rewrite, each);
-        return SourceFormatter.formatValue(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatValue(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /** {@code source} with the class and its constant deleted; unchanged when either is missing. */

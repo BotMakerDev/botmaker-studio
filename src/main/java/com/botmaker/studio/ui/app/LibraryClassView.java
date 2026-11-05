@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
@@ -58,7 +59,7 @@ final class LibraryClassView {
      * canvas draws one type per file — and the block of the declaration on {@code view.line()}.
      */
     static Drawn draw(LibrarySource.View view, BlockConverter converter, BlockDragAndDropManager manager) {
-        CompilationUnit cu = SourceParser.parse(view.text());
+        CompilationUnit cu = SourceParser.parse(JavaLevel.LATEST, view.text());
         int offset = view.line() > 0 ? cu.getPosition(view.line(), 0) : -1;
         AbstractTypeDeclaration type = typeAt(cu, offset);
         Map<ASTNode, CodeBlock> blocks = new HashMap<>();

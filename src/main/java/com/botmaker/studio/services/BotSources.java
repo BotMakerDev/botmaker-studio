@@ -4,6 +4,7 @@ import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectFile;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.java.index.BotIndex;
+import com.botmaker.java.parse.JavaLevel;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -174,7 +175,8 @@ public final class BotSources {
         Path root = state != null && state.getSourcePath() != null ? state.getSourcePath()
                 : config == null ? null : config.sourceRoot();
         List<String> classpath = state == null ? List.of() : List.copyOf(state.getResolvedClasspath());
-        return () -> BotIndex.over(sources, classpath, root);
+        JavaLevel level = state == null ? JavaLevel.LATEST : state.level();
+        return () -> BotIndex.over(level, sources, classpath, root);
     }
 
     /**

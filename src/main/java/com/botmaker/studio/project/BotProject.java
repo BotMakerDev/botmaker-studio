@@ -10,6 +10,7 @@ import com.botmaker.studio.plugin.HostRuns;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.studio.runtime.JavacRelease;
 import com.botmaker.studio.runtime.StopKey;
 import com.botmaker.studio.ui.app.reports.RunEndReports;
 import com.botmaker.studio.ui.app.run.RunOverlay;
@@ -132,6 +133,8 @@ public class BotProject {
         // 5. Resolve dependencies (Maven Resolver, reads pom.xml)
         progress.step(OpenStep.DEPENDENCIES);
         List<String> classpath;
+        // The pom's Java is read even when its dependencies do not resolve: the parse needs it either way.
+        state.setLevel(JavacRelease.level(config.projectPath()));
         try {
             classpath = MavenService.resolveClasspath(config.projectPath(), progress);
             state.setResolvedClasspath(classpath);

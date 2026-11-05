@@ -1,5 +1,6 @@
 package com.botmaker.studio.project;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.plugin.PluginHost;
@@ -29,6 +30,7 @@ public class ProjectState implements SourceSet {
 
     // --- Build State ---
     private List<String> resolvedClasspath = new ArrayList<>();
+    private volatile JavaLevel level = JavaLevel.LATEST;
 
     // --- Activities: not here, and not anywhere in the editor (2026-09-11). The project's activities and the
     //     values their parameters hold are the SDK plugin's file; the host asks for ParameterRows through
@@ -255,6 +257,16 @@ public class ProjectState implements SourceSet {
 
     public void setResolvedClasspath(List<String> classpath) {
         this.resolvedClasspath = classpath != null ? new ArrayList<>(classpath) : new ArrayList<>();
+    }
+
+    /** The bot's Java, read from its pom with the classpath ({@code JavacRelease.level}); JDT's newest until then. */
+    @Override
+    public JavaLevel level() {
+        return level;
+    }
+
+    public void setLevel(JavaLevel level) {
+        this.level = level == null ? JavaLevel.LATEST : level;
     }
 
     // =========================================================================

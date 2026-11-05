@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.function.BiPredicate;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +19,7 @@ class EntryPointsTest {
             (facade, method) -> facade.equals("Bot") && method.equals("runFlow");
 
     private static CompilationUnit unit(String main) {
-        return SourceParser.parse("""
+        return SourceParser.parse(LATEST, """
                 package com.mybot;
                 public class Base {
                     static void helper() { Bot.runFlow(null, false, null); }

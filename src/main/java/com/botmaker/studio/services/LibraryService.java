@@ -1,6 +1,8 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.events.CoreApplicationEvents.LibrariesChangedEvent;
+import com.botmaker.studio.runtime.JavacRelease;
 import com.botmaker.studio.events.CoreApplicationEvents.SettingsChangedEvent;
 import com.botmaker.studio.events.EventBus;
 import com.botmaker.studio.migrate.ApiCache;
@@ -259,7 +261,11 @@ public final class LibraryService {
             }
         }
         List<String> classpath = resolution.jars();
-        onFx(() -> state.setResolvedClasspath(classpath));
+        JavaLevel level = JavacRelease.level(config.projectPath());
+        onFx(() -> {
+            state.setResolvedClasspath(classpath);
+            state.setLevel(level);
+        });
         PluginHost.bind(classpath, HostServices.forProject(config),
                 StudioProjectSettings.devModeIn(config.projectPath()));
         // A -SNAPSHOT rebuilt in place keeps its old API readable for the author's migration (2026-10-16). Only a

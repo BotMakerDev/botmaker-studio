@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.PluginState;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.host.PluginCoordinate;
@@ -100,7 +101,7 @@ public final class ManagedHolders {
             return new Plan.Refused("The plugin " + plugin + " has no name a package can be spelled with.");
         }
         String folder = segment.replace('.', '/');
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         TreeSet<String> imports = new TreeSet<>();
         // A parameter is a method of its plugin's group in params/ (2026-11-04), never a field of the holder.
         if (value instanceof ManagedParam<?>) {
@@ -261,7 +262,7 @@ public final class ManagedHolders {
      */
     private static String laidOut(CompilationUnit unit) {
         StringBuilder out = new StringBuilder();
-        SourceFormatter.format(unit.toString()).lines().forEach(line -> out.append(line.stripTrailing()).append('\n'));
+        SourceFormatter.format(JavaLevel.of(unit), unit.toString()).lines().forEach(line -> out.append(line.stripTrailing()).append('\n'));
         return out.toString();
     }
 
@@ -528,7 +529,7 @@ public final class ManagedHolders {
         for (String each : imports) {
             if (!isImplicit(each, pkg)) ImportManager.addImport(unit, rewrite, each);
         }
-        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /**

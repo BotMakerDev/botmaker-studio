@@ -1,6 +1,8 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.params.Param;
+import com.botmaker.studio.runtime.JavacRelease;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.plugin.api.source.ParameterWrite;
 import com.botmaker.plugin.api.source.RunParameter;
@@ -541,7 +543,7 @@ public final class JavaParameters {
         }
         ASTNode read = wholeUse(used);
         if (writes(read)) return false;
-        rewriter.replace(read, ASTNode.copySubtree(read.getAST(), value), null);
+        rewriter.replace(read, JavaLevel.copy(read.getAST(), value), null);
         return true;
     }
 
@@ -593,7 +595,7 @@ public final class JavaParameters {
         if (Files.isRegularFile(beside)) return Optional.of(beside);
         if (!isClassName(className)) return Optional.empty();
         Path file = config.parametersPackageDir().resolve(className + ".java");
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         TypeDeclaration holder = ast.newTypeDeclaration();
         holder.setName(ast.newSimpleName(className));
         holder.setJavadoc(ManagedHolders.javadoc(ast, List.of(
@@ -804,7 +806,8 @@ public final class JavaParameters {
         if (config == null || parameter == null || !parameter.group()) return false;
         Optional<String> mine = currentSource(state, parameter.file());
         return mine.isPresent() && rewriteStarting(config, parameter.file(),
-                starting -> ParamsFitter.withStartingValue(starting, mine.get(), parameter.name()));
+                starting -> ParamsFitter.withStartingValue(JavacRelease.level(config.projectPath()), starting,
+                        mine.get(), parameter.name()));
     }
 
     /**
@@ -822,7 +825,8 @@ public final class JavaParameters {
         Optional<String> starting = startingFile(config, parameter.file()).flatMap(file -> currentSource(null, file));
         if (starting.isEmpty()) return Optional.empty();
         rewrite(config, state, parameter.file(),
-                source -> ParamsFitter.withValue(source, starting.get(), parameter.name()));
+                source -> ParamsFitter.withValue(JavacRelease.level(config.projectPath()), source, starting.get(),
+                        parameter.name()));
         return reread(config, state, parameter.className(), parameter.name(), grammar);
     }
 
@@ -833,10 +837,11 @@ public final class JavaParameters {
     public static List<RunParameter> duringRun(ProjectConfig config, ProjectState state, ValueGrammar grammar) {
         if (config == null) return List.of();
         List<RunParameter> out = new ArrayList<>();
+        JavaLevel level = JavacRelease.level(config.projectPath());
         for (JavaParameter parameter : scan(config, state, grammar)) {
             if (!parameter.group() || !parameter.row().duringRun()) continue;
             Optional<Instant> kept = currentSource(state, parameter.file()).flatMap(
-                    source -> ParamValues.keptAt(source, parameter.className(), parameter.name()));
+                    source -> ParamValues.keptAt(level, source, parameter.className(), parameter.name()));
             out.add(new RunParameter(parameter.className(), parameter.name(), parameter.row().typeName(),
                     parameter.row().value(), kept));
         }
@@ -920,7 +925,7 @@ public final class JavaParameters {
 
     /** The source of the bot's own group {@code className} with no parameter yet. */
     static String emptyGroup(ProjectConfig config, String className) {
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         TypeDeclaration group = ast.newTypeDeclaration();
         group.setName(ast.newSimpleName(className));
         group.setJavadoc(ManagedHolders.javadoc(ast, List.of(

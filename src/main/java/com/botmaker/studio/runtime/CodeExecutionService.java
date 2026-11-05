@@ -303,7 +303,7 @@ public class CodeExecutionService {
     private void takeRunsValues(Map<Path, String> atStart) {
         Map<Path, String> written = paramSources();
         Platform.runLater(() -> written.forEach((file, text) -> state.getFile(file).ifPresent(open -> {
-            String merged = ParamValues.withRunsValues(open.getContent(), atStart.getOrDefault(file, ""), text);
+            String merged = ParamValues.withRunsValues(state.level(), open.getContent(), atStart.getOrDefault(file, ""), text);
             if (!merged.equals(open.getContent())) open.setContent(merged);
         })));
     }
@@ -496,7 +496,7 @@ public class CodeExecutionService {
         Path params = config.parametersPackageDir().toAbsolutePath().normalize();
         List<ParamsFitter.Fitted> fitted;
         try {
-            fitted = ParamsFitter.onDisk(params, config.projectPath().resolve(ParamsFitter.STARTING),
+            fitted = ParamsFitter.onDisk(state.level(), params, config.projectPath().resolve(ParamsFitter.STARTING),
                     config.projectPath().resolve(VALUES_BACKUPS));
         } catch (IOException | UncheckedIOException e) {
             warn("WARN parameters could not be fitted to their starting copy: " + e.getMessage());

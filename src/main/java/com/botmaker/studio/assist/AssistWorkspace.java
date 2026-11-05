@@ -1,6 +1,7 @@
 package com.botmaker.studio.assist;
 
 import com.botmaker.java.index.LibraryIndex;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.parser.guard.RefusalJournal;
 import com.botmaker.studio.plugin.PluginHost;
 import com.botmaker.java.grammar.ValueGrammar;
@@ -31,6 +32,7 @@ import java.util.List;
  * @param constants the bot's managed constants, which a slot may be set to by name ({@code Pictures.ORE})
  * @param others    the bot's other files as they were when the turn began, read only: an insert that names
  *                  another class of the bot ({@code Bot.runFlow(Sdk.class)}) looks for it among them
+ * @param level     the Java the bot is written in, which each staged step is parsed at
  */
 public record AssistWorkspace(ProjectConfig config,
                               Path file,
@@ -42,13 +44,24 @@ public record AssistWorkspace(ProjectConfig config,
                               RefusalJournal journal,
                               ValueGrammar grammar,
                               List<ManagedConstants.Constant> constants,
-                              List<ProjectFile> others) {
+                              List<ProjectFile> others,
+                              JavaLevel level) {
 
     public AssistWorkspace {
         classpath = classpath == null ? List.of() : List.copyOf(classpath);
         if (grammar == null) grammar = PluginHost.grammar();
         constants = constants == null ? List.of() : List.copyOf(constants);
         others = others == null ? List.of() : List.copyOf(others);
+        if (level == null) level = JavaLevel.LATEST;
+    }
+
+    /** A workspace of a bot with no pom: JDT's newest Java. */
+    public AssistWorkspace(ProjectConfig config, Path file, List<String> classpath, Path sourceRoot,
+                           ProjectTemplate template, StudioProjectSettings settings, LibraryIndex index,
+                           RefusalJournal journal, ValueGrammar grammar, List<ManagedConstants.Constant> constants,
+                           List<ProjectFile> others) {
+        this(config, file, classpath, sourceRoot, template, settings, index, journal, grammar, constants, others,
+                JavaLevel.LATEST);
     }
 
     /** A workspace that knows none of the bot's other files. */
@@ -67,7 +80,7 @@ public record AssistWorkspace(ProjectConfig config,
                 .toList();
         return new AssistWorkspace(config, file, state.getResolvedClasspath(), state.getSourcePath(),
                 state.getTemplate(), state.getSettings(), index, null, PluginHost.grammar(),
-                ManagedConstants.scan(config, state), others);
+                ManagedConstants.scan(config, state), others, state.level());
     }
 
     /** The constants as the grammar reads them. */
@@ -83,6 +96,7 @@ public record AssistWorkspace(ProjectConfig config,
         staged.setActiveFile(file);
         staged.setSourcePath(sourceRoot);
         staged.setResolvedClasspath(classpath);
+        staged.setLevel(level);
         staged.setTemplate(template);
         if (settings != null) staged.setSettings(settings);
         staged.setCurrentCode(source);

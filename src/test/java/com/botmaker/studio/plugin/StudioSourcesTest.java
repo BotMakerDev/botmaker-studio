@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,5 +50,24 @@ class StudioSourcesTest {
                 "Studio source names " + FORBIDDEN + " in " + offenders + ". The toolkit is on Studio's"
                         + " runtime classpath for its bundled plugin's sake only; Studio's own code must not"
                         + " use it. Write the widget in Studio, or put the code in the plugin that needs it.");
+    }
+
+    /**
+     * No Studio source asks JDT for its newest Java: every tree is at the bot's level, or at
+     * {@code JavaLevel.LATEST} where a fragment is copied into one (botmaker-java's {@code JavaLevel}).
+     */
+    @Test
+    void studio_never_names_jdts_newest_java() throws IOException {
+        Path sources = Path.of("src/main/java");
+        Pattern newest = Pattern.compile("getJLSLatest|latestSupportedJavaVersion|ASTNode\\.copySubtree\\(");
+        List<String> offenders = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(sources)) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                if (newest.matcher(Files.readString(file)).find()) offenders.add(sources.relativize(file).toString());
+            }
+        }
+        assertTrue(offenders.isEmpty(), "Studio source asks JDT for its newest Java in " + offenders
+                + ". Take the level from JavaLevel: the bot's (SourceSet.level(), JavaLevel.of(node)) or LATEST;"
+                + " copy a subtree with JavaLevel.copy, which copies across levels.");
     }
 }

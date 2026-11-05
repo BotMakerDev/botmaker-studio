@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -76,7 +77,7 @@ class EditFunctionSignatureTest {
             updates++;
         });
 
-        state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(SOURCE));
+        state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(LATEST, SOURCE));
         editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
     }
 
@@ -84,7 +85,7 @@ class EditFunctionSignatureTest {
     private void reopen(String source) {
         state.addFile(new ProjectFile(path, source));
         state.setCurrentCode(source);
-        state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(source));
+        state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(LATEST, source));
     }
 
     private TypeDeclaration subject() {

@@ -12,6 +12,7 @@ import com.botmaker.java.edit.palette.BlockCategory;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.palette.ExpressionCatalog;
 import com.botmaker.java.edit.palette.ExpressionType;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.palette.FunctionDraft;
 import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.java.edit.refactor.MethodReferences;
@@ -459,7 +460,7 @@ public final class AssistTurn {
             return Optional.empty();
         }
         if (!enumConstants(type).contains(name)) return Optional.empty();
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         QualifiedName constant = ast.newQualifiedName(ast.newName(written), ast.newSimpleName(name));
         // A local enum has no name to import; it is in scope where it is used.
         String imported = top.getQualifiedName();
@@ -472,7 +473,7 @@ public final class AssistTurn {
     }
 
     private static JavaValue reference(ManagedConstants.Constant constant) {
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         QualifiedName name = ast.newQualifiedName(ast.newName(constant.simpleOwner()),
                 ast.newSimpleName(constant.field()));
         return JavaValue.built(name, List.of(constant.topLevel()));

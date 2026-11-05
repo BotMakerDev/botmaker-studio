@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.source.ManagedMethod;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedParam;
@@ -341,24 +342,24 @@ public final class ManagedRepairs {
         AST ast = unit.getAST();
         MethodDeclaration method = ast.newMethodDeclaration();
         method.setName(ast.newSimpleName(mark.member()));
-        method.setReturnType2((org.eclipse.jdt.core.dom.Type) ASTNode.copySubtree(ast, field.getType()));
+        method.setReturnType2((org.eclipse.jdt.core.dom.Type) JavaLevel.copy(ast, field.getType()));
         @SuppressWarnings("unchecked")
         List<IExtendedModifier> modifiers = method.modifiers();
         for (Object each : field.modifiers()) {
             if (each instanceof Annotation annotation && BotAnnotation.PARAM.marks(annotation)) continue;
             if (each instanceof Modifier modifier && modifier.isFinal()) continue;
-            modifiers.add((IExtendedModifier) ASTNode.copySubtree(ast, (ASTNode) each));
+            modifiers.add((IExtendedModifier) JavaLevel.copy(ast, (ASTNode) each));
         }
         Block body = ast.newBlock();
         ReturnStatement returned = ast.newReturnStatement();
-        returned.setExpression((Expression) ASTNode.copySubtree(ast, fragment.getInitializer()));
+        returned.setExpression((Expression) JavaLevel.copy(ast, fragment.getInitializer()));
         @SuppressWarnings("unchecked")
         List<Statement> statements = body.statements();
         statements.add(returned);
         method.setBody(body);
         ASTRewrite rewrite = ASTRewrite.create(ast);
         rewrite.replace(field, method, null);
-        return Optional.of(SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source)));
+        return Optional.of(SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source)));
     }
 
     /**

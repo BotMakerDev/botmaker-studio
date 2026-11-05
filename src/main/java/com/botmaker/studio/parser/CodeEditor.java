@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.java.edit.ExpressionChoice;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.edit.BodyChildren;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.java.edit.EditContext;
@@ -270,7 +271,7 @@ public class CodeEditor {
     private String formatted(String previousCode, String newCode) {
         if (newCode == null) return null;
         if (LockResolver.forActiveFile(config, state).suppressesInteraction()) return newCode;
-        return SourceFormatter.formatChanged(previousCode, newCode);
+        return SourceFormatter.formatChanged(state.level(), previousCode, newCode);
     }
 
     /**
@@ -303,9 +304,9 @@ public class CodeEditor {
      */
     private boolean wouldBreak(String newCode, String previousCode, ASTNode target, EditKind kind) {
         if (newCode == null || newCode.equals(previousCode)) return false;
-        IProblem problem = SourceParser.firstSyntaxError(SourceParser.parse(newCode));
+        IProblem problem = SourceParser.firstSyntaxError(SourceParser.parse(state.level(), newCode));
         if (problem == null) return false;
-        if (SourceParser.hasSyntaxErrors(SourceParser.parse(previousCode))) return false;
+        if (SourceParser.hasSyntaxErrors(SourceParser.parse(state.level(), previousCode))) return false;
         RefusedEdit refused = RefusedEdit.of(problem, refusedBy(), kind, target, previousCode, config, state);
         System.err.println("Refused an edit that would have broken the code " + refused.summary());
         System.err.println("  the source it would have published: "
@@ -361,8 +362,21 @@ public class CodeEditor {
         if (!canModify(target, kind)) return;
         CompilationUnit cu = getCompilationUnit();
         if (cu == null) return;
-        String newCode = op.apply(cu, getCurrentCode());
+        String newCode = applied(op, cu);
         if (newCode != null) triggerUpdate(newCode, markUnedited, target, kind);
+    }
+
+    /**
+     * {@code op} over the current code, or {@code null} after saying why when it needs a newer Java than the bot's
+     * (2026-11-04): the refusal names the version, where JDT would throw and javac would fail later.
+     */
+    private String applied(BiFunction<CompilationUnit, String, String> op, CompilationUnit cu) {
+        try {
+            return op.apply(cu, getCurrentCode());
+        } catch (JavaLevel.TooOld tooOld) {
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(tooOld.getMessage()));
+            return null;
+        }
     }
 
     /**
@@ -374,7 +388,7 @@ public class CodeEditor {
         if (!canModify(target, kind)) return;
         CompilationUnit cu = getCompilationUnit();
         if (cu == null) return;
-        String newCode = op.apply(cu, getCurrentCode());
+        String newCode = applied(op, cu);
         if (newCode == null || wouldNotCompile(newCode)) return;
         triggerUpdate(newCode, markUnedited, target, kind);
     }
@@ -1050,7 +1064,7 @@ public class CodeEditor {
             if (!(built instanceof ExpressionStatement stmt)) return code;
             // copySubtree: the built expression is still parented to the throwaway statement, and a rewrite
             // may only place a node that belongs to no other tree.
-            context.rewriter().replace(toReplace, ASTNode.copySubtree(cu.getAST(), stmt.getExpression()), null);
+            context.rewriter().replace(toReplace, JavaLevel.copy(cu.getAST(), stmt.getExpression()), null);
             return AstRewriteHelper.applyRewrite(context.rewriter(), code);
         });
     }
@@ -1067,7 +1081,7 @@ public class CodeEditor {
     public void moveExpressionIntoSlot(Expression toReplace, ExpressionStatement source) {
         edit(toReplace, EditKind.BODY, true, (cu, code) -> {
             ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
-            rewriter.replace(toReplace, ASTNode.copySubtree(cu.getAST(), source.getExpression()), null);
+            rewriter.replace(toReplace, JavaLevel.copy(cu.getAST(), source.getExpression()), null);
             rewriter.remove(source, null);
             return AstRewriteHelper.applyRewrite(rewriter, code);
         });
@@ -1089,7 +1103,7 @@ public class CodeEditor {
         if (owner == null || source == null) return;
         edit(owner, EditKind.BODY, true, (cu, code) -> {
             ASTRewrite rewriter = ASTRewrite.create(cu.getAST());
-            Expression value = (Expression) ASTNode.copySubtree(cu.getAST(), source.getExpression());
+            Expression value = (Expression) JavaLevel.copy(cu.getAST(), source.getExpression());
             if (!placeInEmptySlot(rewriter, owner, value)) return code;
             // A move, not a copy — the same bargain moveExpressionIntoSlot makes: the statement's value is now
             // consumed somewhere else, so leaving it behind duplicates the call the user dragged away.
@@ -1107,7 +1121,7 @@ public class CodeEditor {
         if (toReplace == null || source == null || toReplace == source) return;
         edit(toReplace, EditKind.BODY, true, (cu, code) -> {
             EditContext context = ctx(cu);
-            Expression moved = (Expression) ASTNode.copySubtree(cu.getAST(), source);
+            Expression moved = (Expression) JavaLevel.copy(cu.getAST(), source);
             vacateSlot(context, source);
             context.rewriter().replace(toReplace, moved, null);
             return AstRewriteHelper.applyRewrite(context.rewriter(), code);
@@ -1119,7 +1133,7 @@ public class CodeEditor {
         if (owner == null || source == null) return;
         edit(owner, EditKind.BODY, true, (cu, code) -> {
             EditContext context = ctx(cu);
-            Expression moved = (Expression) ASTNode.copySubtree(cu.getAST(), source);
+            Expression moved = (Expression) JavaLevel.copy(cu.getAST(), source);
             if (!placeInEmptySlot(context.rewriter(), owner, moved)) return code;
             vacateSlot(context, source);
             return AstRewriteHelper.applyRewrite(context.rewriter(), code);
@@ -1141,7 +1155,7 @@ public class CodeEditor {
             EditContext context = ctx(cu);
             AST ast = cu.getAST();
             ExpressionStatement lifted =
-                    ast.newExpressionStatement((Expression) ASTNode.copySubtree(ast, source));
+                    ast.newExpressionStatement((Expression) JavaLevel.copy(ast, source));
             vacateSlot(context, source);
             ListRewrite targetList = AstRewriteHelper.getListRewriteForBody(context.rewriter(), targetBody);
             PendingInsert deferred =
@@ -1179,7 +1193,7 @@ public class CodeEditor {
             EditContext context = ctx(cu);
             Statement built = NodeCreator.createDefaultStatement(context, type, owner);
             if (!(built instanceof ExpressionStatement stmt)) return code;
-            Expression value = (Expression) ASTNode.copySubtree(cu.getAST(), stmt.getExpression());
+            Expression value = (Expression) JavaLevel.copy(cu.getAST(), stmt.getExpression());
             if (!placeInEmptySlot(context.rewriter(), owner, value)) return code;
             return AstRewriteHelper.applyRewrite(context.rewriter(), code);
         });
@@ -1352,12 +1366,12 @@ public class CodeEditor {
             EditContext ctx = ctx(cu);
             for (String qualified : imports) ctx.addImport(qualified);
             ASTRewrite rewriter = ctx.rewriter();
-            Statement copied = (Statement) ASTNode.copySubtree(cu.getAST(), statement);
+            Statement copied = (Statement) JavaLevel.copy(cu.getAST(), statement);
             ListRewrite listRewrite = AstRewriteHelper.getListRewriteForBody(rewriter, targetBody);
             // A statement after a comment has no list slot and is inserted as text at an offset: laid out as
             // the formatter would, never as JDT's unspaced print of a node it built.
             PendingInsert deferred = insertIntoList(listRewrite, targetBody, copied, index,
-                    SourceFormatter.statement(statement.toString()));
+                    SourceFormatter.statement(JavaLevel.of(cu), statement.toString()));
             if (deferred != null) {
                 return AstRewriteHelper.applyRewriteAndInsertAt(rewriter, code, deferred.offset(), deferred.text());
             }
@@ -1500,7 +1514,13 @@ public class CodeEditor {
     public void replaceStatementSource(Statement statement, String newSource) {
         if (statement == null || !canModify(statement, EditKind.BODY)) return;
         if (newSource == null || newSource.strip().equals(statement.toString().strip())) return;
-        String newCode = StatementSourceHandler.replace(getCurrentCode(), statement, newSource);
+        String newCode;
+        try {
+            newCode = StatementSourceHandler.replace(getCurrentCode(), statement, newSource);
+        } catch (JavaLevel.TooOld tooOld) {
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(tooOld.getMessage()));
+            return;
+        }
         if (newCode == null) {
             eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(
                     "That is not a Java statement, so the code was left as it was."));
@@ -1857,7 +1877,7 @@ public class CodeEditor {
         if (statement == null) return originalCode;
         ListRewrite sourceListRewrite = AstRewriteHelper.getListRewriteForBody(rewriter, sourceBody);
         ListRewrite targetListRewrite = AstRewriteHelper.getListRewriteForBody(rewriter, targetBody);
-        Statement copiedStatement = (Statement) ASTNode.copySubtree(ast, statement);
+        Statement copiedStatement = (Statement) JavaLevel.copy(ast, statement);
         sourceListRewrite.remove(statement, null);
         PendingInsert deferred =
                 insertIntoList(targetListRewrite, targetBody, copiedStatement, targetIndex, statement.toString());
@@ -1883,7 +1903,7 @@ public class CodeEditor {
         if (elseStatement != null && elseStatement.getNodeType() == ASTNode.BLOCK) {
             IfStatement newElseIf = ast.newIfStatement();
             newElseIf.setExpression(ast.newBooleanLiteral(true));
-            newElseIf.setThenStatement((Block) ASTNode.copySubtree(ast, elseStatement));
+            newElseIf.setThenStatement((Block) JavaLevel.copy(ast, elseStatement));
             rewriter.replace(elseStatement, newElseIf, null);
         }
         return AstRewriteHelper.applyRewrite(rewriter, originalCode);
@@ -2038,7 +2058,8 @@ public class CodeEditor {
     private static java.util.Set<String> referencedTypeNames(String snippet) {
         java.util.Set<String> names = new java.util.LinkedHashSet<>();
         try {
-            Block parsed = SourceParser.statements(snippet);
+            // Clipboard text, read only for the names it mentions: the newest Java reads the most.
+            Block parsed = SourceParser.statements(JavaLevel.LATEST, snippet);
             if (parsed == null) return java.util.Set.of();
             parsed.accept(new ASTVisitor() {
                 @Override

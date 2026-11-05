@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.java.edit.refactor.ReviewMarks;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;
@@ -94,7 +95,7 @@ public final class ReviewMarker {
      */
     public static String markLines(String source, Collection<Integer> lines, String entry) {
         if (source == null || lines == null || lines.isEmpty()) return source;
-        CompilationUnit unit = SourceParser.parse(source);
+        CompilationUnit unit = SourceParser.parse(JavaLevel.LATEST, source);
         if (unit == null || SourceParser.hasSyntaxErrors(unit)) return source;
 
         Set<Integer> wanted = Set.copyOf(lines);
@@ -113,7 +114,7 @@ public final class ReviewMarker {
         String marked = ctx.applyTo(source);
         // A mark that does not parse is worth less than no mark at all: the file the user has to review is the
         // one they now cannot open. Same rule the migration runner applies to its own rewrites.
-        return marked == null || SourceParser.hasSyntaxErrors(SourceParser.parse(marked)) ? source : marked;
+        return marked == null || SourceParser.hasSyntaxErrors(SourceParser.parse(JavaLevel.LATEST, marked)) ? source : marked;
     }
 
     /** Whether {@code method}'s own text — body included — covers any of {@code lines}. */

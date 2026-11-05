@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,7 +44,7 @@ class RetypeLocalTest {
         state.setResolvedClasspath(TestSupport.runtimeClassPath());
         EventBus bus = new EventBus(false);
         bus.subscribe(CoreApplicationEvents.CodeUpdatedEvent.class, e -> lastCode = e.newCode());
-        state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(SOURCE));
+        state.setCompilationUnit(com.botmaker.java.grammar.SourceParser.parse(LATEST, SOURCE));
         CodeEditor editor = new CodeEditor(null, state, bus, new ProjectAnalyzer(null, state));
 
         TypeDeclaration subject = (TypeDeclaration) state.getCompilationUnit().orElseThrow().types().getFirst();

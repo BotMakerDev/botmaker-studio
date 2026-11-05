@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -132,7 +133,7 @@ class JavaParametersTest {
                     public int tries() { return 10; }
                 """));
 
-        ParamsFitter.onDisk(config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
+        ParamsFitter.onDisk(LATEST, config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
                 config.projectPath().resolve(".botmaker/values-removed"));
 
         JavaParameter tries = only(config);
@@ -213,7 +214,7 @@ class JavaParametersTest {
         assertTrue(Files.readString(starting).contains("return 0;"), Files.readString(starting));
         assertFalse(Files.readString(starting).contains("return 5;"), Files.readString(starting));
 
-        ParamsFitter.onDisk(config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
+        ParamsFitter.onDisk(LATEST, config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
                 config.projectPath().resolve(".botmaker/values-removed"));
         assertEquals("5", only(config).row().value(), "a blank starting value takes nothing from this computer");
     }
@@ -256,7 +257,7 @@ class JavaParametersTest {
 
         // Another copy of the bot, still at the old name, fits to the committed starting copy.
         Files.writeString(mine, group("bot", "RunChoices", "    public int tries() { return 7; }\n"));
-        ParamsFitter.onDisk(config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
+        ParamsFitter.onDisk(LATEST, config.parametersPackageDir(), config.projectPath().resolve(ParamsFitter.STARTING),
                 config.projectPath().resolve(".botmaker/values-removed"));
         assertTrue(Files.readString(mine).replaceAll("\\s+", " ").contains("public int attempts() { return 7; }"),
                 Files.readString(mine));

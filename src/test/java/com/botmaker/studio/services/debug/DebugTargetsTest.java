@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -68,7 +69,7 @@ class DebugTargetsTest {
     @Test
     void aBreakpointInAnotherFileIsOnItsOwnLine() {
         List<String> ids = new ArrayList<>();
-        SourceParser.parse(COLLECT_SRC).accept(new ASTVisitor() {
+        SourceParser.parse(LATEST, COLLECT_SRC).accept(new ASTVisitor() {
             @Override public boolean visit(ExpressionStatement node) { ids.add(BlockId.of(node)); return true; }
         });
         DebugTargets targets = DebugTargets.of(ROOT,

@@ -3,6 +3,7 @@ package com.botmaker.studio.parser.handlers;
 import com.botmaker.java.grammar.SourceParser;
 import org.junit.jupiter.api.Test;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,7 +27,7 @@ class RestoreHandlerTest {
             """;
 
     private static String restore(String live, String signature) {
-        return RestoreHandler.replaceMethod(SourceParser.parse(live), live, OLD, signature);
+        return RestoreHandler.replaceMethod(SourceParser.parse(LATEST, live), live, OLD, signature);
     }
 
     @Test

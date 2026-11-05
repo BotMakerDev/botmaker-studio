@@ -3,6 +3,7 @@ package com.botmaker.studio.parser.handlers;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.studio.parser.NodeCreator;
 import com.botmaker.java.edit.factories.InitializerFactory;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.java.types.ProjectAnalyzer;
 import org.eclipse.jdt.core.dom.*;
@@ -91,7 +92,7 @@ public class TypeHandler {
                     ast, newType.qualifiedName(), ctx.cu(), valuesToPreserve, ctx.sources());
         } else {
             return !valuesToPreserve.isEmpty() ?
-                    (Expression) ASTNode.copySubtree(ast, valuesToPreserve.getFirst()) :
+                    (Expression) JavaLevel.copy(ast, valuesToPreserve.getFirst()) :
                     NodeCreator.createDefaultInitializer(ast, newType);
         }
     }

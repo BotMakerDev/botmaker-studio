@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -92,7 +93,7 @@ class ManagedConstantsTest {
     }
 
     private static QualifiedName name(String source) {
-        return (QualifiedName) SourceParser.expression(source);
+        return (QualifiedName) SourceParser.expression(LATEST, source);
     }
 
     private static QualifiedName fieldValue(String source) {

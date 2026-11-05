@@ -1,5 +1,6 @@
 package com.botmaker.studio.migrate;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.Uses;
@@ -273,7 +274,7 @@ public final class Rewrite {
                         methodStart);
             }
             case CASE -> {
-                Expression body = SourceParser.expression(rule.body());
+                Expression body = SourceParser.expression(JavaLevel.LATEST, rule.body());
                 if (!(body instanceof Name constant)) {
                     return left(site, rule, node, "a case label takes a constant, and " + name
                             + " returns something else", methodStart);
@@ -356,7 +357,7 @@ public final class Rewrite {
         }
         String text = filled.get();
         if (!rule.statement() && !Template.bare(node)) {
-            Expression result = SourceParser.expression(text);
+            Expression result = SourceParser.expression(JavaLevel.LATEST, text);
             if (result == null || !Template.primary(result)) text = "(" + text + ")";
         }
         return new Candidate(site, rule, start, end, text, null, methodStart);

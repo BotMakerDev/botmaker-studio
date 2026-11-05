@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.java.edit.ImportManager;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
@@ -529,7 +530,7 @@ public final class ManagedSets {
         else body.insertAfter(nested, last, null);
         for (String each : imports) ImportManager.addImport(unit, rewrite, each);
         // The rewrite writes a new node flat, "implements Outcome{NEXT,WON}": only what it added is laid out.
-        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /** {@code source} with the enum {@code name} nested in {@code className} deleted; unchanged when absent. */

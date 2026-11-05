@@ -1,6 +1,7 @@
 package com.botmaker.studio.migrate;
 
 import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.parse.JavaLevel;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.ArrayAccess;
@@ -70,7 +71,7 @@ public final class Template {
      * @param statement whether {@code body} is a statement rather than an expression
      */
     public static Optional<String> filled(String body, boolean statement, Map<String, Part> parts) {
-        ASTNode root = statement ? statement(body) : SourceParser.expression(body);
+        ASTNode root = statement ? statement(body) : SourceParser.expression(JavaLevel.LATEST, body);
         if (root == null) return Optional.empty();
         int base = root.getStartPosition();
         List<SimpleName> uses = new ArrayList<>();
@@ -106,7 +107,7 @@ public final class Template {
 
     /** {@code source} as one statement, or {@code null} when it is not exactly one. */
     private static Statement statement(String source) {
-        Block block = SourceParser.statements(source);
+        Block block = SourceParser.statements(JavaLevel.LATEST, source);
         if (block == null || block.statements().size() != 1) return null;
         return (Statement) block.statements().getFirst();
     }

@@ -20,6 +20,7 @@ import com.botmaker.studio.parser.helpers.MethodSignatures;
 import com.botmaker.studio.parser.refactor.CallMigrator;
 import com.botmaker.java.edit.refactor.ReviewMarks;
 import com.botmaker.studio.parser.refactor.SignatureMigration;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.parse.SourceSet;
 import com.botmaker.java.edit.palette.ExpressionType;
 import com.botmaker.java.types.ResolvedType;
@@ -399,7 +400,7 @@ public class MethodHandler {
             }
             SingleVariableDeclaration origin = (SingleVariableDeclaration) current.get(target.origin());
             SingleVariableDeclaration moved =
-                    (SingleVariableDeclaration) ASTNode.copySubtree(ast, origin);
+                    (SingleVariableDeclaration) JavaLevel.copy(ast, origin);
             if (!target.type().isKept() && !origin.getType().toString().equals(target.type().sourceName())) {
                 moved.setType(typeNodeFor(ctx, target.type()));
             }

@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.meta.Migrated;
 import com.botmaker.plugin.api.source.ManagedClasses;
@@ -420,7 +421,7 @@ public final class ManagedMigrations {
     static Optional<Expression> substituted(String body, Map<String, Expression> bound) {
         Map<String, Template.Part> parts = new LinkedHashMap<>();
         bound.forEach((name, part) -> parts.put(name, Template.Part.of(part, part.toString())));
-        return Template.filled(body, false, parts).map(SourceParser::expression);
+        return Template.filled(body, false, parts).map(text -> SourceParser.expression(JavaLevel.LATEST, text));
     }
 
     // --- writing -----------------------------------------------------------------------------------------
@@ -483,7 +484,7 @@ public final class ManagedMigrations {
         if (written.isEmpty()) return source;
         if (marked) imports.add(Migrated.class.getName());
         for (String each : imports) ImportManager.addImport(unit, rewrite, each);
-        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /**
@@ -500,7 +501,7 @@ public final class ManagedMigrations {
         if (mark == null) return source;
         ASTRewrite rewrite = ASTRewrite.create(unit.getAST());
         rewrite.getListRewrite(field, FieldDeclaration.MODIFIERS2_PROPERTY).remove(mark, null);
-        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     private static FieldDeclaration field(TypeDeclaration holder, String name) {

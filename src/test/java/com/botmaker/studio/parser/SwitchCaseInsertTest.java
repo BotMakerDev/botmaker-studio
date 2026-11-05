@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -185,7 +186,7 @@ class SwitchCaseInsertTest {
     }
 
     private static void assertParses(String code) {
-        assertFalse(SourceParser.hasSyntaxErrors(SourceParser.parse(code)),
+        assertFalse(SourceParser.hasSyntaxErrors(SourceParser.parse(LATEST, code)),
                 () -> "the edit published source that doesn't parse: " + code);
     }
 

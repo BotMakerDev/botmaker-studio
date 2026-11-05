@@ -3,6 +3,7 @@ package com.botmaker.studio.project.params;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.SourceNames;
 import com.botmaker.java.grammar.SourceNode;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.studio.project.ProjectConfig;
@@ -243,7 +244,7 @@ public final class BotRecords {
                 || parts.stream().anyMatch(java.util.Objects::isNull)) {
             return Optional.empty();
         }
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         ClassInstanceCreation creation = ast.newClassInstanceCreation();
         creation.setType(ast.newSimpleType(ast.newName(shape.qualifiedName())));
         Set<String> imports = new LinkedHashSet<>();

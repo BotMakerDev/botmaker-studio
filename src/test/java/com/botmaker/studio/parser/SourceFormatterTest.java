@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -31,7 +32,7 @@ class SourceFormatterTest {
         String longest = longestLine(packed);
         assertTrue(longest.length() > 200, "fixture should be packed; longest line is " + longest.length());
 
-        String formatted = SourceFormatter.format(packed);
+        String formatted = SourceFormatter.format(LATEST, packed);
 
         assertTrue(longestLine(formatted).length() < longest.length(),
                 () -> "nothing was reflowed:\n" + formatted);
@@ -83,20 +84,20 @@ class SourceFormatterTest {
         String after = before.replace("        int   aligned   = 1;\n",
                 "        int   aligned   = 1;\nSystem.out.println(  \"x\"  );\n");
 
-        String formatted = SourceFormatter.formatChanged(before, after);
+        String formatted = SourceFormatter.formatChanged(LATEST, before, after);
 
         assertTrue(formatted.contains("    private Collect() {}\n"), formatted);
         assertTrue(formatted.contains("        int   aligned   = 1;\n"), formatted);
         assertTrue(formatted.contains("\n        System.out.println(\"x\");\n"), formatted);
-        assertSame(before, SourceFormatter.formatChanged(before, before));
+        assertSame(before, SourceFormatter.formatChanged(LATEST, before, before));
     }
 
     /** Formatting twice must be formatting once — otherwise every save produces a diff. */
     @Test
     void formattingIsIdempotent() {
-        String once = SourceFormatter.format(readResource("/parser/packed-switch.java.txt"));
+        String once = SourceFormatter.format(LATEST, readResource("/parser/packed-switch.java.txt"));
 
-        assertEquals(once, SourceFormatter.format(once));
+        assertEquals(once, SourceFormatter.format(LATEST, once));
     }
 
     /**
@@ -108,21 +109,21 @@ class SourceFormatterTest {
     void sourceThatDoesNotParseIsReturnedUntouched() {
         String broken = "package com.mybot;\npublic class Subject { void run() { int a = ; } \n";
 
-        assertSame(broken, SourceFormatter.format(broken),
+        assertSame(broken, SourceFormatter.format(LATEST, broken),
                 "declining must return the very same text, not a reflowed guess at it");
     }
 
     @Test
     void nullAndBlankAreLetThrough() {
-        assertSame(null, SourceFormatter.format(null));
-        assertSame("", SourceFormatter.format(""));
+        assertSame(null, SourceFormatter.format(LATEST, null));
+        assertSame("", SourceFormatter.format(LATEST, ""));
     }
 
     /** Same tree, printed the same way — the only definition of "means the same" available without a compiler. */
     private static void assertSameAst(String before, String after) {
-        assertFalse(SourceParser.hasSyntaxErrors(SourceParser.parse(after)),
+        assertFalse(SourceParser.hasSyntaxErrors(SourceParser.parse(LATEST, after)),
                 () -> "the formatter emitted source that doesn't parse:\n" + after);
-        assertEquals(SourceParser.parse(before).toString(), SourceParser.parse(after).toString(),
+        assertEquals(SourceParser.parse(LATEST, before).toString(), SourceParser.parse(LATEST, after).toString(),
                 "formatting changed the tree, not just the layout");
     }
 

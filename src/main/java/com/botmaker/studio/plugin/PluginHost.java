@@ -23,6 +23,7 @@ import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.parse.SourceSet;
 import com.botmaker.studio.project.PluginFiles;
 import org.eclipse.jdt.core.dom.CompilationUnit;
@@ -723,6 +724,7 @@ public final class PluginHost {
         @Override public Optional<String> text(Path file) { return Optional.empty(); }
         @Override public List<String> classpath() { return List.of(); }
         @Override public Path sourceRoot() { return null; }
+        @Override public JavaLevel level() { return JavaLevel.LATEST; }
         @Override public Optional<String> ownerOf(String simpleName) {
             return Optional.ofNullable(qualifiedName(simpleName));
         }

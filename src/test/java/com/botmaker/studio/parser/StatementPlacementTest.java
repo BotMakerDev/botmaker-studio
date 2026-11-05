@@ -9,6 +9,7 @@ import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.SwitchStatement;
 import org.junit.jupiter.api.Test;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,7 +40,7 @@ class StatementPlacementTest {
                     }
                 }
                 """.formatted(methodBody.indent(8));
-        CompilationUnit unit = SourceParser.parse(source);
+        CompilationUnit unit = SourceParser.parse(LATEST, source);
         assertFalse(SourceParser.hasSyntaxErrors(unit), "fixture must parse: " + source);
 
         // The drop target is the block enclosing the `marker();` call — the same node the drag handler
@@ -203,7 +204,7 @@ class StatementPlacementTest {
                 %s
                 }
                 """.formatted(method.indent(4));
-        CompilationUnit unit = SourceParser.parse(source);
+        CompilationUnit unit = SourceParser.parse(LATEST, source);
         ASTNode[] found = new ASTNode[1];
         unit.accept(new ASTVisitor() {
             @Override

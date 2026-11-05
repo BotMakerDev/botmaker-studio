@@ -47,6 +47,7 @@ final class BlockPreview {
         staged.setActiveFile(file);
         staged.setSourcePath(live.getSourcePath());
         staged.setResolvedClasspath(live.getResolvedClasspath());
+        staged.setLevel(live.level());
         staged.setTemplate(live.getTemplate());
         if (live.getSettings() != null) staged.setSettings(live.getSettings());
         staged.setCurrentCode(source);

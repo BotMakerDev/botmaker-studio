@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Follow's pacing: one frame per window, and a loop recognised when a line comes round within one. */
@@ -61,7 +62,7 @@ class FollowPacerTest {
 
     @Test
     void theEnclosingLoopIsTheInnermostOneHoldingEveryLine() {
-        CompilationUnit cu = SourceParser.parse("""
+        CompilationUnit cu = SourceParser.parse(LATEST, """
                 class C {
                     void m() {
                         while (true) {
@@ -90,7 +91,7 @@ class FollowPacerTest {
 
     @Test
     void codeInNoSharedLoopHasNone() {
-        CompilationUnit cu = SourceParser.parse("class C { void m() { a(); b(); } }");
+        CompilationUnit cu = SourceParser.parse(LATEST, "class C { void m() { a(); b(); } }");
         List<ASTNode> calls = new ArrayList<>();
         cu.accept(new ASTVisitor() {
             @Override public boolean visit(ExpressionStatement node) { calls.add(node); return true; }

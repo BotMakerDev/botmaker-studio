@@ -1,5 +1,7 @@
 package com.botmaker.studio.ui.app.versions;
 
+import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.project.ProjectConfig;
 import com.botmaker.studio.project.ProjectState;
 import com.botmaker.studio.project.vcs.BlockDiff;
@@ -249,7 +251,7 @@ final class DiffCards {
             text = onlyText(source, only);
         } else {
             int end = start;
-            var cu = com.botmaker.java.grammar.SourceParser.parse(source);
+            var cu = SourceParser.parse(JavaLevel.LATEST, source);
             for (var m : BlockDiff.methods(cu).values()) {
                 if (m.getStartPosition() == start) end = start + m.getLength();
             }

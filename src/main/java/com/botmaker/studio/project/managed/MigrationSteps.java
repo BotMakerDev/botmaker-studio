@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.managed;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.source.ManagedOpenSet;
 import com.botmaker.plugin.api.source.ManagedValue;
@@ -594,7 +595,7 @@ public final class MigrationSteps {
     private static Optional<Step> readCalls(ValueGrammar grammar, ManagedMigrations.Method method, Shape.Parts shape,
                                             Class<?> from, Class<?> to) {
         if (method.params().size() != shape.from().size()) return Optional.empty();
-        Expression body = SourceParser.expression(method.body());
+        Expression body = SourceParser.expression(JavaLevel.LATEST, method.body());
         Optional<List<Expression>> arguments = arguments(grammar, to, body);
         if (arguments.isEmpty() || arguments.get().size() != shape.to().size()) return Optional.empty();
         List<String> names = method.params().stream().map(ManagedMigrations.Param::name).toList();
@@ -770,7 +771,7 @@ public final class MigrationSteps {
             body.insertLast(method.get(), null);
         }
         for (String each : imports) ImportManager.addImport(unit, rewrite, each);
-        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /** The declaration of {@code method} in {@code holder}: its name and its mark. */

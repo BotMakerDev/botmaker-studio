@@ -1,5 +1,6 @@
 package com.botmaker.studio.project.params;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.params.Param;
 import com.botmaker.plugin.api.source.ParameterWrite;
@@ -96,7 +97,7 @@ public final class JavaParameterEdits {
      * {@code return}.
      */
     public static String setReturned(String source, String group, String methodName, JavaValue value) {
-        return ParamValues.withReturned(source, group, methodName, value).orElse(source);
+        return ParamValues.withReturned(JavaLevel.LATEST, source, group, methodName, value).orElse(source);
     }
 
     /**
@@ -139,7 +140,7 @@ public final class JavaParameterEdits {
         method.setBody(body);
         ASTRewrite rewrite = ASTRewrite.create(ast);
         rewrite.getListRewrite(type, TypeDeclaration.BODY_DECLARATIONS_PROPERTY).insertLast(method, null);
-        String declared = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        String declared = SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
         CompilationUnit reparsed = BotParser.syntax(declared);
         ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
         addImports(reparsed, importing, List.copyOf(imports));
@@ -286,7 +287,7 @@ public final class JavaParameterEdits {
         } else {
             normal = ast.newNormalAnnotation();
             normal.setTypeName(existing == null ? ast.newName(SHOWN)
-                    : (Name) ASTNode.copySubtree(ast, existing.getTypeName()));
+                    : (Name) JavaLevel.copy(ast, existing.getTypeName()));
             ListRewrite modifiers = rewrite.getListRewrite(method, MethodDeclaration.MODIFIERS2_PROPERTY);
             if (existing == null) modifiers.insertFirst(normal, null);
             else modifiers.replace(existing, normal, null);
@@ -379,7 +380,7 @@ public final class JavaParameterEdits {
             }
         }
         members.insertLast(renameRule(ast, group, from, to, parameter.getReturnType2()), null);
-        String renamed = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        String renamed = SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
         CompilationUnit reparsed = BotParser.syntax(renamed);
         ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
         addImports(reparsed, importing, List.of(Migrate.class.getCanonicalName()));
@@ -412,7 +413,7 @@ public final class JavaParameterEdits {
         MethodDeclaration rule = ast.newMethodDeclaration();
         rule.modifiers().add(mark);
         rule.modifiers().add(ast.newModifier(Modifier.ModifierKeyword.STATIC_KEYWORD));
-        rule.setReturnType2((org.eclipse.jdt.core.dom.Type) ASTNode.copySubtree(ast, type));
+        rule.setReturnType2((org.eclipse.jdt.core.dom.Type) JavaLevel.copy(ast, type));
         rule.setName(ast.newSimpleName(from));
         rule.parameters().add(self);
         rule.setBody(body);
@@ -587,7 +588,7 @@ public final class JavaParameterEdits {
 
         ASTRewrite rewrite = ASTRewrite.create(ast);
         rewrite.getListRewrite(target, TypeDeclaration.BODY_DECLARATIONS_PROPERTY).insertLast(field, null);
-        String declared = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        String declared = SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
 
         CompilationUnit reparsed = BotParser.syntax(declared);
         ASTRewrite importing = ASTRewrite.create(reparsed.getAST());
@@ -717,7 +718,7 @@ public final class JavaParameterEdits {
         if (existing instanceof NormalAnnotation normal) return normal;
         NormalAnnotation normal = ast.newNormalAnnotation();
         // The name as the author wrote it: whichever import or qualification made it the annotation still does.
-        normal.setTypeName((Name) ASTNode.copySubtree(ast, existing.getTypeName()));
+        normal.setTypeName((Name) JavaLevel.copy(ast, existing.getTypeName()));
         rewrite.getListRewrite(field, FieldDeclaration.MODIFIERS2_PROPERTY)
                 .replace(existing, normal, null);
         return normal;

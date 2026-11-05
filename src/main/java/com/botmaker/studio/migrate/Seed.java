@@ -1,5 +1,6 @@
 package com.botmaker.studio.migrate;
 
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.plugin.api.meta.Migrate;
 import com.botmaker.plugin.api.meta.Refactor;
 import com.botmaker.java.edit.ImportManager;
@@ -111,7 +112,7 @@ public final class Seed {
         imports.add(Migrate.class.getName());
         imports.add(Refactor.class.getName());
         for (String each : imports) ImportManager.addImport(unit, rewrite, each);
-        String written = SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        String written = SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
         return new Seeded(written, List.copyOf(seeded), unseeded);
     }
 
@@ -312,7 +313,7 @@ public final class Seed {
      */
     @SuppressWarnings("unchecked")
     public static String skeleton(String mainPackage) {
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         CompilationUnit unit = ast.newCompilationUnit();
         PackageDeclaration declaration = ast.newPackageDeclaration();
         declaration.setName(ast.newName(mainPackage));
@@ -340,7 +341,7 @@ public final class Seed {
         type.bodyDeclarations().add(constructor);
         unit.types().add(type);
         StringBuilder out = new StringBuilder();
-        SourceFormatter.format(unit.toString()).lines().forEach(line -> out.append(line.stripTrailing()).append('\n'));
+        SourceFormatter.format(JavaLevel.of(unit), unit.toString()).lines().forEach(line -> out.append(line.stripTrailing()).append('\n'));
         return out.toString();
     }
 }

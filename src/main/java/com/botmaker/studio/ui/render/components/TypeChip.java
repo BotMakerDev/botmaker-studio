@@ -1,6 +1,7 @@
 package com.botmaker.studio.ui.render.components;
 
 import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.parse.JavaLevel;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
 import javafx.scene.Node;
@@ -53,7 +54,7 @@ public final class TypeChip {
 
     /** {@code text} parsed as a type, read-only; a text Java cannot read as one is shown as written. */
     public static Node of(String text) {
-        Type parsed = SourceParser.type(text);
+        Type parsed = SourceParser.type(JavaLevel.LATEST, text);
         if (parsed != null) return of(parsed);
         HBox chip = frame();
         chip.getChildren().add(part(text == null || text.isBlank() ? "?" : text, "type-chip-class", null));
@@ -178,7 +179,7 @@ public final class TypeChip {
      */
     public static String keepingArguments(Type part, String replacement) {
         // An array's element is reported as the array, and the pick keeps its brackets: compare the elements.
-        Type parsed = SourceParser.type(replacement);
+        Type parsed = SourceParser.type(JavaLevel.LATEST, replacement);
         int dims = parsed instanceof ArrayType array ? array.getDimensions() : 0;
         Type partElement = part instanceof ArrayType array ? array.getElementType() : part;
         Type pickElement = parsed instanceof ArrayType array ? array.getElementType() : parsed;
@@ -203,8 +204,8 @@ public final class TypeChip {
      */
     public static String replace(Type root, Type part, String replacement) {
         if (root == null || part == null) return null;
-        if (part == root) return SourceParser.type(replacement) == null ? null : replacement.strip();
-        Type parsed = SourceParser.type(replacement);
+        if (part == root) return SourceParser.type(JavaLevel.LATEST, replacement) == null ? null : replacement.strip();
+        Type parsed = SourceParser.type(JavaLevel.LATEST, replacement);
         if (parsed == null) return null;
 
         // The way down from root to part, as (property, list index or -1) steps.
@@ -221,8 +222,8 @@ public final class TypeChip {
             at = parent;
         }
 
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
-        Type copy = (Type) ASTNode.copySubtree(ast, root);
+        AST ast = JavaLevel.of(root).newAst();
+        Type copy = (Type) JavaLevel.copy(ast, root);
         ASTNode walk = copy;
         while (properties.size() > 1) {
             StructuralPropertyDescriptor property = properties.pop();
@@ -232,7 +233,7 @@ public final class TypeChip {
         }
         StructuralPropertyDescriptor property = properties.pop();
         int index = indices.pop();
-        Type fresh = (Type) ASTNode.copySubtree(ast, parsed);
+        Type fresh = (Type) JavaLevel.copy(ast, parsed);
         if (index >= 0) {
             @SuppressWarnings("unchecked")
             List<Object> list = (List<Object>) walk.getStructuralProperty(property);

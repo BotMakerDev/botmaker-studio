@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.managed;
 
 import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.edit.ImportManager;
 import com.botmaker.java.edit.helpers.AstRewriteHelper;
 import com.botmaker.java.grammar.SourceFormatter;
@@ -199,7 +200,7 @@ public final class BotMethods {
         members.insertLast(method, null);
         if (imported != null) ImportManager.addImport(unit, rewrite, imported);
         // The rewrite writes a new node flat: only what it added is laid out, the rest of the file kept as written.
-        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /**
@@ -258,7 +259,7 @@ public final class BotMethods {
         for (JavaValue argument : arguments) {
             for (String imported : argument.imports()) ImportManager.addImport(unit, rewrite, imported);
         }
-        return SourceFormatter.formatChanged(source, AstRewriteHelper.applyRewrite(rewrite, source));
+        return SourceFormatter.formatChanged(JavaLevel.of(rewrite.getAST()), source, AstRewriteHelper.applyRewrite(rewrite, source));
     }
 
     /** The top-level class {@code className}'s method {@code name} with no parameter, or null. */

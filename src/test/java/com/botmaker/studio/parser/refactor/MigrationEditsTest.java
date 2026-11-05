@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.util.List;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -145,7 +146,7 @@ class MigrationEditsTest {
     /** Applies one change to {@code source}, returning the new text — or null when the edit was refused. */
     private static String rewrite(String source, java.util.function.Function<CompilationUnit, CallChange> of) {
         currentSource = source;
-        CompilationUnit unit = SourceParser.parse(source);
+        CompilationUnit unit = SourceParser.parse(LATEST, source);
         Plan plan = new Plan(List.of(of.apply(unit)), List.of(), List.of(), ReturnFate.UNCHANGED);
         List<CallMigrator.Rewritten> rewritten = CallMigrator.rewriteOthers(plan, null, null, null);
         if (rewritten == null) return null;
@@ -155,7 +156,7 @@ class MigrationEditsTest {
 
     private static void assertParses(String source) {
         assertNotNull(source, "the edit was refused, so there is nothing to parse");
-        assertFalse(SourceParser.hasSyntaxErrors(SourceParser.parse(source)),
+        assertFalse(SourceParser.hasSyntaxErrors(SourceParser.parse(LATEST, source)),
                 () -> "rewritten source does not parse:\n" + source);
     }
 

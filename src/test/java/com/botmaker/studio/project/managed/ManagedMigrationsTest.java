@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -240,7 +241,7 @@ class ManagedMigrationsTest {
     @Test
     void aBodyDeclaringAParameterNameIsNotFilledIn() {
         Map<String, org.eclipse.jdt.core.dom.Expression> bound = Map.of("file",
-                SourceParser.expression("\"a.png\""));
+                SourceParser.expression(LATEST, "\"a.png\""));
         assertTrue(ManagedMigrations.substituted("java.util.List.of(1).stream().map(file -> file)", bound).isEmpty());
         assertEquals("new Shot(\"a.png\",1)", ManagedMigrations.substituted("new Shot(file, 1)", bound)
                 .orElseThrow().toString());

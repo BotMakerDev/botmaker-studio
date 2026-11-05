@@ -1,6 +1,7 @@
 package com.botmaker.studio.services.debug;
 
 import com.botmaker.java.edit.BlockId;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.SourceParser;
 import com.botmaker.studio.project.ProjectState.SourceFile;
 import org.eclipse.jdt.core.dom.ASTNode;
@@ -48,7 +49,7 @@ public record DebugTargets(Map<String, FileTargets> byTopLevelClass) {
     }
 
     static FileTargets read(Path path, String content, Set<String> breakpointIds) {
-        CompilationUnit cu = SourceParser.parse(content);
+        CompilationUnit cu = SourceParser.parse(JavaLevel.LATEST, content);
         String pkg = cu.getPackage() == null ? "" : cu.getPackage().getName().getFullyQualifiedName() + ".";
         List<String> classNames = ((List<?>) cu.types()).stream()
                 .map(t -> pkg + ((AbstractTypeDeclaration) t).getName().getIdentifier())

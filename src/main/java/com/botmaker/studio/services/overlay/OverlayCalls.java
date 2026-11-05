@@ -1,6 +1,7 @@
 package com.botmaker.studio.services.overlay;
 
 import com.botmaker.java.grammar.SourceFormatter;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
@@ -74,7 +75,7 @@ public final class OverlayCalls {
 
     /** {@code Owner.method(arguments…);}, each argument's tree copied in and its imports carried. */
     static Statement of(Method method, List<JavaValue> arguments) {
-        AST ast = AST.newAST(AST.getJLSLatest(), false);
+        AST ast = JavaLevel.LATEST.newAst();
         Set<String> imports = new LinkedHashSet<>();
         Class<?> owner = method.getDeclaringClass();
         String importName = JavaNames.importName(owner);
@@ -89,7 +90,7 @@ public final class OverlayCalls {
         }
         if (!importName.isEmpty()) imports.add(importName);
         ExpressionStatement statement = ast.newExpressionStatement(call);
-        return new Statement(statement, List.copyOf(imports), SourceFormatter.statement(statement.toString()));
+        return new Statement(statement, List.copyOf(imports), SourceFormatter.statement(JavaLevel.of(statement), statement.toString()));
     }
 
     private static String describe(Executable call) {

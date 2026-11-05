@@ -1,6 +1,7 @@
 package com.botmaker.studio.nav;
 
 import com.botmaker.java.grammar.SourceParser;
+import com.botmaker.java.parse.JavaLevel;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.FieldInfo;
@@ -198,7 +199,7 @@ public final class LibrarySource {
      * else 0.
      */
     static int lineOf(String source, Target target) {
-        CompilationUnit cu = SourceParser.parse(source);
+        CompilationUnit cu = SourceParser.parse(JavaLevel.LATEST, source);
         AbstractTypeDeclaration type = null;
         List<?> members = cu.types();
         for (String name : target.typePath()) {

@@ -6,6 +6,7 @@ import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 import org.junit.jupiter.api.Test;
 
+import static com.botmaker.java.parse.JavaLevel.LATEST;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -15,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class BreakpointHolderTest {
 
     private static MethodDeclaration method() {
-        var cu = SourceParser.parse("class C { void run() { int x = 1; } }");
+        var cu = SourceParser.parse(LATEST, "class C { void run() { int x = 1; } }");
         return ((TypeDeclaration) cu.types().getFirst()).getMethods()[0];
     }
 

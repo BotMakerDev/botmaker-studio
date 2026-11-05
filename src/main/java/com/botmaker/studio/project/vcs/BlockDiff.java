@@ -1,6 +1,7 @@
 package com.botmaker.studio.project.vcs;
 
 import com.botmaker.cli.repair.Members;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.java.grammar.SourceParser;
 import org.eclipse.jdt.core.compiler.IProblem;
 import org.eclipse.jdt.core.dom.ASTMatcher;
@@ -121,8 +122,9 @@ public final class BlockDiff {
 
     /** Compares {@code before} with {@code after}; either is null when the file does not exist on that side. */
     public static FileDiff of(String before, String after) {
-        CompilationUnit a = before == null ? null : SourceParser.parse(before);
-        CompilationUnit b = after == null ? null : SourceParser.parse(after);
+        // Read to compare, never written back: the newest Java reads every version.
+        CompilationUnit a = before == null ? null : SourceParser.parse(JavaLevel.LATEST, before);
+        CompilationUnit b = after == null ? null : SourceParser.parse(JavaLevel.LATEST, after);
         String why = unparseable(a, "before");
         if (why == null) why = unparseable(b, "after");
         if (why != null) return FileDiff.unreadable(why);

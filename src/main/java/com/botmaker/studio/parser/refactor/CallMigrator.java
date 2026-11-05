@@ -1,6 +1,7 @@
 package com.botmaker.studio.parser.refactor;
 
 import com.botmaker.java.edit.refactor.ReviewMarks;
+import com.botmaker.java.parse.JavaLevel;
 import com.botmaker.studio.palette.BotType;
 import com.botmaker.studio.palette.SignatureType;
 import com.botmaker.java.edit.EditContext;
@@ -132,7 +133,7 @@ public final class CallMigrator {
             // The one check that stands between a bad rewrite and a file the user cannot open: applyRewrite
             // returns the original text when an edit won't apply, and a rewrite that *does* apply can still
             // produce nonsense. Either way this file is not written, and neither is any other.
-            if (SourceParser.hasSyntaxErrors(SourceParser.parse(source))) return null;
+            if (SourceParser.hasSyntaxErrors(SourceParser.parse(JavaLevel.of(ctx.ast()), source))) return null;
             rewritten.add(new Rewritten(first.file(), first.source(), source));
         }
         return List.copyOf(rewritten);
@@ -370,7 +371,7 @@ public final class CallMigrator {
     private static Expression nodeFor(EditContext ctx, List<?> current, ArgumentEdit edit) {
         return switch (edit) {
             case ArgumentEdit.Keep keep ->
-                    (Expression) ASTNode.copySubtree(ctx.ast(), (ASTNode) current.get(keep.from()));
+                    (Expression) JavaLevel.copy(ctx.ast(), (ASTNode) current.get(keep.from()));
             case ArgumentEdit.Fresh fresh -> defaultFor(ctx, fresh.type());
         };
     }
