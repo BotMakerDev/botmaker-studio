@@ -41,6 +41,7 @@ import com.botmaker.core.project.LockResolver;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.types.JdkType;
+import com.botmaker.java.grammar.TypeNodes;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import org.eclipse.jdt.core.dom.*;
 
@@ -1147,9 +1148,7 @@ public class BlockConverter {
         if (expr instanceof ArrayInitializer) return true;
         if (expr instanceof ArrayCreation) return true;
         if (expr instanceof ClassInstanceCreation cic) {
-            String typeName = cic.getType().toString();
-            return (typeName.startsWith(JdkType.ARRAY_LIST.simpleName())
-                    || typeName.startsWith(JdkType.ARRAY_LIST.qualifiedName())) && !cic.arguments().isEmpty();
+            return TypeNodes.names(cic.getType(), JdkType.ARRAY_LIST.qualifiedName()) && !cic.arguments().isEmpty();
         }
         if (expr instanceof MethodInvocation mi) {
             String scope = mi.getExpression() != null ? mi.getExpression().toString() : "";

@@ -77,7 +77,7 @@ public class ConstructorBlock extends MethodDeclarationBlock {
                     addParamBtn, null, context, null, false, false,
                     type -> SignatureEdits.edit(context, windowOf(addParamBtn), md,
                             draft -> withAddedParameter(draft, DefaultNames.forType(type.simpleName()),
-                                    MethodSignatures.signatureTypeOf(type.simpleName(), PluginHost.grammar())))));
+                                    MethodSignatures.signatureTypeOf(type, PluginHost.grammar())))));
             paramRowBuilder.addNode(addParamBtn);
         }
 

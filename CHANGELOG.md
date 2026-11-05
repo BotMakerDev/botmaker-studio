@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- Only `java.util.ArrayList` draws as a list (2026-11-05): `new ArrayListOfMine(x)` no longer does, and neither does an
+  `ArrayList` the file does not import. A type picked on a method or constructor header is compared by its whole name,
+  so `b.Point` over a written `a.Point` is a change.
 - The explorer shows a file as parameters only when it carries the contract's `@Param` (2026-11-05): a comment, a string
   or another library's `@Param` no longer does it. *Undo* on a marked function brings back only the imports its code
   uses, not one a comment or string mentions.

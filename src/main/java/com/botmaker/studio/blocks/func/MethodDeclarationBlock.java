@@ -315,7 +315,7 @@ public class MethodDeclarationBlock extends AbstractStatementBlock implements Bl
                     newType -> SignatureEdits.edit(context, windowOf(typeLabel),
                             (MethodDeclaration) this.astNode,
                             draft -> withParameter(draft, index, p -> new FunctionDraft.Parameter(p.name(),
-                                    MethodSignatures.signatureTypeOf(newType.simpleName(), PluginHost.grammar()), p.origin()))));
+                                    MethodSignatures.signatureTypeOf(newType, PluginHost.grammar()), p.origin()))));
         }
 
         String currentName = param.getName().getIdentifier();
