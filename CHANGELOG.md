@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- Closing Studio while the bot runs asks "Stop the run or keep it running in the background?" (2026-11-05). Stop is
+  the default, and Cancel keeps Studio open. A kept run goes on in BotMaker's core; reopening its project shows it
+  running again, and Claude can stop it through the MCP.
 - Claude reaches Studio through BotMaker's core (2026-11-05). The core is the only MCP server. It runs Claude's edits on
   the open project itself, and Studio registers its own tools with it: the screen, runs, versions and plugins. With no
   project open, Studio registers the home's tools. If the core stops, Studio says so, starts a new one and reopens the

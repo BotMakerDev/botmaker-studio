@@ -58,6 +58,8 @@ public final class CoreRuns implements AutoCloseable {
     private volatile boolean started;
     private volatile OptionalLong pid = OptionalLong.empty();
     private volatile boolean debugging;
+    /** The user kept the run going past Studio's close ({@link #keepRunning}). */
+    private volatile boolean kept;
 
     private CoreRuns(CoreEdits core, EventBus bus, ProjectState state, Path sourceRoot, DebugOnBus debugView,
                      Supplier<Optional<String>> check) {
@@ -107,6 +109,16 @@ public final class CoreRuns implements AutoCloseable {
     /** Whether a run was asked for and has not ended. */
     public boolean isRunning() {
         return asked || started;
+    }
+
+    /** Whether a debug session is on. */
+    public boolean debugging() {
+        return debugging;
+    }
+
+    /** The run going now is not stopped by {@link #close}: the user kept it running in the background. */
+    public void keepRunning() {
+        kept = true;
     }
 
     /** The bot's process, while it has one: what a plugin's pause signals. */
@@ -293,7 +305,7 @@ public final class CoreRuns implements AutoCloseable {
      */
     @Override
     public void close() {
-        if (isRunning()) core.request(CoreClient::stop);
+        if (isRunning() && !kept) core.request(CoreClient::stop);
         if (debugging) core.request(client -> client.debugging(Request.Debugging.Step.STOP));
         starting.shutdown();
         steering.shutdown();

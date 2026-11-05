@@ -64,6 +64,8 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     private final Object draining = new Object();
     private volatile Consumer<CoreEvent> heard;
     private volatile boolean closing;
+    /** The bot running now outlives the close: the core keeps it ({@link #keepRunning}). */
+    private volatile boolean keepRun;
     private CoreLink link;
     private final Path sourceRoot;
     /** Whoever hears of runs; told through {@link #runEvents}, which waits for it. */
@@ -434,6 +436,11 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         bus.publish(new CoreApplicationEvents.StatusMessageEvent(message));
     }
 
+    /** The close leaves the bot running now to the core, which keeps the project open until it ends (plan phase 11). */
+    public void keepRunning() {
+        keepRun = true;
+    }
+
     /** Leaves the project, which the core closes when no other client is on it, and ends the channel. */
     @Override
     public void close() {
@@ -442,7 +449,7 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         closing = true;
         CoreClient client = link.client();
         try {
-            if (client.isOpen()) client.leave();
+            if (client.isOpen()) client.leave(keepRun);
         } catch (IOException e) {
             System.err.println("BotMaker's core did not let the project go: " + e.getMessage());
         } finally {

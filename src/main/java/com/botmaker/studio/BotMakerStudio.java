@@ -37,6 +37,7 @@ import com.botmaker.core.project.migration.ProjectSchemaTooNew;
 import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.app.CommunityPluginPrompt;
 import com.botmaker.studio.ui.app.ForceX11Notice;
+import com.botmaker.studio.ui.app.KeepRunDialog;
 import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.home.BmkFlow;
 import com.botmaker.studio.ui.app.home.HomeShell;
@@ -555,6 +556,17 @@ public class BotMakerStudio extends Application {
 
             primaryStage.setOnCloseRequest(e -> {
                 e.consume();
+                // A run going asks whether it outlives Studio (plan phase 11); a debug session always ends.
+                if (!KeepRunDialog.unasked(primaryStage) && currentProject != null && currentProject.botRuns()) {
+                    switch (KeepRunDialog.ask(primaryStage)) {
+                        case CANCEL -> {
+                            return;
+                        }
+                        case KEEP -> currentProject.keepRunning();
+                        case STOP -> {
+                        }
+                    }
+                }
                 shutdown();
             });
 

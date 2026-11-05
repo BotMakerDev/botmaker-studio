@@ -5,6 +5,7 @@ import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.Describe;
 import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.ui.Choosers;
+import com.botmaker.studio.ui.app.KeepRunDialog;
 import javafx.application.Platform;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -334,7 +335,10 @@ final class UiTools {
             } catch (InterruptedException stopped) {
                 return;
             }
-            Platform.runLater(() -> main.fireEvent(new WindowEvent(main, WindowEvent.WINDOW_CLOSE_REQUEST)));
+            Platform.runLater(() -> {
+                KeepRunDialog.closeUnasked(main);
+                main.fireEvent(new WindowEvent(main, WindowEvent.WINDOW_CLOSE_REQUEST));
+            });
         });
         return "Closing Studio. start_studio opens it again.";
     }

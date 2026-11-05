@@ -292,7 +292,10 @@ final class StudioBridge implements StudioDriver {
             } catch (InterruptedException stopped) {
                 return;
             }
-            Platform.runLater(() -> main.fireEvent(new WindowEvent(main, WindowEvent.WINDOW_CLOSE_REQUEST)));
+            Platform.runLater(() -> {
+                KeepRunDialog.closeUnasked(main);
+                main.fireEvent(new WindowEvent(main, WindowEvent.WINDOW_CLOSE_REQUEST));
+            });
         });
         return "Closing Studio. start_studio opens it again.";
     }

@@ -349,6 +349,20 @@ public class BotProject {
     // LIFECYCLE
     // =========================================================================
 
+    /** Whether the bot runs now, not a debug session: what closing Studio asks about ({@code KeepRunDialog}). */
+    public boolean botRuns() {
+        return runs != null && runs.isRunning() && !runs.debugging();
+    }
+
+    /**
+     * The bot running now outlives this project's {@link #close} (plan phase 11): the core keeps it, and the project
+     * open in it, until it ends.
+     */
+    public void keepRunning() {
+        if (runs != null) runs.keepRunning();
+        if (coreEdits != null) coreEdits.keepRunning();
+    }
+
     /**
      * Ends everything this project started outside the JVM. Both services run the bot as a <em>separate OS
      * process</em>, which survives the Studio exiting on its own — this used to be an empty stub, so quitting
