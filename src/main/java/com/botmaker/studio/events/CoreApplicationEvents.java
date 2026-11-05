@@ -1,10 +1,10 @@
 package com.botmaker.studio.events;
 
 import com.botmaker.core.events.ApplicationEvent;
-import com.botmaker.core.events.FileEdit;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.core.project.UserLibrary;
+import com.botmaker.core.run.trial.TrialAsk;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.ui.dnd.DropInfo;
 import com.botmaker.studio.ui.dnd.ExpressionDropInfo;
@@ -30,14 +30,10 @@ public class CoreApplicationEvents {
     }
 
     /**
-     * Files a plugin's value writes rewrote underneath the editor, as one history step named {@code label} — a
-     * {@code PluginValues} write, or a plugin's batch of them. The files are already written, buffer and disk;
-     * this is for history alone, so ↶ takes them back like an edit made on the canvas.
+     * A plugin of this Studio wrote the bot's values, through the core (plan phase 10c): what reads them again, the
+     * toolbar's labels, does. The core recorded the step; the files are on disk and in the mirror.
      */
-    public record FilesRewrittenEvent(String label, List<FileEdit> edits) implements ApplicationEvent {
-        public FilesRewrittenEvent {
-            edits = edits != null ? List.copyOf(edits) : List.of();
-        }
+    public record PluginWroteEvent() implements ApplicationEvent {
     }
 
     /**
@@ -199,9 +195,8 @@ public class CoreApplicationEvents {
     public record MethodRunRequestedEvent(String packageName, String className, String method, boolean valued,
                                           javafx.stage.Window owner) implements ApplicationEvent {}
 
-    /** A try's caller, written: {@code CodeExecutionService} compiles it beside the bot and runs it as a run. */
-    public record TrialRunRequestedEvent(com.botmaker.core.run.trial.TrialCaller.Source caller, String label)
-            implements ApplicationEvent {}
+    /** A try, asked: the core plans it, writes its caller beside the bot and runs it as a run (plan phase 10c). */
+    public record TrialRunRequestedEvent(TrialAsk trial, String label) implements ApplicationEvent {}
 
     // --- User history requests ---
 

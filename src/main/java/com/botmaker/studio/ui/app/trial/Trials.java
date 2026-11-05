@@ -16,34 +16,33 @@ import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.java.index.BotIndex;
-import com.botmaker.core.services.BotSources;
-import com.botmaker.studio.services.overlay.ProbeCalls;
+import com.botmaker.core.plugin.ProbeCalls;
 import com.botmaker.core.run.trial.LastRunValues;
+import com.botmaker.core.run.trial.TrialAsk;
 import com.botmaker.core.run.trial.TrialCaller;
 import com.botmaker.core.run.trial.TrialPlan;
+import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
-import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Statement;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
+import java.util.Set;
 
 /**
  * ▶ Try and ▶ Run on its own, for both editors (2026-10-06): answers {@link TryRequestedEvent} and
  * {@link MethodRunRequestedEvent}, wherever they were asked from ({@link TrialMenu}).
  *
  * <p>A statement is planned ({@link TrialPlan}), its earlier locals asked about when it reads any
- * ({@link TryDialog}), its caller written ({@link TrialCaller}) with the bot's managed holders, and the run
- * requested as {@link TrialRunRequestedEvent}, which {@code CodeExecutionService} runs as it runs the bot. A refusal
+ * ({@link TryDialog}), and the try requested as {@link TrialRunRequestedEvent} by the statement's id and the values
+ * chosen: the core plans it again, writes its caller ({@link TrialCaller}) and runs it as it runs the bot. A refusal
  * is told in a dialog, with the plan's sentence. The assistant asks through {@link #tryWith} and {@link #runOnItsOwn},
  * which take the values the dialog would ask for and throw the refusal instead. One project's; it keeps itself
  * subscribed.
@@ -75,12 +74,12 @@ public final class Trials {
 
     private void tryStatement(Statement statement, Window owner) {
         try {
-            Method entry = ready();
+            ready();
             TrialPlan.Plan plan = plan(statement);
             if (plan.needed(Map.of()).isEmpty()) {
-                start(plan, Map.of(), entry);
+                start(plan, Map.of(), statement);
             } else {
-                TryDialog.ask(owner, plan, config).ifPresent(values -> start(plan, values, entry));
+                TryDialog.ask(owner, plan, config).ifPresent(values -> start(plan, values, statement));
             }
         } catch (IllegalArgumentException refused) {
             refuse(owner, refused.getMessage());
@@ -105,7 +104,7 @@ public final class Trials {
      *                                  that does not read, a local that can be neither found nor computed
      */
     public String tryWith(Statement statement, Map<String, String> given) {
-        Method entry = ready();
+        ready();
         TrialPlan.Plan plan = plan(statement);
         Map<String, TrialPlan.Source> chosen = new LinkedHashMap<>();
         given.keySet().forEach(name -> chosen.put(name, TrialPlan.Source.ASK));
@@ -145,7 +144,7 @@ public final class Trials {
             throw new IllegalArgumentException("This statement reads earlier values the last run did not leave and "
                     + "Studio cannot compute: give them in values — " + String.join(", ", missing) + ".");
         }
-        start(plan, values, entry);
+        start(plan, values, statement);
         return "Trying " + plan.label() + ".";
     }
 
@@ -155,9 +154,9 @@ public final class Trials {
      * @throws IllegalArgumentException with the sentence why not
      */
     public String runOnItsOwn(String packageName, String className, String method, boolean valued) {
-        Method entry = ready();
+        ready();
         TrialPlan.Plan plan = TrialPlan.call(packageName, className, method, valued);
-        start(plan, Map.of(), entry);
+        start(new TrialAsk.OnItsOwn(packageName, className, method, valued), plan.label());
         return "Running " + plan.label() + " on its own.";
     }
 
@@ -187,37 +186,41 @@ public final class Trials {
     }
 
     /**
-     * The trial entry, when one is offered and nothing runs.
+     * Whether a try can start: nothing runs and a plugin offers the trial entry. The core asks the same of its own
+     * copy of the plugins; this says it before any dialog does.
      *
      * @throws IllegalArgumentException saying why not
      */
-    private Method ready() {
+    private void ready() {
         if (running || debugging) {
             throw new IllegalArgumentException((debugging ? "The bot is being debugged." : "The bot is running.")
                     + " Stop it first, then try again.");
         }
-        return TrialCaller.entry().orElseThrow(() -> new IllegalArgumentException(
+        TrialCaller.entry().orElseThrow(() -> new IllegalArgumentException(
                 "None of this bot's plugins offers a way to try one statement, so it can only run whole."));
     }
 
     /**
-     * Writes the caller off the FX thread — finding the bot's holders parses its sources — then asks for the run on
-     * the FX thread, where the run takes its snapshot of the project.
+     * Asks for the try of {@code statement} with the values chosen: the core plans it again on its own tree and writes
+     * its caller (plan phase 10c), so what crosses is the statement's id and each value, never Java.
      */
-    private void start(TrialPlan.Plan plan, Map<String, TrialCaller.Value> values, Method entry) {
-        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
-        bus.publish(new StatusMessageEvent("Preparing to try " + plan.label() + "…"));
-        Thread.ofVirtual().name("trial-caller").start(() -> {
-            TrialCaller.Source caller;
-            try {
-                caller = TrialCaller.write(plan, values, entry, TrialCaller.holders(index.get()));
-            } catch (RuntimeException e) {
-                Platform.runLater(() -> bus.publish(new StatusMessageEvent("Couldn't try " + plan.label() + ": "
-                        + e.getMessage())));
-                return;
+    private void start(TrialPlan.Plan plan, Map<String, TrialCaller.Value> values, Statement statement) {
+        String file = state.activeFileName().orElseThrow(() -> new IllegalArgumentException(
+                "The file changed since this block was drawn. Try again once it has caught up."));
+        Map<String, JavaValue> given = new LinkedHashMap<>();
+        Set<String> computed = new LinkedHashSet<>();
+        values.forEach((name, value) -> {
+            switch (value) {
+                case TrialCaller.Given chosen -> given.put(name, chosen.value());
+                case TrialCaller.Computed ignored -> computed.add(name);
             }
-            Platform.runLater(() -> bus.publish(new TrialRunRequestedEvent(caller, plan.label())));
         });
+        start(new TrialAsk.OneStatement(file, BlockId.of(statement), given, computed), plan.label());
+    }
+
+    private void start(TrialAsk trial, String label) {
+        bus.publish(new StatusMessageEvent("Preparing to try " + label + "…"));
+        bus.publish(new TrialRunRequestedEvent(trial, label));
     }
 
     private static void refuse(Window owner, String reason) {

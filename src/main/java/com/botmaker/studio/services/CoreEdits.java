@@ -8,12 +8,13 @@ import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.edit.HistoryStep;
 import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.core.events.FileEdit;
+import com.botmaker.core.plugin.PluginWrite;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.server.CoreClient;
 import com.botmaker.core.server.CoreLauncher;
+import com.botmaker.core.services.MavenService;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -21,15 +22,18 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -49,6 +53,10 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     private final EventBus bus;
     private final EventBus.UiThread ui;
     private static final int MOST_FRAMES_WAITING = 1024;
+    /** How long a plugin's write from a thread of its own waits for the UI thread to take it. */
+    private static final Duration PLUGIN_WRITE_TAKEN = Duration.ofSeconds(10);
+    /** What the libraries resolved to, as the core last told; nothing until it told. */
+    private volatile MavenService.Resolution resolution = new MavenService.Resolution(List.of(), List.of());
 
     private final AtomicInteger framesWaiting = new AtomicInteger();
     private final Queue<CoreEvent> told = new ConcurrentLinkedQueue<>();
@@ -102,22 +110,77 @@ public final class CoreEdits implements EditPort, AutoCloseable {
             throw e;
         }
         state.setSavedByCore(true);
-        bus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, event -> edits.librariesChanged());
         return edits;
     }
 
-    /** The core resolves the changed libraries off the caller's thread: it may download. */
-    private void librariesChanged() {
-        if (closing) return;
-        CompletableFuture.runAsync(() -> {
-            try {
-                if (client.reload() instanceof EditResult.Refused refused) {
-                    System.err.println("BotMaker's core kept its libraries: " + refused.reason());
+    /**
+     * What the project's libraries resolved to in the core as this client attached (plan phase 10c): Studio binds its
+     * own copy of the plugins to it and resolves no pom itself.
+     */
+    public MavenService.Resolution resolution() {
+        return resolution;
+    }
+
+    /**
+     * The core resolves the project's libraries again, puts the contract's entry right and writes a holder a new plugin
+     * brings; what they resolved to now. On the caller's thread, which waits: it may download.
+     *
+     * @throws IllegalStateException with the core's reason when it kept its libraries (a pom it cannot read)
+     */
+    public MavenService.Resolution reload() {
+        if (request(CoreClient::reload) instanceof EditResult.Refused refused) {
+            throw new IllegalStateException(refused.reason());
+        }
+        // Told before the answer, on the reader thread, so it is in by now.
+        return resolution;
+    }
+
+    /**
+     * A write of the bot's values a plugin of this Studio asked for, made by the core (plan phase 10c). On the UI thread
+     * the mirror holds what it wrote when this returns; from another thread this waits, a while, for the UI thread to
+     * have taken it, so a plugin that reads its value back after a write reads the new one either way.
+     */
+    public Optional<String> pluginWrite(PluginWrite write) {
+        if (ui.isCurrent()) {
+            EditResult result = ask(client -> client.pluginWrite(write));
+            if (result instanceof EditResult.Refused refused) return Optional.of(refused.reason());
+            wrote();
+            return Optional.empty();
+        }
+        EditResult result = request(client -> client.pluginWrite(write));
+        if (result instanceof EditResult.Refused refused) return Optional.of(refused.reason());
+        CountDownLatch taken = new CountDownLatch(1);
+        try {
+            ui.later(() -> {
+                try {
+                    drain();
+                    wrote();
+                } finally {
+                    taken.countDown();
                 }
-            } catch (IOException e) {
-                System.err.println("BotMaker's core did not answer: " + e.getMessage());
+            });
+            if (!taken.await(PLUGIN_WRITE_TAKEN.toMillis(), TimeUnit.MILLISECONDS)) {
+                System.err.println("A plugin's write landed, but Studio had not drawn it yet.");
             }
-        });
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException gone) {
+            // The UI thread is gone: Studio is closing.
+        }
+        return Optional.empty();
+    }
+
+    /** A plugin's write landed: what it wrote beside the open file is read again, and the toolbar relabels. */
+    private void wrote() {
+        readOthersFromDisk();
+        bus.publish(new CoreApplicationEvents.PluginWroteEvent());
+    }
+
+    /** Opens ({@code open}, under {@code label}) or ends a plugin's batch in the core; see {@code Request.Batch}. */
+    public void batch(String label, boolean open) {
+        if (request(client -> client.batch(label, open)) instanceof EditResult.Refused refused) {
+            System.err.println("BotMaker's core did not take a plugin's batch: " + refused.reason());
+        }
     }
 
     /** This port, telling {@code listener} what the core tells from now on: what {@code CodeEditorService} is given. */
@@ -181,11 +244,6 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     }
 
     @Override
-    public EditResult recordRewrite(String label, List<FileEdit> edits) {
-        return ask(client -> client.recorded(label, edits));
-    }
-
-    @Override
     public EditResult rewritten(String file, String original, String source) {
         return ask(client -> client.rewritten(file, original, source));
     }
@@ -221,6 +279,11 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     }
 
     private void arrived(CoreEvent event) {
+        if (event instanceof CoreEvent.LibrariesResolved resolved) {
+            // Not queued: the asker that waits for it reads it as soon as its answer is in, on no UI thread.
+            resolution = new MavenService.Resolution(resolved.jars(), resolved.problems());
+            return;
+        }
         if (ofARun(event)) {
             toRuns(event);
             return;

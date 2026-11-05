@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The plugins write the bot through BotMaker's core (2026-11-05). Studio's copy of a plugin draws its windows and
+  reads the bot, and the core makes each write and records it in the history. A batch of writes is one undo step.
+  Studio no longer resolves the pom: it binds to what the core resolved, and Reload and the pom watcher ask the core.
+  ▶ Try sends the statement's id and the chosen values; the core plans the try and writes its caller. The toolbar
+  relabels on `PluginWroteEvent`, which replaces `FilesRewrittenEvent`.
 - The bot compiles, runs, is tried and debugged in BotMaker's core (2026-11-05): `CoreRuns` asks from the bus and tells
   what it hears on the bus, on a thread of its own so a bot's trace does not queue on the FX thread. The bot now ends when
   the project's last client leaves, including when Studio crashes. A window of Studio's sees a file's new text when the

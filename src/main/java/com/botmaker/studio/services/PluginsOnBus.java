@@ -63,9 +63,12 @@ public final class PluginsOnBus {
         return runs;
     }
 
-    /** Installs the project's history for plugins: ↶ and ↷ asked on {@code bus}, its state heard from it. */
-    public static HostHistory history(EventBus bus) {
-        if (bus == null) {
+    /**
+     * Installs the project's history for plugins: ↶ and ↷ asked on {@code bus}, its state heard from it, and a batch
+     * held open in the core around the plugin's writes, which the core makes and records (plan phase 10c).
+     */
+    public static HostHistory history(EventBus bus, CoreEdits core) {
+        if (bus == null || core == null) {
             HostHistory.clear();
             return null;
         }
@@ -83,23 +86,18 @@ public final class PluginsOnBus {
 
             @Override
             public void step(String label, List<FileEdit> edits) {
-                bus.publish(new CoreApplicationEvents.FilesRewrittenEvent(label, edits));
+                // Nothing is written here: a write is the core's, which records it there.
+            }
+
+            @Override
+            public void batch(String label, Runnable writes) {
+                core.batch(label, true);
+                try {
+                    writes.run();
+                } finally {
+                    core.batch(label, false);
+                }
             }
         });
-    }
-
-    /** What a plugin's value write tells the editor: its undo step and the open file's redraw, on {@code bus}. */
-    public static HostPluginValues.Edits edits(EventBus bus) {
-        return new HostPluginValues.Edits() {
-            @Override
-            public void step(String label, List<FileEdit> edits) {
-                bus.publish(new CoreApplicationEvents.FilesRewrittenEvent(label, edits));
-            }
-
-            @Override
-            public void redraw(String content) {
-                bus.publish(new CoreApplicationEvents.UIRefreshRequestedEvent(content));
-            }
-        };
     }
 }

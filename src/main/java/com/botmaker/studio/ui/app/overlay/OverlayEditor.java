@@ -46,7 +46,7 @@ import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.core.run.capture.Capture;
 import com.botmaker.studio.services.overlay.OverlayCalls;
 import com.botmaker.studio.services.overlay.OverlayTargets;
-import com.botmaker.studio.services.overlay.ProbeCalls;
+import com.botmaker.core.plugin.ProbeCalls;
 import com.botmaker.studio.services.overlay.ProbeEngine;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.core.run.trial.TrialCaller;

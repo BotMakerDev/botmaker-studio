@@ -6,7 +6,6 @@ import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.edit.HistoryStep;
 import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.core.events.FileEdit;
 import com.botmaker.core.parser.EditorOutput;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
@@ -43,12 +42,6 @@ public final class LocalEdits implements EditPort {
     @Override
     public EditResult step(HistoryStep step) {
         return core.step(step) ? new EditResult.Accepted(List.of()) : new EditResult.Refused("No step that way.");
-    }
-
-    @Override
-    public EditResult recordRewrite(String label, List<FileEdit> edits) {
-        core.recordRewrite(label, edits);
-        return new EditResult.Accepted(List.of());
     }
 
     @Override

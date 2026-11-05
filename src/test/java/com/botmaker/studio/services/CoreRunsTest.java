@@ -8,6 +8,7 @@ import com.botmaker.core.server.CoreLauncher;
 import com.botmaker.core.server.CoreMain;
 import com.botmaker.core.server.CoreServer;
 import com.botmaker.core.server.OpenProject;
+import com.botmaker.core.services.MavenService;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.CoreApplicationEvents;
@@ -47,10 +48,12 @@ class CoreRunsTest extends FxHeadlessTest {
             }
             """;
 
-    private static final OpenProject.Libraries LIBRARIES = new OpenProject.Libraries() {
+    /** The project's libraries are this test's classpath; nothing is resolved or bound. */
+    static final OpenProject.Libraries LIBRARIES = new OpenProject.Libraries() {
         @Override
-        public List<String> classpath(ProjectConfig config, ProjectState state) {
-            return Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator));
+        public MavenService.Resolution resolve(ProjectConfig config, ProjectState state) {
+            return new MavenService.Resolution(
+                    Arrays.asList(System.getProperty("java.class.path").split(File.pathSeparator)), List.of());
         }
 
         @Override

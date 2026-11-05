@@ -148,22 +148,19 @@ public class BotProject {
         DiagnosticsManager diagnosticsManager = new DiagnosticsManager();
         BlockDragAndDropManager dragAndDropManager = new BlockDragAndDropManager(eventBus);
 
-        // 5. Resolve dependencies (Maven Resolver, reads pom.xml)
+        // 5. The dependencies, as the core resolved them on open (plan phase 10c): one resolve, in the core, and the
+        //    same jars bound in both processes. A pom that did not resolve still opens, with what did.
         progress.step(OpenStep.DEPENDENCIES);
-        List<String> classpath;
         // The pom's Java is read even when its dependencies do not resolve: the parse needs it either way.
         state.setLevel(JavacRelease.level(config.projectPath()));
-        try {
-            classpath = MavenService.resolveClasspath(config.projectPath(), progress);
-            state.setResolvedClasspath(classpath);
-            logSdkBuildStamp(classpath);
-        } catch (Exception e) {
-            System.err.println("Warning: Could not resolve classpath: " + e.getMessage());
-            classpath = List.of();
-        }
+        MavenService.Resolution resolved = coreEdits.resolution();
+        List<String> classpath = resolved.jars();
+        state.setResolvedClasspath(classpath);
+        logSdkBuildStamp(classpath);
+        resolved.problems().forEach(problem -> System.err.println("Warning: Could not resolve " + problem));
 
         // 5a. The contract's dependency and a plugin's editor libraries are the core's open-time writes since
-        //     phase 10a1 (OpenProject.Libraries.MAVEN), made before the resolve above.
+        //     phase 10a1 (OpenProject.Libraries.MAVEN), made before its resolve.
 
         // 5-. Bind the plugins this project's own jars declare, so the palette and the value vocabulary
         // describe the SDK it pins rather than the one Studio bundles. An empty or unresolvable classpath
@@ -181,8 +178,8 @@ public class BotProject {
         // it was created from, and a plugin that wants to add one to an existing project writes it from its
         // own window. The host is not in the business of putting files in somebody's source tree.
         // Revised 2026-09-26: the host does write a plugin's managed *holder* when the project has none —
-        // generated from what the plugin declares, not copied, never over a file — once services are up
-        // (HostPluginValues.createMissing, end of initializeServices).
+        // generated from what the plugin declares, not copied, never over a file — in the core since phase 10c,
+        // before the open's answer (OpenProject.createMissing).
 
         // 6. Build or load the type index for external libraries
         TypeSummaryManager typeSummaryManager = TypeSummaryManager.buildOrLoad(classpath);
@@ -208,7 +205,9 @@ public class BotProject {
         warmUp.start();
 
         // 7b. Library management (pom.xml is the source of truth)
-        LibraryService libraryService = new LibraryService(config, state, typeSummaryManager, eventBus);
+        // Its resolves are the core's: Studio binds its copy of the plugins to what the core resolved.
+        LibraryService libraryService = new LibraryService(config, state, typeSummaryManager, eventBus,
+                coreEdits::reload);
 
         // 7b-. The Errors panel asks whether a call is @Deprecated the way the blocks do, off the index built
         //      at step 6, through a predicate rather than a dependency — validation/ stays free of Maven, jars
@@ -309,14 +308,13 @@ public class BotProject {
         // for the same reason, and the services handed over are this project's: a value written or a
         // constant renamed through a window left open over the project the user just left would land in the
         // wrong file.
-        HostPluginValues.install(config, state, HostServices.forProject(config), PluginsOnBus.edits(eventBus));
+        // Since phase 10c a write is the core's: this copy of the plugins reads the bot and forwards each write.
+        HostPluginValues.installForwarding(config, state, HostServices.forProject(config), coreEdits::pluginWrite);
         // And the undo those writes join, the core's (HistoryOnBus): a plugin window's ↶ is the menu's.
-        PluginsOnBus.history(eventBus);
+        PluginsOnBus.history(eventBus, coreEdits);
 
-        // Every bound plugin's managed holder the project lacks (Sdk.java, Pictures.java), written now so the
-        // file is there before the explorer is first drawn. Never over a file; LibraryService does the same
-        // after each rebind.
-        HostPluginValues.createMissing();
+        // Every bound plugin's managed holder the project lacks (Sdk.java, Pictures.java) the core wrote on open,
+        // before this Studio heard the answer, and writes again after each reload.
 
         // A pom edited outside Studio — mvn, an IDE, a pull, a restore — rebinds the plugins by itself.
         libraryService.watchPom();

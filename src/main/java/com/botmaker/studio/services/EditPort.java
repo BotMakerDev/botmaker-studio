@@ -3,7 +3,6 @@ package com.botmaker.studio.services;
 import com.botmaker.core.edit.Edit;
 import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.edit.HistoryStep;
-import com.botmaker.core.events.FileEdit;
 
 import java.util.List;
 
@@ -19,9 +18,6 @@ public interface EditPort {
 
     /** An undo or a redo of the project's history. */
     EditResult step(HistoryStep step);
-
-    /** What a plugin already wrote, buffer and disk, recorded as one step named {@code label}. */
-    EditResult recordRewrite(String label, List<FileEdit> edits);
 
     /** A write of the open file made outside an edit (an open-time migration), recorded as one step. */
     EditResult rewritten(String file, String original, String source);
@@ -43,11 +39,6 @@ public interface EditPort {
 
         @Override
         public EditResult step(HistoryStep step) {
-            return READ_ONLY;
-        }
-
-        @Override
-        public EditResult recordRewrite(String label, List<FileEdit> edits) {
             return READ_ONLY;
         }
 

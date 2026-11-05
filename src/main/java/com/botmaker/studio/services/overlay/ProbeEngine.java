@@ -1,5 +1,6 @@
 package com.botmaker.studio.services.overlay;
 
+import com.botmaker.core.plugin.ProbeCalls;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.ProbeContext;

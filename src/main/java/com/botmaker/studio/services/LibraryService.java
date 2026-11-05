@@ -10,7 +10,6 @@ import com.botmaker.studio.events.CoreApplicationEvents.SettingsChangedEvent;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.migrate.ApiCache;
 import com.botmaker.core.index.TypeSummaryManager;
-import com.botmaker.core.plugin.HostPluginValues;
 import com.botmaker.core.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
@@ -60,14 +59,27 @@ public final class LibraryService {
     private String boundPom;
     private PomWatcher pomWatcher;
 
+    private final Resolver resolver;
+
+    /** Resolving with Maven in this process: a test's, with no core behind it. */
     public LibraryService(ProjectConfig config,
                           ProjectState state,
                           TypeSummaryManager typeIndex,
                           EventBus eventBus) {
+        this(config, state, typeIndex, eventBus,
+                () -> MavenService.resolve(config.projectPath(), ProgressReporter.NONE));
+    }
+
+    public LibraryService(ProjectConfig config,
+                          ProjectState state,
+                          TypeSummaryManager typeIndex,
+                          EventBus eventBus,
+                          Resolver resolver) {
         this.config = config;
         this.state = state;
         this.typeIndex = typeIndex;
         this.eventBus = eventBus;
+        this.resolver = resolver;
     }
 
     /** The user libraries currently declared in the project pom. */
@@ -146,7 +158,7 @@ public final class LibraryService {
                 throw new RuntimeException("Failed to update pom.xml: " + e.getMessage(), e);
             }
             String after = readQuietly(pom);
-            MavenService.Resolution resolution = MavenService.resolve(config.projectPath(), ProgressReporter.NONE);
+            MavenService.Resolution resolution = resolver.resolve();
             List<String> refused = resolution.problems().stream()
                     .filter(line -> named.stream().anyMatch(coordinate -> line.startsWith(coordinate + ":")))
                     .toList();
@@ -158,12 +170,28 @@ public final class LibraryService {
                         throw new RuntimeException("Could not download " + String.join("; ", refused)
                                 + ", and pom.xml could not be put back: " + e.getMessage(), e);
                     }
+                    // The core resolved and bound the refused pom: it binds the one put back. Should that reload be
+                    // refused too, the download is still what the user is told about.
+                    try {
+                        boundPom = bind(resolver.resolve(), before);
+                    } catch (RuntimeException e) {
+                        boundPom = before;
+                    }
                 }
                 throw new RuntimeException("Could not download " + String.join("; ", refused)
                         + ". pom.xml is unchanged.");
             }
             boundPom = bind(resolution, after);
         }, rebinds);
+    }
+
+    /**
+     * What resolves the project's libraries: the core since phase 10c, which also puts the contract's entry right and
+     * writes a holder a new plugin brings; Maven in this process for a test with no core.
+     */
+    @FunctionalInterface
+    public interface Resolver {
+        MavenService.Resolution resolve();
     }
 
     private Path pom() {
@@ -187,7 +215,7 @@ public final class LibraryService {
         return CompletableFuture.supplyAsync(() -> {
             String now = readQuietly(pom());
             if (now == null || now.equals(boundPom)) return false;
-            boundPom = bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE), now);
+            boundPom = bind(resolver.resolve(), now);
             return true;
         }, rebinds);
     }
@@ -228,7 +256,7 @@ public final class LibraryService {
     /** Re-resolve without a pom write, then {@link #bind}. */
     private void rebind() {
         String pom = readQuietly(pom());
-        boundPom = bind(MavenService.resolve(config.projectPath(), ProgressReporter.NONE), pom);
+        boundPom = bind(resolver.resolve(), pom);
     }
 
     /**
@@ -243,26 +271,13 @@ public final class LibraryService {
      * {@link ProjectState} on the FX thread, which is the only thread that object is used on.
      *
      * @param pom the pom text {@code resolution} was resolved from
-     * @return the pom text now bound — {@code pom}, or the pom as re-read when the contract entry was changed
-     *         here, so the watcher does not take Studio's own write for an outside one
+     * @return the pom text now bound — the pom as re-read once resolved, since the core may have put the contract's
+     *         entry right in it (ContractDependency.reconcile, the core's since phase 10c), so the watcher does not
+     *         take that write for an outside one; {@code pom} when it cannot be read
      */
     private String bind(MavenService.Resolution resolution, String pom) {
-        // The contract entry follows the bot's own imports (ContractDependency.reconcile): declared when a pom
-        // edit took away what brought it (a plugin removed), dropped when a plugin brings it again at that version
-        // or newer. Only after a complete resolve: a jar that failed to download is not a plugin gone, and a direct
-        // entry written then would outlive it and pin the contract once it came back.
-        if (resolution.problems().isEmpty()) {
-            boolean[] used = {false};
-            onFx(() -> used[0] = ContractDependency.usedBy(config, state));
-            try {
-                if (ContractDependency.reconcile(config.projectPath(), used[0], resolution.jars())) {
-                    resolution = MavenService.resolve(config.projectPath(), ProgressReporter.NONE);
-                    pom = readQuietly(pom());
-                }
-            } catch (Exception e) {
-                System.err.println("Could not put the plugin contract right in pom.xml: " + e.getMessage());
-            }
-        }
+        String resolvedFrom = readQuietly(pom());
+        if (resolvedFrom != null) pom = resolvedFrom;
         List<String> classpath = resolution.jars();
         JavaLevel level = JavacRelease.level(config.projectPath());
         onFx(() -> {
@@ -274,9 +289,8 @@ public final class LibraryService {
         // A -SNAPSHOT rebuilt in place keeps its old API readable for the author's migration (2026-10-16). Only a
         // complete resolve: a jar that failed to download is no plugin change, and would stand as the API before.
         if (resolution.problems().isEmpty()) ApiCache.shared().loaded(config.projectPath(), classpath);
-        // A plugin just added brings its managed holders with it (2026-09-26): written from what the plugin
-        // declares, never over a file, never into main. The explorer redraws on the event below.
-        HostPluginValues.createMissing();
+        // A plugin just added brings its managed holders with it (2026-09-26), which the core wrote as it reloaded
+        // (phase 10c) and told by name. The explorer redraws on the event below.
         typeIndex.refresh(classpath);
         unresolved = resolution.problems();
         eventBus.publish(new LibrariesChangedEvent(currentLibraries()));

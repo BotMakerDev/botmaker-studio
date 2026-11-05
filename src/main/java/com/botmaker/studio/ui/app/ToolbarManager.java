@@ -73,7 +73,7 @@ public class ToolbarManager {
         // refreshing the bar costs less than knowing which button a settings change touched.
         eventBus.subscribe(CoreApplicationEvents.SettingsChangedEvent.class, e -> refreshItems(), true);
         // A plugin's write to the bot's Java — its game or capture source is a @Param now — relabels the bar too.
-        eventBus.subscribe(CoreApplicationEvents.FilesRewrittenEvent.class, e -> refreshItems(), true);
+        eventBus.subscribe(CoreApplicationEvents.PluginWroteEvent.class, e -> refreshItems(), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> setAppState(AppState.RUNNING), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStoppedEvent.class, e -> setAppState(AppState.IDLE), true);
         eventBus.subscribe(CoreApplicationEvents.DebugSessionEvent.class, e -> {
