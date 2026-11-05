@@ -12,7 +12,7 @@ import com.botmaker.studio.assist.PastRuns;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.plugin.PluginHost;
-import com.botmaker.studio.runtime.RunTelemetry;
+import com.botmaker.core.run.RunTelemetry;
 import com.botmaker.studio.util.BrowserLauncher;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;

@@ -1,4 +1,4 @@
-package com.botmaker.studio.runtime;
+package com.botmaker.core.run;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;

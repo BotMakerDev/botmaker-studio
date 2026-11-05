@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.services.debug.DebugSnapshot;
+import com.botmaker.core.run.debug.DebugSnapshot;
 import com.botmaker.studio.ui.fx.FxHeadlessTest;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;

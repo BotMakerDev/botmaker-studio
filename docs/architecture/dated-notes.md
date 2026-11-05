@@ -1,5 +1,13 @@
 # Dated notes — read these before the other files here
 
+> **Compiling, running, trying and debugging are `botmaker-core`'s since 2026-11-05** (phase 7a of the same plan).
+> `runtime` (all but `StopKey` and `StopKeyPreference`), `services.trial`, `services.debug`, `DebuggingService`,
+> `Capture`, `DesktopGrab` and `SessionEnvironment` are now `com.botmaker.core.run` and its `agent`, `tryhost`, `trial`,
+> `debug` and `capture` packages; the run agent's jar is cut from the core's jar. Studio keeps the bridges (`RunOnBus`,
+> `DebugOnBus`), `TargetCapture`, `ScreenOverlay` and the stop key. `RunCheck` now answers a `Verdict`: the problems it
+> showed, which the run tells every client as `CoreEvent.Diagnostics`, and its refusal. Text below that names
+> `studio.runtime` or `services.debug` means these.
+
 > **A run speaks the core's events since 2026-11-05** (phase 7 of the same plan; the classes move in 7a).
 > `CodeExecutionService` reports through a `Consumer<CoreEvent>` (`RunState`, `RunOutput`, `RunLogged`, `InputAsked`,
 > `Status`), checks before a run through a `RunCheck`, and hands trace lines and telemetry frames to a

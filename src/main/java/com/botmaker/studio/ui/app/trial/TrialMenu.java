@@ -5,7 +5,7 @@ import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents.MethodRunRequestedEvent;
 import com.botmaker.studio.events.CoreApplicationEvents.TryRequestedEvent;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.services.trial.TrialCaller;
+import com.botmaker.core.run.trial.TrialCaller;
 import javafx.scene.control.MenuItem;
 import javafx.stage.Window;
 import org.eclipse.jdt.core.dom.ASTNode;

@@ -1,7 +1,7 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.services.capture.Capture;
-import com.botmaker.studio.services.capture.Capture.WindowRef;
+import com.botmaker.core.run.capture.Capture;
+import com.botmaker.core.run.capture.Capture.WindowRef;
 import com.botmaker.studio.services.capture.ScreenOverlay;
 import com.botmaker.studio.services.capture.TargetCapture;
 

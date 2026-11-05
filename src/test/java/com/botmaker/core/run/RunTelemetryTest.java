@@ -1,4 +1,4 @@
-package com.botmaker.studio.runtime;
+package com.botmaker.core.run;
 
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.shared.ipc.TelemetryEvent;

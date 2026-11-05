@@ -1,5 +1,6 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.run.DebuggingService;
 import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.edit.CoreEditor;
 import com.botmaker.core.edit.Edit;

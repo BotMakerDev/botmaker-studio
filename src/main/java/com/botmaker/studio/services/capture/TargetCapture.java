@@ -1,5 +1,7 @@
 package com.botmaker.studio.services.capture;
 
+import com.botmaker.core.run.capture.DesktopGrab;
+import com.botmaker.core.run.capture.Capture;
 import javafx.stage.Screen;
 import javafx.stage.Window;
 

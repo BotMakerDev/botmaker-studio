@@ -12,7 +12,7 @@ import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.sharing.ProgramEntries;
 import com.botmaker.core.sharing.UnpackedBots;
 
-import com.botmaker.studio.runtime.TreeCompile;
+import com.botmaker.core.run.TreeCompile;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

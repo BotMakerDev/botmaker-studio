@@ -3,7 +3,7 @@ package com.botmaker.studio.project;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;

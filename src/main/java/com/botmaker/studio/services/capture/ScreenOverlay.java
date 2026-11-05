@@ -1,5 +1,7 @@
 package com.botmaker.studio.services.capture;
 
+import com.botmaker.core.run.capture.DesktopGrab;
+import com.botmaker.core.run.capture.Capture;
 import com.botmaker.core.project.ProjectPreferences;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 

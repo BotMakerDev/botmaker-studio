@@ -8,7 +8,7 @@ import com.botmaker.runlog.api.LogLine;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.plugin.PluginHost;
-import com.botmaker.studio.runtime.RunTelemetry;
+import com.botmaker.core.run.RunTelemetry;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.app.reports.ReportConsent;

@@ -4,7 +4,7 @@ import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.vcs.ProjectVcs;
 import com.botmaker.core.project.vcs.Remote;
 import com.botmaker.core.project.vcs.VersionOrigin;
-import com.botmaker.studio.runtime.TreeCompile;
+import com.botmaker.core.run.TreeCompile;
 
 import java.io.IOException;
 import java.util.List;

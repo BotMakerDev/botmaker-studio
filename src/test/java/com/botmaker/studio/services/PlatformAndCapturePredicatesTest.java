@@ -1,7 +1,7 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.studio.services.capture.DesktopGrab;
-import com.botmaker.studio.services.platform.SessionEnvironment;
+import com.botmaker.core.run.capture.DesktopGrab;
+import com.botmaker.core.run.capture.SessionEnvironment;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIf;
 

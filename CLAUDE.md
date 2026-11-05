@@ -77,7 +77,7 @@ options*:
 
 The same two are in `pom.xml` (`javafx-maven-plugin` `<options>` and jpackage `<javaOptions>`), and
 `Enable-Native-Access: ALL-UNNAMED` is in the shaded jar's manifest for `java -jar`. A bot's own JVM is a
-third command line, built in `runtime/BotJvm`.
+third command line, built in `botmaker-core`'s `run/BotJvm` (since 2026-11-05).
 
 ## Code Style
 

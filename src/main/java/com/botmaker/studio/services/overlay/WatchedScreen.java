@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayFrame;
 import com.botmaker.plugin.api.overlay.OverlayPart;
 import com.botmaker.plugin.api.overlay.Watched;
-import com.botmaker.studio.services.capture.Capture;
+import com.botmaker.core.run.capture.Capture;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;

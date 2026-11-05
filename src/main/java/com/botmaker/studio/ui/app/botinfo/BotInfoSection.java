@@ -4,7 +4,7 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.core.project.BotIcon;
 import com.botmaker.core.project.PomInfo;
 import com.botmaker.studio.services.capture.ScreenOverlay;
-import com.botmaker.studio.services.capture.Capture;
+import com.botmaker.core.run.capture.Capture;
 import com.botmaker.studio.ui.Choosers;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;

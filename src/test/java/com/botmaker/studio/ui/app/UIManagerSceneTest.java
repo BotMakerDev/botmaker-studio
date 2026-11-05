@@ -6,7 +6,7 @@ import com.botmaker.studio.parser.EditorFixture;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.project.StudioContext;
-import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.studio.services.RunOnBus;

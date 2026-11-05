@@ -6,7 +6,7 @@ import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.plugin.api.run.RunProperty;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.runtime.CodeExecutionService;
+import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.services.ProjectSettingsService;
 
 import java.util.List;
@@ -39,7 +39,7 @@ import java.util.function.Consumer;
  *
  * <p><b>Telemetry crosses as the bytes it arrived as</b> (2026-09-29; decoded and re-encoded before). Studio
  * does not read a match or a click — that is the runtime's vocabulary — so {@link
- * com.botmaker.studio.runtime.RunTelemetry} relays each frame whole and the plugin decodes it with its own
+ * com.botmaker.core.run.RunTelemetry} relays each frame whole and the plugin decodes it with its own
  * copy of the format. A debug line is the exception, because showing a log is a capability of any host: it
  * arrives as a {@link TraceLine} and goes to {@link #onTrace} listeners only ({@code
  * docs/refactor/40-run-trace.md}).

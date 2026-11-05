@@ -27,7 +27,7 @@ import com.botmaker.studio.sharing.ListingStatus;
 import com.botmaker.studio.sharing.MyCopy;
 import com.botmaker.studio.sharing.PublishRequest;
 import com.botmaker.studio.sharing.Suggestion;
-import com.botmaker.studio.runtime.TreeCompile;
+import com.botmaker.core.run.TreeCompile;
 import com.botmaker.studio.util.BrowserLauncher;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;

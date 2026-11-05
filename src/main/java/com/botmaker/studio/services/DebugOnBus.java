@@ -1,5 +1,6 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.run.DebuggingService;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
@@ -7,10 +8,10 @@ import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.core.StatementBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.runtime.CodeExecutionService;
-import com.botmaker.studio.services.debug.DebugSnapshot;
-import com.botmaker.studio.services.debug.DebugView;
-import com.botmaker.studio.services.debug.FollowPacer;
+import com.botmaker.core.run.CodeExecutionService;
+import com.botmaker.core.run.debug.DebugSnapshot;
+import com.botmaker.core.run.debug.DebugView;
+import com.botmaker.core.run.debug.FollowPacer;
 import com.botmaker.studio.ui.FxThread;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;

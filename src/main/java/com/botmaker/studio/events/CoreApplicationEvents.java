@@ -200,7 +200,7 @@ public class CoreApplicationEvents {
                                           javafx.stage.Window owner) implements ApplicationEvent {}
 
     /** A try's caller, written: {@code CodeExecutionService} compiles it beside the bot and runs it as a run. */
-    public record TrialRunRequestedEvent(com.botmaker.studio.services.trial.TrialCaller.Source caller, String label)
+    public record TrialRunRequestedEvent(com.botmaker.core.run.trial.TrialCaller.Source caller, String label)
             implements ApplicationEvent {}
 
     // --- User history requests ---
@@ -261,6 +261,6 @@ public class CoreApplicationEvents {
      * {@link DebugSessionPausedEvent} of the same pause. Not in the session family: a subscriber to that family
      * switches over it, and this is data for the Debug tab, not a state change.
      */
-    public record DebugSnapshotEvent(com.botmaker.studio.services.debug.DebugSnapshot snapshot)
+    public record DebugSnapshotEvent(com.botmaker.core.run.debug.DebugSnapshot snapshot)
             implements ApplicationEvent {}
 }

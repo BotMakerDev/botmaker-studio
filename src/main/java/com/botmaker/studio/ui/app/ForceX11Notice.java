@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.core.project.ProjectPreferences;
-import com.botmaker.studio.services.platform.SessionEnvironment;
+import com.botmaker.core.run.capture.SessionEnvironment;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;

@@ -108,10 +108,12 @@ class OnPathParityTest {
                 "exists() is the method for an argv[0] that may be a path; that is the split SV4 must respect");
     }
 
-    /** The three files SV4 touched; the ones whose arguments have to stay bare names. */
+    /**
+     * The files SV4 touched that are still Studio's; the ones whose arguments have to stay bare names. The other two,
+     * {@code DesktopGrab} and {@code SessionEnvironment}, are the core's since plan phase 7a, and so is their guard
+     * ({@code OnPathCallSitesTest} there).
+     */
     private static final List<Path> CALL_SITES = List.of(
-            Path.of("src/main/java/com/botmaker/studio/services/capture/DesktopGrab.java"),
-            Path.of("src/main/java/com/botmaker/studio/services/platform/SessionEnvironment.java"),
             Path.of("src/main/java/com/botmaker/studio/services/UpdateService.java"));
 
     /**

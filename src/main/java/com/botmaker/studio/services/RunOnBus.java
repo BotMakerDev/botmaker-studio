@@ -7,12 +7,15 @@ import com.botmaker.core.project.ProjectState;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.runtime.CodeExecutionService;
-import com.botmaker.studio.runtime.RunCheck;
-import com.botmaker.studio.runtime.RunTelemetry;
+import com.botmaker.core.run.CodeExecutionService;
+import com.botmaker.core.run.RunCheck;
+import com.botmaker.core.run.RunTelemetry;
 import com.botmaker.studio.ui.FxThread;
+import com.botmaker.core.validation.ErrorTranslator;
+import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import org.eclipse.lsp4j.Diagnostic;
+import org.eclipse.lsp4j.DiagnosticSeverity;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -35,7 +38,7 @@ public final class RunOnBus {
     public static CodeExecutionService service(DiagnosticsManager diagnostics, ProjectConfig config,
                                                ProjectState state, EventBus bus) {
         CodeExecutionService service = new CodeExecutionService(config, state, FxThread.INSTANCE,
-                check(diagnostics, bus), events(bus), telemetry(bus));
+                check(diagnostics, state, bus), events(bus), telemetry(bus));
         requests(bus, service, state);
         return service;
     }
@@ -78,6 +81,7 @@ public final class RunOnBus {
                     logged.folder().isEmpty() ? null : Path.of(logged.folder())));
             case CoreEvent.InputAsked ask -> bus.publish(new CoreApplicationEvents.InputRequestedEvent(
                     new TelemetryEvent.Ask(ask.id(), ask.kind(), ask.prompt(), ask.choices(), ask.line())));
+            // Diagnostics: Studio drew them from its own check already, ranges and all (see check).
             default -> {
             }
         }
@@ -105,18 +109,43 @@ public final class RunOnBus {
      * that need a name (see UnfilledSlot). Deprecated SDK calls ride along but never stop it: they compile and work
      * today, and the warning is the deprecation cycle.
      */
-    static RunCheck check(DiagnosticsManager diagnostics, EventBus bus) {
+    static RunCheck check(DiagnosticsManager diagnostics, ProjectState state, EventBus bus) {
         return () -> {
             List<Diagnostic> emptySlots = diagnostics.validateBlocks();
             List<Diagnostic> shown = new ArrayList<>(emptySlots);
             shown.addAll(diagnostics.deprecationWarnings());
             shown.addAll(diagnostics.entryPointHints());
-            // Always published: an empty list clears the slot errors shown before.
+            // Always published: an empty list clears the slot errors shown before. Studio's own marks come from these,
+            // which keep their ranges; the core tells other clients the same problems as CoreEvent.Diagnostics.
             bus.publish(new CoreApplicationEvents.DiagnosticsUpdatedEvent(shown));
+            // Told whole, the compiler's last problems too: an empty list clears a client's marks.
+            List<Diagnostic> all = new ArrayList<>(diagnostics.getDiagnostics());
+            all.addAll(shown);
+            Optional<CoreEvent.Diagnostics> told = state.activeFileName().map(file -> new CoreEvent.Diagnostics(file,
+                    all.stream().map(d -> problem(diagnostics, d)).toList()));
             if (!emptySlots.isEmpty()) {
-                return Optional.of("Run aborted: choose a variable for the highlighted slot(s) — see the Errors tab.");
+                return new RunCheck.Verdict(told,
+                        Optional.of("Run aborted: choose a variable for the highlighted slot(s) — see the Errors tab."));
             }
-            return diagnostics.hasErrors() ? Optional.of("Run aborted due to errors.") : Optional.empty();
+            return new RunCheck.Verdict(told,
+                    diagnostics.hasErrors() ? Optional.of("Run aborted due to errors.") : Optional.empty());
         };
+    }
+
+    /**
+     * One of Studio's diagnostics as the protocol's problem: on the node of the block it marks, at its 1-based line (1
+     * when it has no range). No severity counts as an error, as {@link DiagnosticsManager#hasErrors()} counts it.
+     */
+    private static CoreEvent.Diagnostics.Problem problem(DiagnosticsManager diagnostics, Diagnostic diagnostic) {
+        DiagnosticSeverity severity = diagnostic.getSeverity();
+        CoreEvent.Diagnostics.Severity told = severity == null || severity == DiagnosticSeverity.Error
+                ? CoreEvent.Diagnostics.Severity.ERROR
+                : severity == DiagnosticSeverity.Warning ? CoreEvent.Diagnostics.Severity.WARNING
+                : CoreEvent.Diagnostics.Severity.INFO;
+        int line = diagnostic.getRange() == null ? 1 : diagnostic.getRange().getStart().getLine() + 1;
+        String node = diagnostics.findBlockForDiagnostic(diagnostic)
+                .map(block -> BlockId.of(block.getAstNode())).orElse("");
+        String message = ErrorTranslator.messageOf(diagnostic);
+        return new CoreEvent.Diagnostics.Problem(node, told, line, message == null ? "" : message);
     }
 }
