@@ -10,6 +10,8 @@ import com.botmaker.studio.assist.UiEvents;
 import com.botmaker.core.config.AppPaths;
 import com.botmaker.core.config.Constants;
 import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.studio.plugin.FxUi;
+import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.core.plugin.PluginGate;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.project.BotProject;
@@ -115,6 +117,8 @@ public class BotMakerStudio extends Application {
         // Before any window is shown: from here on every window gets the stylesheet and the theme class as it
         // appears, including the popups (context menus, tooltips, dropdowns) that no call site can reach.
         ThemedWindows.install();
+        // A plugin's dialogs and look reach this window from here on; before, they answer as a host with no UI.
+        HostServices.attach(FxUi.FOCUSED);
         // The saved theme before the first window too (2026-10-25): it loaded with the editor or the Runner, so the
         // home and the loading page were always light, and a dark user's window flashed light on every open.
         BlockTheme.initialize();

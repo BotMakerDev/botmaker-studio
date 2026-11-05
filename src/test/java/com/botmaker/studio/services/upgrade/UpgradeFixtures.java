@@ -157,7 +157,8 @@ final class UpgradeFixtures {
         ProjectConfig config = ProjectConfig.forProject("fixture", project);
         EventBus bus = new EventBus(false);
         LibraryService libraries = new LibraryService(config, state, new TypeSummaryManager(), bus);
-        return new PluginUpgradeService(config, state, libraries, new JitPackSearch(), PluginUpgradeService.SDK);
+        return new PluginUpgradeService(config, state, libraries::removePlugin, new JitPackSearch(),
+                PluginUpgradeService.SDK);
     }
 
     /**

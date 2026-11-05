@@ -541,7 +541,8 @@ public final class InstalledPluginsTab {
         Row(InstalledPlugin plugin, boolean twinned) {
             this.plugin = plugin;
             this.twinned = twinned;
-            this.upgrades = new PluginUpgradeService(config, state, libraryService, jitpack, plugin.artifact());
+            this.upgrades = new PluginUpgradeService(config, state, libraryService::removePlugin, jitpack,
+                    plugin.artifact());
 
             name = new Label(plugin.displayName());
             // Resolved: a template pins its SDK as ${botmaker.sdk.version}, and the pom's text is not a version.

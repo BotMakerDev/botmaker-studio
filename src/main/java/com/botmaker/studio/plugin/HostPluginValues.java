@@ -13,8 +13,6 @@ import com.botmaker.plugin.api.source.RunParameter;
 import com.botmaker.plugin.api.value.Ref;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
-import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.core.events.EventBus;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.core.parser.refactor.ReviewMarker;
 import com.botmaker.java.grammar.JavaValue;
@@ -88,29 +86,33 @@ public final class HostPluginValues implements PluginValues {
     private final ProjectConfig config;
     private final ProjectState state;
     private final StudioServices services;
-    private final EventBus eventBus;
+    private final Edits edits;
 
-    private HostPluginValues(ProjectConfig config, ProjectState state, StudioServices services,
-                             EventBus eventBus) {
+    /** What a write here tells the host: the undo step it made, and the open file's new text to redraw. */
+    public interface Edits extends WriteSteps.Recorded {
+        void redraw(String content);
+    }
+
+    private HostPluginValues(ProjectConfig config, ProjectState state, StudioServices services, Edits edits) {
         this.config = config;
         this.state = state;
         this.services = services;
-        this.eventBus = eventBus;
+        this.edits = edits;
     }
 
     /**
      * Makes this project's values the ones a plugin reaches, replacing whatever was installed before.
      *
-     * <p>{@code eventBus} may be null — it is only how the editor is told to redraw a file rewritten underneath
-     * it, and a headless caller has no editor to redraw.
+     * <p>{@code edits} may be null — it is only how the history hears a write and the editor is told to redraw a
+     * file rewritten underneath it, and a headless caller has neither.
      */
     public static synchronized void install(ProjectConfig config, ProjectState state,
-                                            StudioServices services, EventBus eventBus) {
+                                            StudioServices services, Edits edits) {
         if (config == null || state == null) {
             clear();
             return;
         }
-        current = new HostPluginValues(config, state, services, eventBus);
+        current = new HostPluginValues(config, state, services, edits);
     }
 
     /** No project: a plugin asking now gets {@link PluginValues#NONE}. */
@@ -336,8 +338,8 @@ public final class HostPluginValues implements PluginValues {
         WriteSteps.step(HISTORY_LABEL, () -> {
             writes.run();
             return null;
-        }, step -> {
-            if (eventBus != null) eventBus.publish(step);
+        }, (label, changed) -> {
+            if (edits != null) edits.step(label, changed);
         });
     }
 
@@ -933,10 +935,10 @@ public final class HostPluginValues implements PluginValues {
      * really changed, so a stale view is the only thing wrong, which is the kind of bug that reads as data loss.
      */
     private void redraw(java.util.Collection<Path> changed) {
-        if (eventBus == null) return;
+        if (edits == null) return;
         ProjectFile active = state.getActiveFile();
         if (active == null || active.getPath() == null
                 || !changed.contains(active.getPath().toAbsolutePath().normalize())) return;
-        eventBus.publish(new CoreApplicationEvents.UIRefreshRequestedEvent(active.getContent()));
+        edits.redraw(active.getContent());
     }
 }

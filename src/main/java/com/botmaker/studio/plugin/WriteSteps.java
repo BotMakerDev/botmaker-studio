@@ -1,6 +1,5 @@
 package com.botmaker.studio.plugin;
 
-import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.FileEdit;
 import com.botmaker.core.services.BotSources;
 
@@ -9,7 +8,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -28,6 +26,12 @@ import java.util.function.Supplier;
 final class WriteSteps {
 
     private WriteSteps() {}
+
+    /** Where a finished step goes: the project's history, which records the files it rewrote under its label. */
+    @FunctionalInterface
+    public interface Recorded {
+        void step(String label, List<FileEdit> edits);
+    }
 
     private static final ThreadLocal<Step> OPEN = new ThreadLocal<>();
 
@@ -96,7 +100,7 @@ final class WriteSteps {
      * they changed nothing; inside a step already open on this thread, they are part of that one, under its
      * label.
      */
-    static <T> T step(String label, Supplier<T> writes, Consumer<CoreApplicationEvents.FilesRewrittenEvent> recorded) {
+    static <T> T step(String label, Supplier<T> writes, Recorded recorded) {
         if (OPEN.get() != null) return writes.get();
         Step step = new Step(label == null || label.isBlank() ? "the last change" : label.strip());
         OPEN.set(step);
@@ -108,7 +112,7 @@ final class WriteSteps {
             List<FileEdit> edits = step.edits();
             if (!edits.isEmpty() && recorded != null) {
                 try {
-                    recorded.accept(new CoreApplicationEvents.FilesRewrittenEvent(step.label, edits));
+                    recorded.step(step.label, edits);
                 } catch (RuntimeException failed) {
                     // The files are written; a history that could not hear it must not turn the write into a failure.
                     System.err.println("Couldn't record \"" + step.label + "\" for undo: " + failed);

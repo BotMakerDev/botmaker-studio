@@ -18,6 +18,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   and `DebugOnBus` (2026-11-05); nothing a user sees changes. Window grabs are `Capture`, apart from the overlay's.
 - Compiling, running, trying and debugging moved to `botmaker-core` (2026-11-05), with the run agent, the window grabs
   and the session check; Studio keeps the bridges, the overlay's capture and the stop key.
+- A plugin's dialogs and look go through the core's `UiPort`, which Studio fills (`FxUi`), and `HostRuns`,
+  `HostHistory` and `HostPluginValues` ask and hear through ports that `PluginsOnBus` bridges to the bus (2026-11-05);
+  nothing a user sees changes. `StudioServices.hasUi()` is true in Studio.
 
 - The canvas is redrawn from what `botmaker-core` announces, and ↶/↷ are the core's history (2026-11-05). An undo now
   keeps the blocks it did not change, as an edit does, instead of drawing the whole file again.

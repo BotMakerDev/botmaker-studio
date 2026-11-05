@@ -4,6 +4,7 @@ import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.core.events.EventBus;
+import com.botmaker.studio.plugin.FxUi;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
@@ -52,7 +53,7 @@ final class RunOverlayWindows implements RunOverlay.Surface {
         for (PluginHost.OwnedPart owned : PluginHost.runOverlayParts()) {
             RunOverlayPart part = owned.part();
             if (part.barFactory().isEmpty()) continue;
-            PartContext context = new PartContext(HostServices.forProject(config, this::barWindow),
+            PartContext context = new PartContext(HostServices.forProject(config, FxUi.ownedBy(this::barWindow)),
                     RunOverlayContext.Mode.RUNNING);
             contexts.add(context);
             Node node = build(owned, part.barFactory().get(), context);

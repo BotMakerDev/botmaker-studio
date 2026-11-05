@@ -7,6 +7,7 @@ import com.botmaker.shared.ipc.TelemetryFrame;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.run.CodeExecutionService;
+import com.botmaker.studio.services.PluginsOnBus;
 import com.botmaker.studio.services.RunOnBus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayNameGeneration;
@@ -79,7 +80,7 @@ class HostRunsTest {
         EventBus bus = new EventBus();
         CodeExecutionService execution = RunOnBus.service(null, null, null, bus);
         try {
-            HostRuns.install(bus, execution, null);
+            PluginsOnBus.runs(bus, execution, null);
             List<byte[]> first = new ArrayList<>();
             List<byte[]> second = new ArrayList<>();
             HostRuns.live().onTelemetry(bytes -> {
@@ -104,7 +105,7 @@ class HostRunsTest {
         EventBus bus = new EventBus();
         CodeExecutionService execution = RunOnBus.service(null, null, null, bus);
         try {
-            HostRuns.install(bus, execution, null);
+            PluginsOnBus.runs(bus, execution, null);
             List<TraceLine> heard = new ArrayList<>();
             AutoCloseable handle = HostRuns.live().onTrace(heard::add);
             TraceLine line = new TraceLine(Instant.EPOCH, TraceLine.Level.WARN, "Game", "slow", 1,

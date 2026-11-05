@@ -9,6 +9,7 @@ import com.botmaker.shared.capture.NativeControllerFactory;
 import com.botmaker.shared.platform.Os;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
+import com.botmaker.studio.plugin.FxUi;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
@@ -129,7 +130,7 @@ public final class DesktopLayer {
     private void show(RunOverlayContext.Mode mode, ProjectConfig config, List<PluginHost.OwnedPart> parts) {
         List<Node> nodes = new ArrayList<>();
         for (PluginHost.OwnedPart owned : parts) {
-            PartContext context = new PartContext(HostServices.forProject(config, () -> stage), mode);
+            PartContext context = new PartContext(HostServices.forProject(config, FxUi.ownedBy(() -> stage)), mode);
             contexts.add(context);
             Node node = RunOverlayWindows.build(owned, owned.part().layerFactory().orElseThrow(), context);
             if (node != null) nodes.add(node);

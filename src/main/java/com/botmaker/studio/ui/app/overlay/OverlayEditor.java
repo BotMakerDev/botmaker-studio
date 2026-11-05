@@ -28,6 +28,7 @@ import com.botmaker.studio.events.CoreApplicationEvents.UIBlocksUpdatedEvent;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.studio.plugin.HostOverlayContext;
+import com.botmaker.studio.plugin.FxUi;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.core.InsertionCursor;
@@ -225,7 +226,7 @@ public final class OverlayEditor {
         this.settings = settings;
         this.capture = capture;
         this.watched = watched;
-        this.services = HostServices.forProject(context.getConfig(), this::stage);
+        this.services = HostServices.forProject(context.getConfig(), FxUi.ownedBy(this::stage));
         this.strip = new TargetStrip(this::pickTarget, this::pickMethod);
         this.palette = new OverlayPalette(context, settings,
                 new OverlayPalette.Callbacks(this::insertLibraryCall, this::addBelow));
@@ -285,7 +286,7 @@ public final class OverlayEditor {
 
     /** What each plugin says the bot watches, in plugin order. FX thread: a plugin reads its own values. */
     private static List<Watched> pluginsWatched(CodeEditorService context, Window owner) {
-        StudioServices services = HostServices.forProject(context.getConfig(), () -> owner);
+        StudioServices services = HostServices.forProject(context.getConfig(), FxUi.ownedBy(() -> owner));
         OverlayContext ask = () -> services;
         List<Watched> said = new ArrayList<>();
         for (PluginHost.OwnedOverlay owned : PluginHost.overlayParts()) {
@@ -303,7 +304,7 @@ public final class OverlayEditor {
      * the screen itself. FX thread: a plugin reads its own values; the frames are grabbed off it.
      */
     private static OverlayPart.FrameSource pluginFrames(CodeEditorService context, Window owner) {
-        StudioServices services = HostServices.forProject(context.getConfig(), () -> owner);
+        StudioServices services = HostServices.forProject(context.getConfig(), FxUi.ownedBy(() -> owner));
         OverlayContext ask = () -> services;
         for (PluginHost.OwnedOverlay owned : PluginHost.overlayParts()) {
             try {

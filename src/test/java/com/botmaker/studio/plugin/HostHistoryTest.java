@@ -9,6 +9,7 @@ import com.botmaker.core.edit.CoreEditor;
 import com.botmaker.core.event.CoreEvent;
 import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.services.HistoryOnBus;
+import com.botmaker.studio.services.PluginsOnBus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,7 +45,7 @@ class HostHistoryTest {
             if (event instanceof CoreEvent.HistoryChanged changed) HistoryOnBus.publish(bus, changed);
         });
         HistoryOnBus.attach(bus, core);
-        HostHistory.install(bus);
+        PluginsOnBus.history(bus);
         History history = HostHistory.live();
         int[] heard = {0};
         history.onChanged(() -> heard[0]++);
@@ -62,7 +63,7 @@ class HostHistoryTest {
         WriteSteps.step("Change a plugin's value", () -> {
             replace(config, "y = 2", "y = 4");
             return null;
-        }, bus::publish);
+        }, PluginsOnBus.edits(bus));
         assertEquals("Change a plugin's value", history.undoLabel(), "a lone write is a step of its own");
 
         history.batch("Nothing", () -> replace(config, "no such text", "anything"));
@@ -86,7 +87,7 @@ class HostHistoryTest {
 
     @Test
     void betweenProjectsThereIsNoHistory() {
-        HostHistory.install(new EventBus(false));
+        PluginsOnBus.history(new EventBus(false));
         HostHistory.clear();
         assertSame(History.NONE, HostHistory.live());
     }

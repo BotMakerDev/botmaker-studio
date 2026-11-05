@@ -1,5 +1,12 @@
 # Dated notes — read these before the other files here
 
+> **A plugin's host classes ask through ports since 2026-11-05** (phase 8 of the same plan; they move in 8a).
+> `HostServices` names no JavaFX: its look and choosers are the core's `plugin.UiPort`, which `plugin.FxUi` fills
+> (`FxUi.ownedBy(owner)` where a dialog has an owner, `FxUi.FOCUSED` attached at start), and `hasUi()` says whether one
+> is attached. `HostRuns`, `HostHistory` and `HostPluginValues` publish and subscribe nothing: they ask through
+> `Requests`/`Edits` ports and are told through methods, and `services.PluginsOnBus` bridges both to the bus.
+> `PluginUpgradeService` removes a plugin through a `Removal`, `LibraryService::removePlugin`.
+
 > **Compiling, running, trying and debugging are `botmaker-core`'s since 2026-11-05** (phase 7a of the same plan).
 > `runtime` (all but `StopKey` and `StopKeyPreference`), `services.trial`, `services.debug`, `DebuggingService`,
 > `Capture`, `DesktopGrab` and `SessionEnvironment` are now `com.botmaker.core.run` and its `agent`, `tryhost`, `trial`,

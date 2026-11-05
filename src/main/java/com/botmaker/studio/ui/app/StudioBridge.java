@@ -32,6 +32,7 @@ import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.plugin.HostHistory;
 import com.botmaker.studio.plugin.HostPluginValues;
+import com.botmaker.studio.plugin.FxUi;
 import com.botmaker.studio.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectFile;
@@ -736,8 +737,8 @@ final class StudioBridge implements StudioDriver {
     public String removePlugin(String id, boolean deleteFiles, boolean confirm, Runnable removed) {
         List<InstalledPlugin> declared = installed(registryEntries());
         InstalledPlugin plugin = declaredPlugin(declared, id);
-        PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
-                jitpack, plugin.artifact());
+        PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(),
+                ctx.libraryService()::removePlugin, jitpack, plugin.artifact());
         PluginUpgradeService.Report report = upgrades.removal(plugin.editorDependencies());
         PluginHolders holders = upgrades.holders();
         String preview = removalPreview(plugin, report, holders, deleteFiles);
@@ -780,8 +781,8 @@ final class StudioBridge implements StudioDriver {
             throw new IllegalArgumentException("The pom declares " + name + " twice, under both groupIds. The user "
                     + "keeps one copy in Plugins & Libraries first.");
         }
-        PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(), ctx.libraryService(),
-                jitpack, plugin.artifact());
+        PluginUpgradeService upgrades = new PluginUpgradeService(ctx.config(), ctx.state(),
+                ctx.libraryService()::removePlugin, jitpack, plugin.artifact());
         String from = upgrades.currentVersion();
         String to = version == null ? "" : version.strip();
         String local = ctx.libraryService().devMode() ? LocalBuilds.scan().stream()
@@ -1626,7 +1627,7 @@ final class StudioBridge implements StudioDriver {
                      OverlayPart.FrameSource frames, Marks marks) {}
         Asked asked = onFx(() -> {
             Optional<WatchedScreen> shown = OverlayEditor.watchedScreen();
-            return new Asked(HostServices.forProject(ctx.config(), owner), shown.orElse(null),
+            return new Asked(HostServices.forProject(ctx.config(), FxUi.ownedBy(owner)), shown.orElse(null),
                     shown.isPresent() ? List.of() : OverlayEditor.watchedSaid(ctx.codeEditorService(), owner.get()),
                     shown.isPresent() ? null : OverlayEditor.framesSaid(ctx.codeEditorService(), owner.get()),
                     OverlayEditor.assistantMarks().orElse(Marks.NONE));

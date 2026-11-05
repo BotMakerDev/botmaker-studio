@@ -25,6 +25,7 @@ import com.botmaker.core.services.ContractDependency;
 import com.botmaker.studio.services.ApiDocsService;
 import com.botmaker.studio.services.DebugOnBus;
 import com.botmaker.core.run.DebuggingService;
+import com.botmaker.studio.services.PluginsOnBus;
 import com.botmaker.studio.services.RunOnBus;
 import com.botmaker.core.services.EditorCompanions;
 import com.botmaker.studio.services.LibraryService;
@@ -315,15 +316,15 @@ public class BotProject {
         // The bot, as a plugin is allowed to see it. After CodeExecutionService, since that is what owns the
         // process; cleared in close(), so a plugin between projects reaches Runs.NONE rather than a channel
         // into the project the user just left.
-        HostRuns.install(eventBus, codeExec, projectSettingsService);
+        PluginsOnBus.runs(eventBus, codeExec, projectSettingsService);
 
         // The plugin's own values, which live in the bot's Java beside everything else here. Same lifetime
         // for the same reason, and the services handed over are this project's: a value written or a
         // constant renamed through a window left open over the project the user just left would land in the
         // wrong file.
-        HostPluginValues.install(config, state, HostServices.forProject(config), eventBus);
+        HostPluginValues.install(config, state, HostServices.forProject(config), PluginsOnBus.edits(eventBus));
         // And the undo those writes join, the core's (HistoryOnBus): a plugin window's ↶ is the menu's.
-        HostHistory.install(eventBus);
+        PluginsOnBus.history(eventBus);
 
         // Every bound plugin's managed holder the project lacks (Sdk.java, Pictures.java), written now so the
         // file is there before the explorer is first drawn. Never over a file; LibraryService does the same

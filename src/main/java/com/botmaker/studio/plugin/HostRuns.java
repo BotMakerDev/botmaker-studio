@@ -4,10 +4,7 @@ import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.plugin.api.run.RunProperty;
-import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.core.events.EventBus;
 import com.botmaker.core.run.CodeExecutionService;
-import com.botmaker.studio.services.ProjectSettingsService;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,9 +15,10 @@ import java.util.function.Consumer;
 /**
  * Studio's side of {@link Runs} — the open project's bot, as a plugin is allowed to see it.
  *
- * <p>Nothing here is new capability. Starting and stopping are the events the Run and Stop buttons already
- * publish, the pid is {@link CodeExecutionService#runningBotPid()}, and the two listener channels are
- * {@link EventBus} subscriptions Studio already makes. What the class adds is the shape: a plugin gets the
+ * <p>Nothing here is new capability. Starting and stopping are what the Run and Stop buttons already ask
+ * ({@link Requests}), the pid is {@link CodeExecutionService#runningBotPid()}, and the listener channels are told
+ * what the run tells ({@link #ran}, {@link #telemetry}, {@link #trace}): Studio fills both from its bus
+ * ({@code services.PluginsOnBus}, 2026-11-05). What the class adds is the shape: a plugin gets the
  * bot's process without seeing a Studio type, which is what lets the Remote Pilot be a plugin's feature
  * rather than the host's.
  *
@@ -32,10 +30,8 @@ import java.util.function.Consumer;
  *
  * <h2>Two things about the listeners that are not incidental</h2>
  *
- * <p><b>The {@code EventBus} subscription is made once and never removed</b> — it has no unsubscribe — so
- * what a plugin registers goes in a list of Studio's own, and the handle it gets back removes it from
- * <em>that</em>. Registering per plugin listener directly on the bus would accumulate one dead handler per
- * project opened, which is the leak the handle exists to prevent.
+ * <p><b>What a plugin registers goes in a list of the host's own</b>, and the handle it gets back removes it from
+ * <em>that</em>, so a window closed over a run stops hearing it without the run's source knowing plugins exist.
  *
  * <p><b>Telemetry crosses as the bytes it arrived as</b> (2026-09-29; decoded and re-encoded before). Studio
  * does not read a match or a click — that is the runtime's vocabulary — so {@link
@@ -46,13 +42,28 @@ import java.util.function.Consumer;
  */
 public final class HostRuns implements Runs {
 
+    /** What a plugin's start, stop and status line ask of the host. */
+    public interface Requests {
+        void start();
+
+        void stop();
+
+        void status(String message);
+    }
+
+    /** Where the run properties live — the checkout's own {@code .botmaker/settings.json}. */
+    public interface Properties {
+        String get(String name);
+
+        void set(String name, String value);
+    }
+
     /** The live channel, or null between projects. */
     private static volatile HostRuns current;
 
-    private final EventBus eventBus;
+    private final Requests requests;
     private final CodeExecutionService execution;
-    /** Where the run properties live — the checkout's own {@code .botmaker/settings.json}. */
-    private final ProjectSettingsService settings;
+    private final Properties settings;
 
     /** Plugin listeners, held here rather than on the bus, which cannot unsubscribe. */
     private final List<Consumer<Boolean>> stateListeners = new CopyOnWriteArrayList<>();
@@ -62,27 +73,27 @@ public final class HostRuns implements Runs {
     private volatile boolean running;
     private volatile boolean paused;
 
-    private HostRuns(EventBus eventBus, CodeExecutionService execution, ProjectSettingsService settings) {
-        this.eventBus = eventBus;
+    private HostRuns(Requests requests, CodeExecutionService execution, Properties settings) {
+        this.requests = requests;
         this.execution = execution;
         this.settings = settings;
-        // false: these must not be marshalled onto the FX thread. A plugin is told in the contract that the
-        // thread is not promised and that it must hop for UI itself, and a pilot pushing a frame has no
-        // business queueing behind the editor's rendering.
-        eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> fireState(true), false);
-        eventBus.subscribe(CoreApplicationEvents.ProgramStoppedEvent.class, e -> fireState(false), false);
-        eventBus.subscribe(CoreApplicationEvents.TelemetryFrameEvent.class, e -> fireTelemetry(e.frame()), false);
-        eventBus.subscribe(CoreApplicationEvents.TraceLineEvent.class, e -> fireTrace(e.line()), false);
     }
 
-    /** Makes this project's bot the one a plugin reaches, replacing whatever was installed before. */
-    public static synchronized void install(EventBus eventBus, CodeExecutionService execution,
-                                            ProjectSettingsService settings) {
-        if (eventBus == null || execution == null) {
+    /**
+     * Makes this project's bot the one a plugin reaches, replacing whatever was installed before; the instance, which
+     * is told the run's start and end ({@link #ran}), its frames ({@link #telemetry}) and its debug lines
+     * ({@link #trace}) on the thread they happen on. A plugin is told in the contract that the thread is not promised
+     * and that it must hop for UI itself, and a pilot pushing a frame has no business queueing behind the editor's
+     * rendering.
+     */
+    public static synchronized HostRuns install(Requests requests, CodeExecutionService execution,
+                                                Properties settings) {
+        if (requests == null || execution == null) {
             clear();
-            return;
+            return null;
         }
-        current = new HostRuns(eventBus, execution, settings);
+        current = new HostRuns(requests, execution, settings);
+        return current;
     }
 
     /** No project: a plugin asking now gets {@link Runs#NONE}. */
@@ -100,17 +111,17 @@ public final class HostRuns implements Runs {
     public static void status(String message) {
         HostRuns live = current;
         if (live == null || message == null) return;
-        live.eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(message));
+        live.requests.status(message);
     }
 
     @Override
     public void start() {
-        eventBus.publish(new CoreApplicationEvents.ExecutionRequestedEvent());
+        requests.start();
     }
 
     @Override
     public void stop() {
-        eventBus.publish(new CoreApplicationEvents.StopRunRequestedEvent());
+        requests.stop();
     }
 
     @Override
@@ -182,7 +193,7 @@ public final class HostRuns implements Runs {
     /** This checkout's run property {@code name}, kept in {@code .botmaker/settings.json}; null when unset. */
     public String property(String name) {
         if (settings == null || name == null) return null;
-        return settings.current().runProperties().get(name);
+        return settings.get(name);
     }
 
     /**
@@ -193,7 +204,7 @@ public final class HostRuns implements Runs {
      */
     public void setProperty(String name, String value) {
         if (settings == null || name == null || name.isBlank()) return;
-        settings.saveAndPublish(settings.current().withRunProperty(name.trim(), value));
+        settings.set(name.trim(), value);
     }
 
     @Override
@@ -217,7 +228,8 @@ public final class HostRuns implements Runs {
         return () -> traceListeners.remove(listener);
     }
 
-    private void fireState(boolean nowRunning) {
+    /** The bot started ({@code true}) or ended. */
+    public void ran(boolean nowRunning) {
         running = nowRunning;
         paused = false;
         for (Consumer<Boolean> listener : stateListeners) {
@@ -226,14 +238,16 @@ public final class HostRuns implements Runs {
     }
 
     /** Each listener gets its own copy: a byte array is mutable, and one plugin must not edit another's frame. */
-    private void fireTelemetry(byte[] frame) {
+    /** One telemetry frame the bot wrote, as its bytes. */
+    public void telemetry(byte[] frame) {
         if (frame == null) return;
         for (Consumer<byte[]> listener : telemetryListeners) {
             deliver(() -> listener.accept(frame.clone()));
         }
     }
 
-    private void fireTrace(TraceLine line) {
+    /** One debug line of the run. */
+    public void trace(TraceLine line) {
         if (line == null) return;
         for (Consumer<TraceLine> listener : traceListeners) {
             deliver(() -> listener.accept(line));
@@ -243,7 +257,7 @@ public final class HostRuns implements Runs {
     /**
      * Runs one listener, total.
      *
-     * <p>The same rule the {@link EventBus} keeps for its own handlers, for the same reason: a plugin that
+     * <p>The same rule the event bus keeps for its own handlers, for the same reason: a plugin that
      * throws while being told a bot started must not stop the next plugin being told, and must not surface as
      * the Run button appearing to fail.
      */

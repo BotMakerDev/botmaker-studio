@@ -22,7 +22,6 @@ import com.botmaker.core.project.vcs.ProjectVcs;
 import com.botmaker.core.project.vcs.VersionOrigin;
 import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.JitPackSearch;
-import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.services.MavenService;
 
 import java.io.IOException;
@@ -64,8 +63,17 @@ public final class PluginUpgradeService {
 
     private final ProjectConfig config;
     private final ProjectState state;
-    private final LibraryService libraryService;
+    private final Removal removal;
     private final JitPackSearch jitpack;
+
+    /**
+     * How a plugin leaves the pom: {@code LibraryService::removePlugin} live, which removes its editor dependencies too
+     * and re-binds the plugins.
+     */
+    @FunctionalInterface
+    public interface Removal {
+        CompletableFuture<Void> remove(String groupId, String artifactId, List<UserLibrary> editorDependencies);
+    }
 
     /**
      * Which plugin this service is about — the coordinate its jars are resolved at and whose pin the pom
@@ -79,11 +87,11 @@ public final class PluginUpgradeService {
             new UserLibrary(MavenService.SDK_GROUP_ID, MavenService.SDK_ARTIFACT_ID, "");
 
     public PluginUpgradeService(ProjectConfig config, ProjectState state,
-                                LibraryService libraryService, JitPackSearch jitpack,
+                                Removal removal, JitPackSearch jitpack,
                                 UserLibrary artifact) {
         this.config = config;
         this.state = state;
-        this.libraryService = libraryService;
+        this.removal = removal;
         this.jitpack = jitpack;
         this.artifact = artifact;
     }
@@ -456,8 +464,8 @@ public final class PluginUpgradeService {
                         throw new RuntimeException("The plugin's files could not be deleted: " + e.getMessage(), e);
                     }
                 })
-                .thenCompose(repaired -> libraryService
-                        .removePlugin(artifact.groupId(), artifact.artifactId(), editorDependencies)
+                .thenCompose(repaired -> removal
+                        .remove(artifact.groupId(), artifact.artifactId(), editorDependencies)
                         .thenApply(v -> repaired));
     }
 
