@@ -31,14 +31,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * mangled tree and the method rendered <b>empty</b>. Adding a block could erase the visible contents of a
  * method, with Ctrl-Z the only way back.
  *
- * <p>Driven through {@code updateComment} because it is a real raw-text splice rather than an AST rewrite —
- * a comment whose text contains {@code *&#47;} closes the comment early and drops the rest of it into the class
- * body. Any write path would do; the guard sits on the single publish point they all share.
+ * <p>Driven through {@code pasteCode}, the user's own text placed as written: pasted text can close the method it is
+ * pasted into. Any write path would do; the guard sits on the single publish point they all share.
  */
 class EditGuardTest {
 
-    /** Comment text that ends the comment it is put in, leaving a stray brace in the class body. */
-    private static final String ESCAPES_THE_COMMENT = "*/\n}";
+    /** Pasted text that closes the method, leaving its last statement in the class body. */
+    private static final String CLOSES_THE_METHOD = "}";
 
     private static String source(String comment) {
         return "package com.mybot;\npublic class Subject {\n    public static void run() {\n"
@@ -49,7 +48,7 @@ class EditGuardTest {
     void anEditThatWouldNotParseIsRefusedAndTheCodeIsUntouched() {
         EditorFixture f = new EditorFixture(source("// marker"));
 
-        f.editor.updateComment(comment(f), ESCAPES_THE_COMMENT);
+        f.editor.pasteCode(f.body("run").getId(), 0, CLOSES_THE_METHOD);
 
         assertNull(f.lastCode, "broken source must never reach the canvas");
         assertTrue(f.statusMessages.stream().anyMatch(m -> m.contains("would have broken the code")),
@@ -69,13 +68,13 @@ class EditGuardTest {
         System.setErr(new PrintStream(captured, true, StandardCharsets.UTF_8));
         try {
             EditorFixture f = new EditorFixture(source("// marker"));
-            f.editor.updateComment(comment(f), ESCAPES_THE_COMMENT);
+            f.editor.pasteCode(f.body("run").getId(), 0, CLOSES_THE_METHOD);
         } finally {
             System.setErr(realErr);
         }
 
         String log = captured.toString(StandardCharsets.UTF_8);
-        assertTrue(log.contains("updateComment"),
+        assertTrue(log.contains("pasteCode"),
             () -> "the log must name the rewrite, not the guard: " + log);
         assertFalse(log.contains("(refusedBy"),
             () -> "the guard named itself again: " + log);
@@ -119,22 +118,22 @@ class EditGuardTest {
         RefusalJournal journal = RefusalJournal.in(dir);
         EditorFixture f = new EditorFixture(source("// marker"), Paths.get("Subject.java").toAbsolutePath(), journal);
 
-        f.editor.updateComment(comment(f), ESCAPES_THE_COMMENT);
+        f.editor.pasteCode(f.body("run").getId(), 0, CLOSES_THE_METHOD);
 
         List<RefusedEdit> entries = journal.entries();
         assertEquals(1, entries.size(), "one refusal, one line");
         RefusedEdit entry = entries.getFirst();
-        assertTrue(entry.refusedBy().startsWith("updateComment"),
+        assertTrue(entry.refusedBy().startsWith("pasteCode"),
             () -> "the entry must name the rewrite: " + entry.refusedBy());
         assertEquals("MyBot", entry.projectName());
         assertNotNull(entry.message(), "JDT's complaint is the whole reason the edit was refused");
         assertTrue(entry.problemId() != 0, "the problem id is what groups refusals across messages");
-        assertEquals("LineComment", entry.nodeType());
+        assertEquals("Block", entry.nodeType());
         assertNotNull(entry.blockClass(), "the block being edited is the handle on which affordance did it");
         assertNotNull(entry.blockId());
         assertEquals("BODY", entry.editKind());
 
-        assertTrue(readDump(dir, entry.newSourceFile()).contains("*/"),
+        assertEquals(braces(readDump(dir, entry.previousSourceFile())) + 1, braces(readDump(dir, entry.newSourceFile())),
             "the refused source is dumped beside the entry — only it says *how* the rewrite broke");
         assertTrue(readDump(dir, entry.previousSourceFile()).contains("// marker"),
             "and so is the source it would have replaced");
@@ -151,11 +150,15 @@ class EditGuardTest {
         }
         EditorFixture f = new EditorFixture(source("// marker"), Paths.get("Subject.java").toAbsolutePath(), unwritable);
 
-        f.editor.updateComment(comment(f), ESCAPES_THE_COMMENT);
+        f.editor.pasteCode(f.body("run").getId(), 0, CLOSES_THE_METHOD);
 
         assertNull(f.lastCode, "broken source must still never reach the canvas");
         assertTrue(f.statusMessages.stream().anyMatch(m -> m.contains("would have broken the code")),
             "and the user must still be told: " + f.statusMessages);
+    }
+
+    private static long braces(String source) {
+        return source.chars().filter(c -> c == '}').count();
     }
 
     private static String readDump(Path dir, String fileName) throws Exception {
