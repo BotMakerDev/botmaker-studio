@@ -263,15 +263,9 @@
         <!-- D-Bus and GStreamer stood here for the Wayland live preview, dropped 2026-07-09; nothing named
              them since (removed 2026-10-18). -->
 
-        <!-- JDT's own org.eclipse.platform jars (core.runtime, core.resources, …) come at the versions its pom
-             names: the pins that stood here only overrode them. -->
-
-        <!-- Eclipse JDT Core -->
-        <dependency>
-            <groupId>org.eclipse.jdt</groupId>
-            <artifactId>org.eclipse.jdt.core</artifactId>
-            <version>3.47.0</version>
-        </dependency>
+        <!-- Eclipse JDT Core comes through botmaker-java, the one pom that names its version (2026-11-05). Its own
+             org.eclipse.platform jars (core.runtime, core.resources, …) come at the versions its pom names: the pins
+             that stood here only overrode them. -->
 
         <!-- LSP4J -->
         <dependency>
