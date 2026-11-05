@@ -4,7 +4,7 @@ import com.botmaker.core.project.managed.TestValue;
 import com.botmaker.plugin.api.source.ManagedClasses;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.java.index.nav.Refactor;
-import com.botmaker.studio.plugin.ConstantValues;
+import com.botmaker.core.plugin.ConstantValues;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.java.index.BotIndex;

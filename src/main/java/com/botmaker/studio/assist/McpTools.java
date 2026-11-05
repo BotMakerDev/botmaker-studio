@@ -3,7 +3,7 @@ package com.botmaker.studio.assist;
 import com.botmaker.plugin.api.assist.AgentReply;
 import com.botmaker.plugin.api.assist.AssistantTool;
 import com.botmaker.plugin.api.assist.ToolSchema;
-import com.botmaker.studio.plugin.ToolCalls;
+import com.botmaker.core.plugin.ToolCalls;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.json.McpJsonMapper;

@@ -1,5 +1,8 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.HostValueContext;
+import com.botmaker.core.plugin.HostTypes;
+import com.botmaker.core.plugin.ConstantValues;
 import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.plugin.PluginHost;

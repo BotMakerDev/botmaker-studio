@@ -7,6 +7,7 @@ import com.botmaker.core.edit.Edit;
 import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.parser.EditorOutput;
+import com.botmaker.core.plugin.HostHistory;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.core.AbstractCodeBlock;
@@ -182,7 +183,10 @@ public class CodeEditorService {
                 eventBus.publish(new CoreApplicationEvents.CodeUpdatedEvent(changed.source(), previous));
                 Platform.runLater(() -> render(parsed, changed.source(), changed.newNamesUnchosen(), reuse));
             }
-            case CoreEvent.HistoryChanged history -> HistoryOnBus.publish(eventBus, history);
+            case CoreEvent.HistoryChanged history -> {
+                HostHistory.told(history);
+                HistoryOnBus.publish(eventBus, history);
+            }
             default -> { /* a refusal is answered to whoever asked; the rest is phase 7's */ }
         }
     }

@@ -7,7 +7,7 @@ import com.botmaker.plugin.api.toolbar.ToolbarItem;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
-import com.botmaker.studio.plugin.HostActionContext;
+import com.botmaker.core.plugin.HostActionContext;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.plugin.PluginHost.PluginBar;
 import com.botmaker.studio.services.ProjectSettingsService;

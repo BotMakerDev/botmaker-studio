@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app.run;
 import com.botmaker.plugin.api.Runs;
 import com.botmaker.plugin.api.TraceLine;
 import com.botmaker.shared.input.InputListenerFactory;
-import com.botmaker.studio.plugin.HostRuns;
+import com.botmaker.core.plugin.HostRuns;
 import com.botmaker.studio.runtime.StopKeyPreference;
 import com.botmaker.studio.ui.app.overlay.OverlayStyles;
 import javafx.animation.Animation;

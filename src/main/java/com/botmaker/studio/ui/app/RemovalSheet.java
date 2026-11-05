@@ -1,8 +1,8 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.meta.Migrate;
-import com.botmaker.studio.services.upgrade.PluginHolders;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
+import com.botmaker.core.services.upgrade.PluginHolders;
+import com.botmaker.core.services.upgrade.PluginUpgradeService.Report;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;

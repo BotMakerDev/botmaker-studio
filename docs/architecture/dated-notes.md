@@ -1,5 +1,11 @@
 # Dated notes — read these before the other files here
 
+> **The plugin host classes are `botmaker-core`'s since 2026-11-05** (phase 8a of the same plan). `plugin/*` but
+> `HostSlotContext`, `HostSlotRun`, `EditorContest` and `FxUi` is now `com.botmaker.core.plugin`; `services.upgrade` is
+> `com.botmaker.core.services.upgrade` and `JitPackSearch` `com.botmaker.core.services`. A file below naming
+> `com.botmaker.studio.plugin.HostServices` and the like means the core's. `HostHistory.told` hears the core's
+> `HistoryChanged`, which `CodeEditorService` passes on; `PluginsOnBus.history` subscribes nothing.
+
 > **A plugin's host classes ask through ports since 2026-11-05** (phase 8 of the same plan; they move in 8a).
 > `HostServices` names no JavaFX: its look and choosers are the core's `plugin.UiPort`, which `plugin.FxUi` fills
 > (`FxUi.ownedBy(owner)` where a dialog has an owner, `FxUi.FOCUSED` attached at start), and `hasUi()` says whether one

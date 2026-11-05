@@ -258,10 +258,10 @@ class ManagedConstantsTest {
         List<ManagedConstants.Constant> constants = ManagedConstants.read(outcomes, known);
         String wire = "new " + JavaNames.canonical(Wire.class) + "(com.bot.plugins.sdk.Outcomes.LOST)";
 
-        Object read = com.botmaker.studio.plugin.ConstantValues.read(grammar, () -> constants, Wire.class, wire)
+        Object read = com.botmaker.core.plugin.ConstantValues.read(grammar, () -> constants, Wire.class, wire)
                 .orElseThrow();
         assertEquals(new Wire(new TestOutcome.Named("LOST")), read);
-        String written = com.botmaker.studio.plugin.ConstantValues.write(grammar, () -> constants, Wire.class,
+        String written = com.botmaker.core.plugin.ConstantValues.write(grammar, () -> constants, Wire.class,
                 new Wire(new TestOutcome.Named("WON"))).orElseThrow().source();
         assertTrue(written.endsWith("(Outcomes.WON)"), written);
     }
@@ -326,10 +326,10 @@ class ManagedConstantsTest {
         String step = JavaNames.canonical(Step.class)
                 + ".of(com.bot.plugins.sdk.Activities.Collect.class, com.bot.plugins.sdk.Activities.Collect.WON)";
 
-        Object read = com.botmaker.studio.plugin.ConstantValues.read(grammar, () -> constants, Step.class, step)
+        Object read = com.botmaker.core.plugin.ConstantValues.read(grammar, () -> constants, Step.class, step)
                 .orElseThrow();
         assertEquals(new Step(new Group("Collect"), new TestOutcome.Named("Collect.WON")), read);
-        JavaValue written = com.botmaker.studio.plugin.ConstantValues.write(grammar, () -> constants, Step.class,
+        JavaValue written = com.botmaker.core.plugin.ConstantValues.write(grammar, () -> constants, Step.class,
                 new Step(new Group("Rest"), new TestOutcome.Named("Rest.NEXT"))).orElseThrow();
         assertTrue(written.source().endsWith("(Activities.Rest.class, Activities.Rest.NEXT)"), written.source());
         assertTrue(written.imports().contains("com.bot.plugins.sdk.Activities"), written.imports().toString());

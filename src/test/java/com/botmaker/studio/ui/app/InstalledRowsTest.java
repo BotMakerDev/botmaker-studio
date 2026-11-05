@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.UserLibrary;
-import com.botmaker.studio.services.upgrade.InstalledPlugin;
+import com.botmaker.core.services.upgrade.InstalledPlugin;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

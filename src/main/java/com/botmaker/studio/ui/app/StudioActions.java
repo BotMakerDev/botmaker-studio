@@ -11,7 +11,7 @@ import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.services.JitPackSearch;
+import com.botmaker.core.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.services.MavenService;
 import com.botmaker.studio.services.MavenCentralSearch;

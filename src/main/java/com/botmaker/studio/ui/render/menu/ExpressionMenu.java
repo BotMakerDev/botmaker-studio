@@ -11,7 +11,7 @@ import com.botmaker.java.edit.palette.PaletteDescriptions;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.edit.ExpressionChoice;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.studio.plugin.HostParameters;
+import com.botmaker.core.plugin.HostParameters;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.java.types.ResolvedType;

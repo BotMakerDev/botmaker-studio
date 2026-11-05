@@ -4,7 +4,7 @@ import com.botmaker.core.validation.ErrorTranslator;
 import com.botmaker.core.validation.SourceChecks;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.plugin.EntryPoints;
+import com.botmaker.core.plugin.EntryPoints;
 import org.eclipse.jdt.core.dom.ASTNode;
 import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.MethodDeclaration;

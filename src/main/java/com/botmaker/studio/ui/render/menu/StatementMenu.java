@@ -7,7 +7,7 @@ import com.botmaker.java.edit.palette.PaletteDescriptions;
 import com.botmaker.plugin.api.catalog.FacadeEntry;
 import com.botmaker.java.edit.StatementPlacement;
 import com.botmaker.core.parser.factories.StatementFactory;
-import com.botmaker.studio.plugin.EntryPoints;
+import com.botmaker.core.plugin.EntryPoints;
 import com.botmaker.core.plugin.PaletteCuration;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.types.ProjectAnalyzer;

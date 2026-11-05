@@ -1,5 +1,7 @@
 package com.botmaker.studio.plugin;
 
+import com.botmaker.core.plugin.WriteSteps;
+import com.botmaker.core.plugin.HostHistory;
 import com.botmaker.plugin.api.History;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.ProjectConfig;
@@ -42,7 +44,7 @@ class HostHistoryTest {
         EventBus bus = new EventBus(false);
         // The history is the core's; Studio's bus carries its steps and what it became.
         CoreEditor core = new CoreEditor(config, new ProjectState(), new BusEditorOutput(bus), null, event -> {
-            if (event instanceof CoreEvent.HistoryChanged changed) HistoryOnBus.publish(bus, changed);
+            if (event instanceof CoreEvent.HistoryChanged changed) HostHistory.told(changed);
         });
         HistoryOnBus.attach(bus, core);
         PluginsOnBus.history(bus);

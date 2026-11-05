@@ -5,7 +5,7 @@ import com.botmaker.plugin.api.run.RunOverlayContext;
 import com.botmaker.plugin.api.run.RunOverlayPart;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.plugin.FxUi;
-import com.botmaker.studio.plugin.HostServices;
+import com.botmaker.core.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.ui.app.overlay.OverlayStyles;

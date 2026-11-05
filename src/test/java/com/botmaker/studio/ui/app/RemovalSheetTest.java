@@ -5,8 +5,8 @@ import com.botmaker.core.migrate.Broken;
 import com.botmaker.core.migrate.OldElement;
 import com.botmaker.core.migrate.Sites;
 import com.botmaker.java.index.nav.Uses;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService;
-import com.botmaker.studio.services.upgrade.PluginUpgradeService.Report;
+import com.botmaker.core.services.upgrade.PluginUpgradeService;
+import com.botmaker.core.services.upgrade.PluginUpgradeService.Report;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;

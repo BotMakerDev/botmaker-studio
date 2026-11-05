@@ -1,10 +1,10 @@
 package com.botmaker.studio.ui.app.params;
 
 import com.botmaker.plugin.api.slot.SlotEditor;
-import com.botmaker.studio.plugin.ConstantValues;
+import com.botmaker.core.plugin.ConstantValues;
 import com.botmaker.studio.plugin.EditorContest;
-import com.botmaker.studio.plugin.HostServices;
-import com.botmaker.studio.plugin.HostValueContext;
+import com.botmaker.core.plugin.HostServices;
+import com.botmaker.core.plugin.HostValueContext;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueGrammar;

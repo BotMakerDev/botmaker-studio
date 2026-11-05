@@ -10,7 +10,7 @@ import com.botmaker.shared.platform.Os;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.studio.plugin.FxUi;
-import com.botmaker.studio.plugin.HostServices;
+import com.botmaker.core.plugin.HostServices;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.services.ScreenCaptureService;

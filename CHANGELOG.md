@@ -21,6 +21,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - A plugin's dialogs and look go through the core's `UiPort`, which Studio fills (`FxUi`), and `HostRuns`,
   `HostHistory` and `HostPluginValues` ask and hear through ports that `PluginsOnBus` bridges to the bus (2026-11-05);
   nothing a user sees changes. `StudioServices.hasUi()` is true in Studio.
+- The plugin host classes (`HostServices`, `HostRuns`, `HostHistory`, `HostPluginValues`, the value and type contexts),
+  plugin upgrade (`services.upgrade`) and `JitPackSearch` moved to `botmaker-core` (2026-11-05); Studio keeps the slot
+  editors' contexts, `EditorContest`, `FxUi` and the bridges. A plugin's ↶/↷ hears the core's history directly.
 
 - The canvas is redrawn from what `botmaker-core` announces, and ↶/↷ are the core's history (2026-11-05). An undo now
   keeps the blocks it did not change, as an edit does, instead of drawing the whole file again.

@@ -4,7 +4,7 @@ import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.Usages;
-import com.botmaker.studio.plugin.HostPluginValues;
+import com.botmaker.core.plugin.HostPluginValues;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.managed.ManagedRenames;

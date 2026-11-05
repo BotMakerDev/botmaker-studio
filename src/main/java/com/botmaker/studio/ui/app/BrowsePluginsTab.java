@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.core.project.UserLibrary;
-import com.botmaker.studio.services.JitPackSearch;
+import com.botmaker.core.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.LocalBuilds;
 import com.botmaker.core.services.MavenService;

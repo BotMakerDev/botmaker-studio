@@ -1,13 +1,12 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.events.FileEdit;
 import com.botmaker.core.run.CodeExecutionService;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.plugin.HostHistory;
-import com.botmaker.studio.plugin.HostPluginValues;
-import com.botmaker.studio.plugin.HostRuns;
+import com.botmaker.core.plugin.HostHistory;
+import com.botmaker.core.plugin.HostPluginValues;
+import com.botmaker.core.plugin.HostRuns;
 
 import java.util.List;
 
@@ -69,7 +68,8 @@ public final class PluginsOnBus {
             HostHistory.clear();
             return null;
         }
-        HostHistory history = HostHistory.install(new HostHistory.Requests() {
+        // What the history became reaches it from the core's event (HostHistory.told), not through the bus.
+        return HostHistory.install(new HostHistory.Requests() {
             @Override
             public void undo() {
                 bus.publish(new CoreApplicationEvents.UndoRequestedEvent());
@@ -85,10 +85,6 @@ public final class PluginsOnBus {
                 bus.publish(new CoreApplicationEvents.FilesRewrittenEvent(label, edits));
             }
         });
-        // Closed with the project (HostHistory.clear), as the history's own subscription was before.
-        history.hearing(bus.subscribe(CoreApplicationEvents.HistoryStateChangedEvent.class, e -> history.heard(
-                new CoreEvent.HistoryChanged(e.canUndo(), e.canRedo(), e.undoLabel(), e.redoLabel())), false));
-        return history;
     }
 
     /** What a plugin's value write tells the editor: its undo step and the open file's redraw, on {@code bus}. */

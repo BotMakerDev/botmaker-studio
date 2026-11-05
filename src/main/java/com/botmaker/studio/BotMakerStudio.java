@@ -11,7 +11,7 @@ import com.botmaker.core.config.AppPaths;
 import com.botmaker.core.config.Constants;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.studio.plugin.FxUi;
-import com.botmaker.studio.plugin.HostServices;
+import com.botmaker.core.plugin.HostServices;
 import com.botmaker.core.plugin.PluginGate;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.studio.project.BotProject;

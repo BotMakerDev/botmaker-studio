@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.UserLibrary;
-import com.botmaker.studio.services.JitPackSearch;
+import com.botmaker.core.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.studio.sharing.PluginCatalog;
