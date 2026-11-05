@@ -1,14 +1,18 @@
 package com.botmaker.studio.validation;
 
 import com.botmaker.core.validation.ErrorTranslator;
+import com.botmaker.core.validation.SourceChecks;
+import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.core.CodeBlock;
+import com.botmaker.studio.plugin.EntryPoints;
 import org.eclipse.jdt.core.dom.ASTNode;
+import org.eclipse.jdt.core.dom.CompilationUnit;
+import org.eclipse.jdt.core.dom.MethodDeclaration;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DiagnosticSeverity;
-import org.eclipse.lsp4j.Position;
-import org.eclipse.lsp4j.Range;
 
 import java.util.*;
+import java.util.function.BiPredicate;
 
 public class DiagnosticsManager {
     private Map<ASTNode, CodeBlock> nodeToBlockMap;
@@ -18,6 +22,9 @@ public class DiagnosticsManager {
 
     // NEW: Track line numbers to blocks for fallback matching
     private Map<Integer, Set<CodeBlock>> lineToBlocksMap = new HashMap<>();
+
+    /** The drawn blocks by {@code BlockId}, built when a diagnostic first needs it: most redraws have none. */
+    private Map<String, CodeBlock> blocksById;
 
     public List<Diagnostic> getDiagnostics() {
         return lastDiagnostics;
@@ -36,6 +43,7 @@ public class DiagnosticsManager {
     public void updateSource(Map<ASTNode, CodeBlock> nodeToBlockMap, String sourceCode) {
         this.nodeToBlockMap = nodeToBlockMap;
         this.sourceCode = sourceCode;
+        this.blocksById = null;
 
         // Build line-to-block mapping for fallback
         buildLineToBlockMap();
@@ -67,27 +75,27 @@ public class DiagnosticsManager {
         }
     }
 
+    /** The file the drawn blocks were read from, or null before there are any. */
+    private CompilationUnit unit() {
+        if (nodeToBlockMap == null) return null;
+        return nodeToBlockMap.keySet().stream()
+                .map(ASTNode::getRoot)
+                .filter(CompilationUnit.class::isInstance)
+                .map(CompilationUnit.class::cast)
+                .findFirst().orElse(null);
+    }
+
     /**
-     * Pre-compile validation of the current block tree (active file). Walks the live {@code nodeToBlockMap} for
-     * unfilled slots ({@link com.botmaker.studio.validation.BlockValidator#emptySlots}) — a switch subject or
-     * assignment target left as a {@code NullLiteral} — and returns one Error {@link Diagnostic} per slot, its
-     * {@link Range} taken from the placeholder's AST-node span so it round-trips through
-     * {@link #findBlockByASTNode} back to the offending block (red mark + click-to-scroll). Empty when the tree
-     * is complete. Called by the Run path before handing anything to {@code javac}.
+     * Pre-compile validation of the active file: one Error {@link Diagnostic} per drawn unfilled slot
+     * ({@link SourceChecks#unfilledSlots}), a switch subject or assignment target left as a {@code NullLiteral}, its
+     * range the placeholder's span so it finds its way back to the offending block (red mark + click-to-scroll). Empty
+     * when the tree is complete. Called by the Run path before handing anything to {@code javac}.
      */
     public List<Diagnostic> validateBlocks() {
         List<Diagnostic> issues = new ArrayList<>();
         if (nodeToBlockMap == null || sourceCode == null) return issues;
-        for (CodeBlock block : com.botmaker.studio.validation.BlockValidator.emptySlots(nodeToBlockMap)) {
-            ASTNode node = block.getAstNode();
-            if (node == null) continue;
-            int start = node.getStartPosition();
-            int end = start + node.getLength();
-            Diagnostic d = new Diagnostic();
-            d.setSeverity(DiagnosticSeverity.Error);
-            d.setRange(new Range(positionOf(start), positionOf(end)));
-            d.setMessage("This slot needs one of your variables — choose one before running.");
-            issues.add(d);
+        for (ASTNode slot : SourceChecks.unfilledSlots(unit())) {
+            if (nodeToBlockMap.containsKey(slot)) issues.add(SourceChecks.unfilled(slot, sourceCode));
         }
         return issues;
     }
@@ -98,9 +106,9 @@ public class DiagnosticsManager {
      * nothing about Maven, jars or ClassGraph — and so a headless test gets the null default, which reports
      * nothing.
      */
-    private java.util.function.BiPredicate<String, String> deprecationProbe;
+    private BiPredicate<String, String> deprecationProbe;
 
-    public void setDeprecationProbe(java.util.function.BiPredicate<String, String> probe) {
+    public void setDeprecationProbe(BiPredicate<String, String> probe) {
         this.deprecationProbe = probe;
     }
 
@@ -113,39 +121,13 @@ public class DiagnosticsManager {
      * well today. The whole point of the deprecation cycle is that the user gets a release of warning while
      * everything still works ({@code docs/refactor/21-api-compat.md}); turning it into a refusal would take
      * that away.
-     *
-     * <p>Only qualified calls on an SDK facade are considered — {@code Wait.seconds(1)}, never a bare
-     * {@code foo()} — because the receiver is what identifies the class without a binding, and blocks are
-     * re-parsed often enough that waiting for bindings would make this flicker.
      */
     public List<Diagnostic> deprecationWarnings() {
-        List<Diagnostic> out = new ArrayList<>();
-        if (deprecationProbe == null || nodeToBlockMap == null || sourceCode == null) return out;
-        Set<ASTNode> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (ASTNode root : nodeToBlockMap.keySet()) {
-            root.accept(new org.eclipse.jdt.core.dom.ASTVisitor() {
-                @Override
-                public boolean visit(org.eclipse.jdt.core.dom.MethodInvocation node) {
-                    if (!(node.getExpression() instanceof org.eclipse.jdt.core.dom.SimpleName receiver)) return true;
-                    String className = receiver.getIdentifier();
-                    if (!com.botmaker.core.plugin.PluginHost.isFacadeClass(className)) return true;
-                    String method = node.getName().getIdentifier();
-                    if (!deprecationProbe.test(className, method)) return true;
-                    // The same invocation is reachable from several map keys (a block and its parent block);
-                    // identity-dedupe so the Errors panel shows one row per call, not one per owner.
-                    if (!seen.add(node)) return true;
-                    int start = node.getStartPosition();
-                    Diagnostic d = new Diagnostic();
-                    d.setSeverity(DiagnosticSeverity.Warning);
-                    d.setRange(new Range(positionOf(start), positionOf(start + node.getLength())));
-                    d.setMessage(className + "." + method + "() is deprecated and will be removed in a future"
-                            + " SDK version. It still works — open the block's ? for the replacement.");
-                    out.add(d);
-                    return true;
-                }
-            });
-        }
-        return out;
+        if (deprecationProbe == null || sourceCode == null || nodeToBlockMap == null) return new ArrayList<>();
+        // A warning shows on a block, so a call no drawn block holds has nowhere to show it.
+        List<Diagnostic> drawn = new ArrayList<>(SourceChecks.deprecatedCalls(unit(), sourceCode, deprecationProbe));
+        drawn.removeIf(warning -> findBlockById(warning).isEmpty());
+        return drawn;
     }
 
     /**
@@ -155,36 +137,13 @@ public class DiagnosticsManager {
      */
     public List<Diagnostic> entryPointHints() {
         if (nodeToBlockMap == null || sourceCode == null) return List.of();
-        org.eclipse.jdt.core.dom.CompilationUnit unit = nodeToBlockMap.keySet().stream()
-                .map(ASTNode::getRoot)
-                .filter(org.eclipse.jdt.core.dom.CompilationUnit.class::isInstance)
-                .map(org.eclipse.jdt.core.dom.CompilationUnit.class::cast)
-                .findFirst().orElse(null);
-        var main = com.botmaker.studio.plugin.EntryPoints.main(unit);
-        if (main.isEmpty() || com.botmaker.studio.plugin.EntryPoints.calledIn(main.get())) return List.of();
-        List<com.botmaker.studio.plugin.EntryPoints.Entry> offered = com.botmaker.studio.plugin.EntryPoints.offered();
+        Optional<MethodDeclaration> main = EntryPoints.main(unit());
+        if (main.isEmpty() || EntryPoints.calledIn(main.get())) return List.of();
+        List<EntryPoints.Entry> offered = EntryPoints.offered();
         if (offered.isEmpty()) return List.of();
-        int start = main.get().getName().getStartPosition();
-        Diagnostic d = new Diagnostic();
-        d.setSeverity(DiagnosticSeverity.Information);
-        d.setRange(new Range(positionOf(start), positionOf(start + main.get().getName().getLength())));
-        d.setMessage("main never starts the bot: add ▶ " + offered.getFirst().label() + " from the + menu inside main.");
-        return List.of(d);
-    }
-
-    /** Inverse of {@link #getOffsetFromPosition}: source character offset → LSP (line, character) position. */
-    private Position positionOf(int offset) {
-        if (sourceCode == null || offset < 0) return new Position(0, 0);
-        int cap = Math.min(offset, sourceCode.length());
-        int line = 0;
-        int lineStart = 0;
-        for (int i = 0; i < cap; i++) {
-            if (sourceCode.charAt(i) == '\n') {
-                line++;
-                lineStart = i + 1;
-            }
-        }
-        return new Position(line, cap - lineStart);
+        return List.of(SourceChecks.at(DiagnosticSeverity.Information, main.get().getName().getStartPosition(),
+                main.get().getName().getLength(), sourceCode,
+                "main never starts the bot: add ▶ " + offered.getFirst().label() + " from the + menu inside main."));
     }
 
     public void processDiagnostics(List<Diagnostic> diagnostics) {
@@ -236,7 +195,7 @@ public class DiagnosticsManager {
      */
     public Optional<CodeBlock> findBlockForDiagnostic(Diagnostic diagnostic) {
         // Strategy 1: Precise AST node matching (best)
-        Optional<CodeBlock> block = findBlockByASTNode(diagnostic);
+        Optional<CodeBlock> block = findBlockById(diagnostic);
         if (block.isPresent()) {
             return block;
         }
@@ -252,33 +211,20 @@ public class DiagnosticsManager {
     }
 
     /**
-     * Strategy 1: Find block by matching AST node ranges
+     * Strategy 1: the innermost drawn block around the diagnostic's range, by the ids of what covers it.
      */
-    private Optional<CodeBlock> findBlockByASTNode(Diagnostic diagnostic) {
+    private Optional<CodeBlock> findBlockById(Diagnostic diagnostic) {
+        if (blocksById == null) {
+            blocksById = new HashMap<>();
+            nodeToBlockMap.forEach((node, block) -> blocksById.put(BlockId.of(node), block));
+        }
         int startOffset = getOffsetFromPosition(diagnostic.getRange().getStart());
         int endOffset = getOffsetFromPosition(diagnostic.getRange().getEnd());
-
-        // Find the most specific (smallest) block that contains the diagnostic range
-        ASTNode bestNode = null;
-        int bestLength = Integer.MAX_VALUE;
-
-        for (ASTNode node : nodeToBlockMap.keySet()) {
-            int nodeStart = node.getStartPosition();
-            int nodeEnd = nodeStart + node.getLength();
-
-            // Check if node contains the diagnostic range
-            if (nodeStart <= startOffset && nodeEnd >= endOffset) {
-                int nodeLength = node.getLength();
-
-                // Prefer the smallest containing node
-                if (nodeLength < bestLength) {
-                    bestNode = node;
-                    bestLength = nodeLength;
-                }
-            }
+        for (String id : SourceChecks.idsAround(unit(), startOffset, endOffset - startOffset)) {
+            CodeBlock block = blocksById.get(id);
+            if (block != null) return Optional.of(block);
         }
-
-        return Optional.ofNullable(bestNode).map(nodeToBlockMap::get);
+        return Optional.empty();
     }
 
     /**

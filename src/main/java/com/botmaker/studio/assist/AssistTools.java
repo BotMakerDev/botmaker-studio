@@ -1,5 +1,7 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.edit.PaletteEntry;
+import com.botmaker.core.edit.Outcome;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

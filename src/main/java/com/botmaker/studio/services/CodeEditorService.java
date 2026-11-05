@@ -1,6 +1,9 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.edit.CoreEditor;
+import com.botmaker.core.edit.Edit;
 import com.botmaker.core.project.ProjectConfig;
+import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.core.BodyBlock;
@@ -40,6 +43,7 @@ import org.eclipse.jdt.core.dom.CompilationUnit;
 import org.eclipse.jdt.core.dom.Expression;
 import org.eclipse.jdt.core.dom.ExpressionStatement;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
+import org.eclipse.jdt.core.dom.Statement;
 import org.eclipse.jdt.core.dom.TypeDeclaration;
 
 import java.nio.file.Files;
@@ -63,6 +67,7 @@ public class CodeEditorService {
     private final EventBus eventBus;
     private final BlockConverter blockConverter;
     private final CodeEditor codeEditor;
+    private final CoreEditor coreEditor;
     private final BlockDragAndDropManager dragAndDropManager;
     private final DiagnosticsManager diagnosticsManager;
     private final EditorHistory history;
@@ -138,6 +143,8 @@ public class CodeEditorService {
         this.apiDocsService = apiDocsService;
         this.history = new EditorHistory(state, eventBus);
         this.codeEditor = new CodeEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer);
+        // Studio redraws from CodeUpdatedEvent, which the output publishes, until plan phase 6d: no events are read yet.
+        this.coreEditor = new CoreEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer, event -> {});
         setupEventHandlers();
     }
 
@@ -224,7 +231,7 @@ public class CodeEditorService {
                 rejectJumpPlacement(jump);
                 return;
             }
-            codeEditor.addStatement(info.bodyId(), type, info.insertionIndex());
+            coreEditor.userInsert(info.bodyId(), type, info.insertionIndex());
         } else if (info.targetClass() != null && type.isClassMember()) {
             TypeDeclaration typeDecl = (TypeDeclaration) info.targetClass().getAstNode();
             switch (type) {
@@ -268,10 +275,7 @@ public class CodeEditorService {
                     rejectJumpPlacement(jump);
                     return;
                 }
-                BodyBlock sourceBody = findParentBody(stmt, state.getNodeToBlockMap());
-                if (sourceBody != null) {
-                    codeEditor.moveStatement(stmt.getId(), sourceBody.getId(), info.bodyId(), info.insertionIndex());
-                }
+                coreEditor.userEdit(new Edit.Move(stmt.getId(), info.bodyId(), info.insertionIndex()));
             }
         } else if (info.targetClass() != null) {
             if (block.getAstNode() instanceof BodyDeclaration decl) {
@@ -891,6 +895,16 @@ public class CodeEditorService {
     public Optional<CodeBlock> getRootBlock() { return Optional.ofNullable(lastRootBlock); }
 
     public CodeEditor getCodeEditor() { return codeEditor; }
+
+    /** The core's editor: every edit that has a typed form goes through it, by {@code BlockId}. */
+    public CoreEditor getCoreEditor() { return coreEditor; }
+
+    /** The ✕ of a statement, however it is drawn. */
+    public void deleteStatement(Statement statement) {
+        // Between an edit's parse and its redraw a block still holds the older tree, where this path may name another line.
+        if (state.getCompilationUnit().filter(statement.getRoot()::equals).isEmpty()) return;
+        coreEditor.userEdit(new Edit.Delete(BlockId.of(statement)));
+    }
     public EditorState getState() { return state; }
 
     public EventBus getEventBus() { return eventBus; }

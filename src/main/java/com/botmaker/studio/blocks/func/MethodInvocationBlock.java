@@ -231,7 +231,7 @@ public abstract class MethodInvocationBlock extends AbstractExpressionBlock impl
                         // enclosingStatement(), not astNode.getParent(): this block's node is the
                         // MethodInvocation, and the wrapping ExpressionStatement is not always its direct parent.
                         Statement statement = enclosingStatement();
-                        if (statement != null) context.getCodeEditor().deleteStatement(statement);
+                        if (statement != null) context.deleteStatement(statement);
                     })
             );
         }

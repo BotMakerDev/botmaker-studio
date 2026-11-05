@@ -2,9 +2,10 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.core.nav.LibrarySource;
-import com.botmaker.studio.nav.SourceNavigation;
-import com.botmaker.studio.nav.SourceNavigation.Declaration;
-import com.botmaker.studio.nav.SourceNavigation.Entry;
+import com.botmaker.core.nav.SourceNavigation;
+import com.botmaker.studio.nav.BlockAt;
+import com.botmaker.core.nav.SourceNavigation.Declaration;
+import com.botmaker.core.nav.SourceNavigation.Entry;
 import com.botmaker.java.index.nav.TextSearch;
 import com.botmaker.java.edit.palette.ApiDocs;
 import com.botmaker.studio.parser.BlockConverter;
@@ -89,13 +90,13 @@ final class NavigationPopups {
 
     /** Opens {@code file} if it is not the one showing, then lands on the block at {@code offset} in it. */
     void revealOffset(Path file, int offset) {
-        reveal(file, cu -> SourceNavigation.blockAtOffset(cu, offset, state.getNodeToBlockMap()));
+        reveal(file, cu -> BlockAt.blockAtOffset(cu, offset, state.getNodeToBlockMap()));
     }
 
     /** Opens {@code file} if it is not the one showing, then lands on the block of {@code line} in it. */
     void revealLine(Path file, int line) {
         reveal(file, cu -> SourceNavigation.nodeAtLine(cu, line)
-                .flatMap(n -> SourceNavigation.blockFor(n, state.getNodeToBlockMap())));
+                .flatMap(n -> BlockAt.blockFor(n, state.getNodeToBlockMap())));
     }
 
     private void reveal(Path file, Function<CompilationUnit, Optional<CodeBlock>> find) {
@@ -133,7 +134,7 @@ final class NavigationPopups {
                 return;
             }
             Optional<CodeBlock> block = SourceNavigation.nodeAtLine(cu, line)
-                    .flatMap(n -> SourceNavigation.blockFor(n, state.getNodeToBlockMap()));
+                    .flatMap(n -> BlockAt.blockFor(n, state.getNodeToBlockMap()));
             if (block.isEmpty()) {
                 problem.setText("No block on line " + line + ".");
                 return;
@@ -243,7 +244,7 @@ final class NavigationPopups {
         choose("File structure", "Type to filter", entries,
                 e -> "    ".repeat(e.depth()) + e.kind().glyph() + "  " + e.label(),
                 Entry::name,
-                e -> SourceNavigation.blockFor(e.node(), state.getNodeToBlockMap()).ifPresent(canvas::scrollToBlock));
+                e -> BlockAt.blockFor(e.node(), state.getNodeToBlockMap()).ifPresent(canvas::scrollToBlock));
     }
 
     void goToDeclaration() {
@@ -252,11 +253,11 @@ final class NavigationPopups {
         CompilationUnit cu = state.getCompilationUnit().orElse(null);
         Optional<Declaration> declaration = SourceNavigation.declarationOf(binding.get(), cu, config.sourceRoot());
         switch (declaration.orElse(null)) {
-            case Declaration.Here here -> SourceNavigation.blockFor(here.node(), state.getNodeToBlockMap())
+            case Declaration.Here here -> BlockAt.blockFor(here.node(), state.getNodeToBlockMap())
                     .ifPresent(canvas::scrollToBlock);
             case Declaration.Elsewhere elsewhere -> reveal(elsewhere.file(), other -> Optional
                     .ofNullable(other.findDeclaringNode(elsewhere.key()))
-                    .flatMap(node -> SourceNavigation.blockFor(node, state.getNodeToBlockMap())));
+                    .flatMap(node -> BlockAt.blockFor(node, state.getNodeToBlockMap())));
             case null -> openLibrary(binding.get());
         }
     }

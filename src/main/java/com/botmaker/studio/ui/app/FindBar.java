@@ -1,7 +1,7 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.core.CodeBlock;
-import com.botmaker.studio.nav.SourceNavigation;
+import com.botmaker.studio.nav.BlockAt;
 import com.botmaker.java.index.nav.TextSearch;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
@@ -115,7 +115,7 @@ final class FindBar {
         Map<CodeBlock, Boolean> seen = new IdentityHashMap<>();
         List<CodeBlock> out = new ArrayList<>();
         for (int offset : TextSearch.offsets(file.getContent(), field.getText())) {
-            SourceNavigation.blockAtOffset(cu, offset, state.getNodeToBlockMap())
+            BlockAt.blockAtOffset(cu, offset, state.getNodeToBlockMap())
                     .filter(block -> seen.put(block, Boolean.TRUE) == null)
                     .ifPresent(out::add);
         }

@@ -1,9 +1,9 @@
 package com.botmaker.studio.parser;
 
 import com.botmaker.studio.assist.AssistTurn;
-import com.botmaker.studio.assist.AssistWorkspace;
+import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.studio.assist.BlockView;
-import com.botmaker.studio.assist.Outcome;
+import com.botmaker.core.edit.Outcome;
 import com.botmaker.java.edit.palette.BlockCatalog;
 import com.botmaker.java.edit.palette.BlockType;
 import com.botmaker.java.edit.palette.ExpressionCatalog;
@@ -63,8 +63,8 @@ class PaletteCompilesTest {
     /** Only inside a switch value's case block, which {@code SwitchValueEditsTest} covers. */
     private static final Set<String> NEEDS_A_SWITCH_VALUE = Set.of("YIELD");
 
-    private static AssistWorkspace workspace() {
-        return new AssistWorkspace(
+    private static EditWorkspace workspace() {
+        return new EditWorkspace(
                 ProjectConfig.forProject("MyBot", Paths.get("/tmp/projects")),
                 Paths.get("Subject.java").toAbsolutePath(),
                 List.of(System.getProperty("java.class.path").split(File.pathSeparator)),

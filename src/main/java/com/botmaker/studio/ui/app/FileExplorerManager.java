@@ -2,8 +2,9 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.nav.SourceNavigation;
-import com.botmaker.studio.nav.SourceNavigation.Entry;
+import com.botmaker.core.nav.SourceNavigation;
+import com.botmaker.studio.nav.BlockAt;
+import com.botmaker.core.nav.SourceNavigation.Entry;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.core.project.FileRole;
 import com.botmaker.core.project.LockResolver;
@@ -463,7 +464,7 @@ public class FileExplorerManager {
         // A click, not a selection change: the list is rebuilt after every edit and must not jump the canvas.
         structure.setOnMouseClicked(e -> {
             Entry entry = structure.getSelectionModel().getSelectedItem();
-            if (entry != null) SourceNavigation.blockFor(entry.node(), state.getNodeToBlockMap()).ifPresent(onReveal);
+            if (entry != null) BlockAt.blockFor(entry.node(), state.getNodeToBlockMap()).ifPresent(onReveal);
         });
     }
 

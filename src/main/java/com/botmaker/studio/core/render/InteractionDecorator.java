@@ -2,7 +2,7 @@ package com.botmaker.studio.core.render;
 
 import com.botmaker.studio.core.AbstractCodeBlock;
 import com.botmaker.studio.events.CoreApplicationEvents;
-import com.botmaker.studio.nav.SourceNavigation;
+import com.botmaker.core.nav.SourceNavigation;
 import com.botmaker.studio.services.CodeEditorService;
 import com.botmaker.studio.ui.app.MigrationMenu;
 import com.botmaker.studio.ui.app.trial.TrialMenu;

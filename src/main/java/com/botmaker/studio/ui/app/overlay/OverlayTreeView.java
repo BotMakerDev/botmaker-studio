@@ -12,7 +12,7 @@ import com.botmaker.studio.core.component.ComponentSpec;
 import com.botmaker.studio.core.render.ReadOnlyDecorator;
 import com.botmaker.studio.core.InsertionCursor;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.studio.validation.BlockValidator;
+import com.botmaker.core.validation.SourceChecks;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -212,7 +212,7 @@ final class OverlayTreeView {
 
     private HBox statementRow(BlockTree.Row row, InsertionCursor cursor) {
         StatementBlock stmt = row.stmt();
-        boolean incomplete = BlockValidator.hasEmptySlot(stmt);
+        boolean incomplete = SourceChecks.hasUnfilledSlot(stmt.getAstNode());
         boolean broken = diagnostics != null && diagnostics.hasError(stmt);
         boolean locked = stmt.isReadOnly();
         boolean focused = focused(row, cursor);

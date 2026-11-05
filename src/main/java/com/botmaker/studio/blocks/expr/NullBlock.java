@@ -17,7 +17,7 @@ import org.eclipse.jdt.core.dom.NullLiteral;
  * <p>Where a value can stand, {@code null} <em>is</em> the value: {@code FlowDriver}'s {@code String node = null;}
  * and its {@code return null;} are the flow's own "nowhere to go", and an author is entitled to write one.
  * Rendering those as a red "fill me in" button both invited an edit the file would refuse and made
- * {@code BlockValidator} abort the run over code nobody may change.
+ * the unfilled-slot check abort the run over code nobody may change.
  *
  * <p>Where a <em>name</em> has to stand — an assignment target, a switch subject — no literal compiles, so
  * {@code null} is genuinely a hole, and that is the only case that keeps the red dashed prompt. Which is which

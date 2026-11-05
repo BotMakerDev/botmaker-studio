@@ -1,5 +1,6 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.plugin.api.History;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
@@ -84,7 +85,7 @@ class McpEndpointTest {
         @Override
         public Optional<AssistTurn> begin(String file) {
             Path path = file.isBlank() ? SUBJECT : LiveBot.resolve(files.keySet(), ROOT, file);
-            return Optional.of(new AssistTurn(new AssistWorkspace(
+            return Optional.of(new AssistTurn(new EditWorkspace(
                     ProjectConfig.forProject("MyBot", Paths.get("/tmp/projects")), path,
                     List.of(System.getProperty("java.class.path").split(File.pathSeparator)), ROOT,
                     ProjectTemplate.GAME_BOT, null, null,
@@ -94,8 +95,8 @@ class McpEndpointTest {
 
         @Override
         public String commit(AssistTurn turn, String label) {
-            return turn.commit(files.get(turn.file()), label).map(event -> {
-                files.put(turn.file(), event.newCode());
+            return turn.session().finished(files.get(turn.file()), AssistTurn.labelOf(label)).map(write -> {
+                files.put(turn.file(), write.newCode());
                 commits.add(turn.file().getFileName().toString());
                 return "Applied.";
             }).orElse("Not applied.");

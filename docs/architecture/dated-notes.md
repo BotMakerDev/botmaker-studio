@@ -1,5 +1,11 @@
 # Dated notes — read these before the other files here
 
+> **Five edits go through `CoreEditor` since 2026-11-05** (phase 6c of the same plan). `edit_code` and the canvas's
+> insert, move and delete name their target by `BlockId`; `AssistTurn` wraps the core's `EditSession`, keeping only what
+> needs Studio: `tree`, and the edits that choose from a dialog's offer. `BlockValidator` is gone for the core's
+> `SourceChecks`, `SourceNavigation` is the core's, and `nav.BlockAt` goes from a place in the source to its drawn
+> block. Every other canvas operation still calls `CodeEditor` with a drawn node, until phase 6d.
+
 > **The edit engine is `botmaker-core`'s since 2026-11-05** (phase 6b of the same plan). `CodeEditor`, `NodeCreator`,
 > `SlotVacancy`, `parser/factories`, `parser/handlers`, `parser/guard`, `parser/refactor`, `state`, `project/managed`,
 > `project/params`, `migrate`, `index`, `nav.LibrarySource`, `validation`'s level and translator moved, each under

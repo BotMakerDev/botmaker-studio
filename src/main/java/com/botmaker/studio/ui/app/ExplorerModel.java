@@ -1,6 +1,6 @@
 package com.botmaker.studio.ui.app;
 
-import com.botmaker.studio.nav.SourceNavigation;
+import com.botmaker.core.nav.SourceNavigation;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.FileRole;
 import com.botmaker.core.project.PluginFiles;

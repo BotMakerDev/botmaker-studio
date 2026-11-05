@@ -1,5 +1,6 @@
 package com.botmaker.studio.ui.app.overlay;
 
+import com.botmaker.core.edit.Edit;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.overlay.Area;
 import com.botmaker.plugin.api.overlay.OverlayContext;
@@ -875,7 +876,7 @@ public final class OverlayEditor {
     private void insertBlock(BlockType type) {
         InsertionCursor c = insertionPoint();
         if (type == null || c == null) return;
-        context.getCodeEditor().addStatement(c.body().getId(), type, armBelow(c, Landed.ADDED));
+        context.getCoreEditor().userInsert(c.body().getId(), type, armBelow(c, Landed.ADDED));
     }
 
     /**
@@ -958,7 +959,7 @@ public final class OverlayEditor {
             return;
         }
         state.setInsertionCursor(new InsertionCursor(body, Math.max(-1, index - 1)));
-        context.getCodeEditor().deleteStatement(s);
+        context.deleteStatement(s);
     }
 
     /** Alt+↑/↓: reorders the block the caret sits on. */
@@ -989,7 +990,7 @@ public final class OverlayEditor {
             return;
         }
         pendingInsert = new PendingFocus(new BlockTree.Position(index().ordinalOf(body), destination), Landed.MOVED);
-        context.getCodeEditor().moveStatement(stmt.getId(), body.getId(), body.getId(), delta < 0 ? destination : destination + 1);
+        context.getCoreEditor().userEdit(new Edit.Move(stmt.getId(), body.getId(), delta < 0 ? destination : destination + 1));
     }
 
     /** ▸/▾: hides or re-shows a control-flow block's branches. See {@link #collapsed}. */

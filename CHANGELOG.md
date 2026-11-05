@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Changed (edits by id)
+
+- Nothing the user means to see (2026-11-05). Inserting, moving and deleting a block, and the assistant's `edit_code`,
+  now reach the file through `botmaker-core`'s `CoreEditor`, which finds its target in the source, not on the canvas.
+
 ### Changed (the edit engine lives in botmaker-core)
 
 - Nothing the user sees (2026-11-05). `CodeEditor`, its handlers and factories, undo, managed values, parameters,

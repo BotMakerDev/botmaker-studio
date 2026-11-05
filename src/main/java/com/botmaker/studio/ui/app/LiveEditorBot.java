@@ -1,7 +1,8 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.studio.assist.AssistTurn;
-import com.botmaker.studio.assist.AssistWorkspace;
+import com.botmaker.core.edit.EditResult;
+import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.studio.assist.LiveBot;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.java.index.nav.Refactor;
@@ -63,7 +64,7 @@ final class LiveEditorBot implements LiveBot {
             String source = active != null && active.getPath().equals(path) ? ctx.state().getCurrentCode()
                     : sources.get(path);
             if (source == null) throw new IllegalArgumentException("Studio cannot read " + file + ".");
-            AssistWorkspace workspace = AssistWorkspace.of(ctx.config(), ctx.state(),
+            EditWorkspace workspace = EditWorkspace.of(ctx.config(), ctx.state(),
                     ctx.projectAnalyzer() == null ? null : ctx.projectAnalyzer().libraryIndex(), path);
             return Optional.of(new AssistTurn(workspace, source));
         });
@@ -86,11 +87,11 @@ final class LiveEditorBot implements LiveBot {
             if (active == null || !active.getPath().equals(turn.file())) {
                 return new Committed("Not applied: Studio could not open " + turn.file().getFileName() + ".", null);
             }
-            Optional<CoreApplicationEvents.CodeUpdatedEvent> event = turn.commit(live, label);
-            if (event.isEmpty()) {
-                return new Committed("Not applied: the file changed in Studio meanwhile. Read the tree again.", null);
+            EditResult landed = ctx.codeEditorService().getCoreEditor()
+                    .commit(turn.session(), live, AssistTurn.labelOf(label));
+            if (landed instanceof EditResult.Refused refused) {
+                return new Committed("Not applied: " + refused.reason(), null);
             }
-            ctx.eventBus().publish(event.get());
             ctx.eventBus().publish(new CoreApplicationEvents.StatusMessageEvent("An MCP client changed "
                     + turn.file().getFileName() + "."));
             return new Committed("Applied to " + turn.file().getFileName() + (opened ? ", now open" : "")

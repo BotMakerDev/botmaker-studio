@@ -55,13 +55,13 @@ public final class DeleteVariableDialog {
         if (context == null || decl == null) return;
         if (decl.fragments().size() != 1
                 || !(decl.fragments().getFirst() instanceof VariableDeclarationFragment fragment)) {
-            context.getCodeEditor().deleteStatement(decl);
+            context.deleteStatement(decl);
             return;
         }
         MethodDeclaration method = AstRewriteHelper.enclosingMethod(decl);
         List<SimpleName> uses = AstRewriteHelper.referencesWithin(fragment.getName());
         if (uses.isEmpty()) {
-            context.getCodeEditor().deleteStatement(decl);
+            context.deleteStatement(decl);
             return;
         }
 

@@ -100,7 +100,7 @@ public abstract class AbstractStatementBlock extends AbstractCodeBlock implement
      */
     private void deleteSelf(CodeEditorService context) {
         Statement statement = enclosingStatement();
-        if (statement != null) context.getCodeEditor().deleteStatement(statement);
+        if (statement != null) context.deleteStatement(statement);
     }
 
     /** The "+" button, or null when this block is read-only. */

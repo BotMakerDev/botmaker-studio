@@ -1,5 +1,6 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.edit.PaletteEntry;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

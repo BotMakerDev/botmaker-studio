@@ -126,7 +126,7 @@ public class DeclareEnumBlock extends AbstractStatementBlock {
         // unconditionally and hand it straight to createHeaderRow, which is why a locked enum kept its cross.
         Runnable deleteAction = whenEditable(() -> {
             if (isStatement) {
-                context.getCodeEditor().deleteStatement((Statement) this.astNode);
+                context.deleteStatement((Statement) this.astNode);
             } else {
                 context.getCodeEditor().deleteEnumFromClass(enumDeclaration);
             }

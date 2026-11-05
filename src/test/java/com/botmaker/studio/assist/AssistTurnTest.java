@@ -1,8 +1,10 @@
 package com.botmaker.studio.assist;
 
+import com.botmaker.core.edit.PaletteEntry;
+import com.botmaker.core.edit.Outcome;
+import com.botmaker.core.edit.EditWorkspace;
 import com.botmaker.plugin.api.value.Drawn;
 import com.botmaker.plugin.api.value.PluginType;
-import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.parser.guard.RefusalJournal;
 import com.botmaker.java.grammar.ValueGrammar;
 import com.botmaker.core.project.ProjectConfig;
@@ -16,7 +18,6 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,8 +41,8 @@ public class AssistTurnTest {
             }
             """;
 
-    private static AssistWorkspace workspace() {
-        return new AssistWorkspace(
+    private static EditWorkspace workspace() {
+        return new EditWorkspace(
                 ProjectConfig.forProject("MyBot", Paths.get("/tmp/projects")),
                 Paths.get("Subject.java").toAbsolutePath(),
                 List.of(System.getProperty("java.class.path").split(File.pathSeparator)),
@@ -94,9 +95,9 @@ public class AssistTurnTest {
      */
     @Test
     void aStagedStepSeesTheBotsOtherFilesAndItsOwnSource() {
-        AssistWorkspace base = workspace();
+        EditWorkspace base = workspace();
         Path sdk = Paths.get("Sdk.java").toAbsolutePath();
-        AssistWorkspace workspace = new AssistWorkspace(base.config(), base.file(), base.classpath(), base.sourceRoot(),
+        EditWorkspace workspace = new EditWorkspace(base.config(), base.file(), base.classpath(), base.sourceRoot(),
                 base.template(), base.settings(), base.index(), base.journal(), base.grammar(), base.constants(),
                 List.of(new ProjectFile(sdk, "public final class Sdk {}"),
                         new ProjectFile(base.file(), "stale")));
@@ -135,8 +136,8 @@ public class AssistTurnTest {
         List<Constant> constants = List.of(
                 new Constant("com.mybot.Subject", "LIMIT", "5"),
                 new Constant("com.mybot.Subject", "NAME", "\"a\""));
-        AssistWorkspace base = workspace();
-        AssistTurn turn = new AssistTurn(new AssistWorkspace(base.config(), base.file(), base.classpath(),
+        EditWorkspace base = workspace();
+        AssistTurn turn = new AssistTurn(new EditWorkspace(base.config(), base.file(), base.classpath(),
                 base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), base.grammar(),
                 constants), source);
         String slot = statement(turn, "System.out.println").slots().getFirst().id();
@@ -192,8 +193,8 @@ public class AssistTurnTest {
                         "new " + pic + "(\"ore.png\")"),
                 new Constant("com.mybot.Subject", "GEM",
                         "new " + pic + "(\"gem.png\")"));
-        AssistWorkspace base = workspace();
-        AssistTurn turn = new AssistTurn(new AssistWorkspace(base.config(), base.file(), base.classpath(),
+        EditWorkspace base = workspace();
+        AssistTurn turn = new AssistTurn(new EditWorkspace(base.config(), base.file(), base.classpath(),
                 base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), grammar,
                 constants), source);
         String slot = statement(turn, Pics.class.getCanonicalName()).slots().getFirst().id();
@@ -225,8 +226,8 @@ public class AssistTurnTest {
         List<Constant> constants = List.of(
                 new Constant("com.mybot.Subject", "ORE", "new " + pic + "(\"ore.png\")"),
                 new Constant("com.mybot.Subject", "BOTH", pics + ".of(Subject.ORE)"));
-        AssistWorkspace base = workspace();
-        AssistTurn turn = new AssistTurn(new AssistWorkspace(base.config(), base.file(), base.classpath(),
+        EditWorkspace base = workspace();
+        AssistTurn turn = new AssistTurn(new EditWorkspace(base.config(), base.file(), base.classpath(),
                 base.sourceRoot(), base.template(), base.settings(), base.index(), base.journal(), grammar,
                 constants), source);
         String slot = statement(turn, pics + ".take").slots().getFirst().id();
@@ -546,9 +547,9 @@ public class AssistTurnTest {
         turn.setSlot(statement(turn, "String name").slots().getFirst().id(), "\"bot\"");
         assertEquals(2, turn.acceptedEdits());
 
-        CoreApplicationEvents.CodeUpdatedEvent event = turn.commit(SOURCE, "Assistant").orElseThrow();
-        assertEquals(SOURCE, event.previousCode());
-        assertEquals(turn.source(), event.newCode());
+        var write = turn.session().finished(SOURCE, AssistTurn.labelOf("Assistant")).orElseThrow();
+        assertEquals(SOURCE, write.previousCode());
+        assertEquals(turn.source(), write.newCode());
     }
 
     @Test
@@ -556,14 +557,13 @@ public class AssistTurnTest {
         AssistTurn turn = turn(SOURCE);
         turn.insert(runBody(turn).id(), 0, "block:PRINT");
 
-        Optional<CoreApplicationEvents.CodeUpdatedEvent> event = turn.commit(SOURCE + "// typed\n", "Assistant");
-        assertTrue(event.isEmpty());
+        assertTrue(turn.session().finished(SOURCE + "// typed\n", AssistTurn.labelOf("Assistant")).isEmpty());
     }
 
     @Test
     void aTurnThatKeptNothingCommitsNothing() {
         AssistTurn turn = turn(SOURCE);
         turn.insert(runBody(turn).id(), 0, "block:NOPE");
-        assertTrue(turn.commit(SOURCE, "Assistant").isEmpty());
+        assertTrue(turn.session().finished(SOURCE, AssistTurn.labelOf("Assistant")).isEmpty());
     }
 }

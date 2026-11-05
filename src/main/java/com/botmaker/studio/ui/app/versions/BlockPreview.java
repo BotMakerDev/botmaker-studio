@@ -26,7 +26,7 @@ import java.util.Map;
 
 /**
  * One side of a file, drawn as the canvas draws it — read-only, in the user's style and font — against a
- * <b>staged</b> {@link ProjectState} of its own, as {@code AssistWorkspace} stages an assistant's edit. The live
+ * <b>staged</b> {@link ProjectState} of its own, as {@code EditWorkspace} stages an assistant's edit. The live
  * editor is never touched: a preview has its own state, its own event bus and its own block registry
  * ({@code docs/refactor/39-versions.md} §5). FX thread.
  */

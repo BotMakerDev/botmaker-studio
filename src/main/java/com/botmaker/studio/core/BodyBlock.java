@@ -197,7 +197,7 @@ public class BodyBlock extends AbstractStatementBlock implements BlockWithChildr
             com.botmaker.studio.ui.app.vars.DeclareVariableDialog.declareInto(context, owner, body, index);
             return;
         }
-        Runnable insert = () -> context.getCodeEditor().addStatement(body.getId(), type, index);
+        Runnable insert = () -> context.getCoreEditor().userInsert(body.getId(), type, index);
         if (!com.botmaker.studio.ui.app.vars.NamingPreference.ask()) {
             insert.run();
             return;

@@ -15,7 +15,7 @@ which older text in the other files is history now.
 | opening a project, `ProjectConfig`, `ProjectState` | `project-lifecycle.md` |
 | `CodeBlock`, statement/expression blocks | `block-system.md` |
 | `BlockFactory`, source ↔ blocks round trip | `ast-block-sync.md` |
-| `CodeEditor`, `parser/handlers` (in `botmaker-core` since 2026-11-05), `AstRewriteHelper` | `rewriting-pipeline.md` |
+| `CodeEditor`, `CoreEditor`, `parser/handlers` (in `botmaker-core` since 2026-11-05), `AstRewriteHelper` | `rewriting-pipeline.md` |
 | `ProjectAnalyzer`, type index, suggestions | `suggestions.md` |
 | `EventBus`, `CoreApplicationEvents` | `event-bus.md` |
 | `ui/` packages, `UIManager`, windows and dialogs | `ui-structure.md` |

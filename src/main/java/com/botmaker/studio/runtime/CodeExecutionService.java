@@ -161,7 +161,7 @@ public class CodeExecutionService {
     private void launch(ProjectState.Snapshot snapshot, TrialCaller.Source trial, String label,
                         Supplier<Launch> run) {
         // Pre-compile block validation: a slot still waiting on one of the user's variables (a red "Choose a
-        // variable…" chip) would only surface as a raw javac error. Detect it via BlockValidator, surface it in
+        // variable…" chip) would only surface as a raw javac error. Detect it via SourceChecks, surface it in
         // the Errors panel, and abort before compiling. Always publish (an empty list clears any previously
         // shown slot errors). Every *value* slot now seeds a compiling default, so this fires only for the
         // positions that need a name — see UnfilledSlot.
