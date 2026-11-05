@@ -46,13 +46,24 @@ class ParameterChoicesTest extends FxHeadlessTest {
             import com.botmaker.plugin.api.DeclaredPlugin;
             import com.botmaker.plugin.api.EditorHolder;
             import com.botmaker.plugin.api.StudioPlugin;
+            import com.botmaker.plugin.api.TypeHolder;
             import com.botmaker.plugin.api.slot.SlotEditor;
+            import com.botmaker.plugin.api.value.PluginType;
             import javafx.scene.control.TextField;
             import java.util.List;
 
             public final class TextPlugin extends DeclaredPlugin {
                 public TextPlugin() {
-                    super(StudioPlugin.declare().editors(Editors.class));
+                    super(StudioPlugin.declare().types(Types.class).editors(Editors.class));
+                }
+
+                /** Text with a blank value, as plugin-basics declares it: a new parameter's starting copy needs one. */
+                public static final class Types implements TypeHolder {
+                    @Override
+                    public List<PluginType<?>> types() {
+                        return List.of(PluginType.value(String.class).fresh(() -> "")
+                                .editor(() -> ctx -> new TextField()).writtenAsLiteral());
+                    }
                 }
 
                 public static final class Editors implements EditorHolder {
