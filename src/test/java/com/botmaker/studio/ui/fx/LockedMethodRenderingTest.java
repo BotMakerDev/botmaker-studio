@@ -2,6 +2,7 @@ package com.botmaker.studio.ui.fx;
 
 import com.botmaker.studio.blocks.func.MethodDeclarationBlock;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.EditPort;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
@@ -54,7 +55,7 @@ class LockedMethodRenderingTest extends FxHeadlessTest {
         context = new CodeEditorService(
                 null, new com.botmaker.studio.core.EditorState(), eventBus, null,
                 new com.botmaker.studio.ui.dnd.BlockDragAndDropManager(eventBus),
-                new com.botmaker.studio.validation.DiagnosticsManager(), null, null);
+                new com.botmaker.studio.validation.DiagnosticsManager(), null, null, told -> EditPort.NONE);
 
         root = new VBox();
         stage.setScene(new Scene(root, 600, 300));

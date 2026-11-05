@@ -12,6 +12,7 @@ import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.project.ProjectTemplate;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.EditPort;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import javafx.scene.Node;
@@ -115,7 +116,7 @@ class BodyCallBlockRenderingTest extends FxHeadlessTest {
         assertNotNull(root, "converter should produce a root block");
 
         CodeEditorService context = new CodeEditorService(
-                CONFIG, state, bus, converter, dnd, null, new ProjectAnalyzer(null, state), null);
+                CONFIG, state, bus, converter, dnd, null, new ProjectAnalyzer(null, state), null, told -> EditPort.NONE);
 
         for (CodeBlock b : flatten(root)) {
             if (b.getClass().getSimpleName().equals("BodyCallBlock")) return new Rendered(b, context);

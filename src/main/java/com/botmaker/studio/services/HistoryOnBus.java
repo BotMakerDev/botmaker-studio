@@ -1,6 +1,5 @@
 package com.botmaker.studio.services;
 
-import com.botmaker.core.edit.CoreEditor;
 import com.botmaker.core.edit.HistoryStep;
 import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.events.EventBus;
@@ -17,11 +16,12 @@ public final class HistoryOnBus {
     private HistoryOnBus() {
     }
 
-    /** Sends the bus's undo, redo and plugin rewrites to {@code core}. */
-    public static void attach(EventBus bus, CoreEditor core) {
-        bus.subscribe(CoreApplicationEvents.UndoRequestedEvent.class, e -> core.step(HistoryStep.UNDO), false);
-        bus.subscribe(CoreApplicationEvents.RedoRequestedEvent.class, e -> core.step(HistoryStep.REDO), false);
-        bus.subscribe(CoreApplicationEvents.FilesRewrittenEvent.class, e -> core.recordRewrite(e.label(), e.edits()), false);
+    /** Sends the bus's undo, redo and plugin rewrites to the core, through {@code edits}. */
+    public static void attach(EventBus bus, EditPort edits) {
+        bus.subscribe(CoreApplicationEvents.UndoRequestedEvent.class, e -> edits.step(HistoryStep.UNDO), false);
+        bus.subscribe(CoreApplicationEvents.RedoRequestedEvent.class, e -> edits.step(HistoryStep.REDO), false);
+        bus.subscribe(CoreApplicationEvents.FilesRewrittenEvent.class, e -> edits.recordRewrite(e.label(), e.edits()),
+                false);
     }
 
     /** {@code history} as the bus's event. */

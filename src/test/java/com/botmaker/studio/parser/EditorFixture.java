@@ -16,6 +16,7 @@ import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectTemplate;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.LocalEdits;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
@@ -116,7 +117,8 @@ public final class EditorFixture {
     public CodeEditorService context() {
         if (context == null) {
             context = new CodeEditorService(CONFIG, state, bus, converter, dragAndDrop,
-                    new DiagnosticsManager(), analyzer, new ApiDocsService(CONFIG, bus));
+                    new DiagnosticsManager(), analyzer, new ApiDocsService(CONFIG, bus),
+                    LocalEdits.over(CONFIG, state, bus, analyzer));
         }
         return context;
     }

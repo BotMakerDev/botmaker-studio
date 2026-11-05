@@ -88,8 +88,17 @@ final class LiveEditorBot implements LiveBot {
             if (active == null || !active.getPath().equals(turn.file())) {
                 return new Committed("Not applied: Studio could not open " + turn.file().getFileName() + ".", null);
             }
-            EditResult landed = ctx.codeEditorService().getCoreEditor()
-                    .commit(turn.session(), live, AssistTurn.labelOf(label));
+            if (turn.acceptedEdits() == 0 || turn.source().equals(turn.session().original())) {
+                return new Committed("Not applied: No edit was kept, so there is nothing to apply.", null);
+            }
+            if (!turn.session().original().equals(live)) {
+                return new Committed("Not applied: The file changed in Studio meanwhile. Read the tree again.", null);
+            }
+            // The session ran here; its end crosses whole to the core, which lands it while the file still reads what
+            // Studio shows now: the text the session started from, or that text with the switches opening tidied.
+            String file = ctx.state().activeFileName().orElse("");
+            EditResult landed = ctx.codeEditorService().edits()
+                    .commit(file, ctx.state().getCurrentCode(), turn.source(), AssistTurn.labelOf(label));
             if (landed instanceof EditResult.Refused refused) {
                 return new Committed("Not applied: " + refused.reason(), null);
             }

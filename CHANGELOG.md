@@ -12,6 +12,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- Studio edits a bot through BotMaker's core, its own process (2026-11-05): the core saves each change as it lands, so
+  a crash of Studio loses no edit. One core serves one project at a time, so a second Studio cannot open another bot
+  until the first closes its own.
+
 ### Changed (edits by id)
 
 - The assistant's MCP endpoint and its tools moved to `botmaker-core` (`com.botmaker.core.assist`, 2026-11-05), with

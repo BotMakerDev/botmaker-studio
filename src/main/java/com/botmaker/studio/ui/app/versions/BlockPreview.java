@@ -9,6 +9,7 @@ import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.project.vcs.BlockDiff;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.EditPort;
 import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
@@ -61,7 +62,7 @@ final class BlockPreview {
         staged.setNodeToBlockMap(registry);
         staged.setCompilationUnit(result.cu());
         this.context = new CodeEditorService(config, staged, bus, converter, dnd, null,
-                new ProjectAnalyzer(null, staged), null);
+                new ProjectAnalyzer(null, staged), null, told -> EditPort.NONE);
         this.problems = result.problems();
         this.drawn = result.root() != null;
     }

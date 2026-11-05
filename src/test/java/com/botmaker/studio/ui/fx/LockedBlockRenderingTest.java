@@ -12,6 +12,7 @@ import com.botmaker.core.project.ProjectFile;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.project.ProjectTemplate;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.EditPort;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import javafx.scene.Node;
 import javafx.scene.Parent;
@@ -120,7 +121,7 @@ class LockedBlockRenderingTest extends FxHeadlessTest {
 
         CodeEditorService context = new CodeEditorService(
                 CONFIG, state, bus, converter, dnd, null,
-                new com.botmaker.java.types.ProjectAnalyzer(null, state), null);
+                new com.botmaker.java.types.ProjectAnalyzer(null, state), null, told -> EditPort.NONE);
         return new Rendered(result.root(), context, state);
     }
 

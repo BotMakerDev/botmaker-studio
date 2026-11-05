@@ -21,13 +21,11 @@ import com.botmaker.studio.runtime.StopKey;
 import com.botmaker.studio.ui.app.reports.RunEndReports;
 import com.botmaker.studio.ui.app.run.RunOverlay;
 import com.botmaker.studio.services.CodeEditorService;
-import com.botmaker.core.services.ContractDependency;
 import com.botmaker.studio.services.ApiDocsService;
 import com.botmaker.studio.services.DebugOnBus;
 import com.botmaker.core.run.DebuggingService;
 import com.botmaker.studio.services.PluginsOnBus;
 import com.botmaker.studio.services.RunOnBus;
-import com.botmaker.core.services.EditorCompanions;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.services.MavenService;
 import com.botmaker.core.services.OpenStep;
@@ -37,8 +35,9 @@ import com.botmaker.java.types.ProjectAnalyzer;
 import com.botmaker.studio.ui.dnd.BlockDragAndDropManager;
 import com.botmaker.studio.validation.DiagnosticsManager;
 
-import com.botmaker.core.project.vcs.ProjectVcs;
+import com.botmaker.studio.services.CoreEdits;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -75,6 +74,7 @@ public class BotProject {
     private RunOverlay runOverlay;
     private RunEndReports runEndReports;
     private BlockConverter blockConverter;
+    private CoreEdits coreEdits;
 
     private BotProject(ProjectConfig config,
                        EditorState state,
@@ -119,18 +119,35 @@ public class BotProject {
         // 2. Create state
         EditorState state = new EditorState();
         state.setSourcePath(config.sourceRoot());
-        // The remotes' git names first: everything below reads origin and upstream (2026-10-25).
-        try {
-            new ProjectVcs(config.projectPath()).adoptRemoteNames();
-        } catch (IOException e) {
-            System.err.println("Warning: " + e.getMessage());
-        }
         // Installed community bots open read-only until the user chooses to edit; local projects are editable.
         state.setReaderMode(ProjectMode.isReader(config.projectPath()));
 
         // 3. Create event bus
         EventBus eventBus = new EventBus(enableEventLogging, uiThread);
 
+        // 3a. The core's process opens the project first (plan phase 10a1): it takes the project's lock, makes the
+        //     open-time writes (the remotes' names, the contract's dependency, a plugin's editor libraries) and
+        //     binds the plugins' host side. Studio edits through it, and resolves below what the core's writes left.
+        progress.step(OpenStep.DEPENDENCIES);
+        CoreEdits coreEdits;
+        try {
+            coreEdits = CoreEdits.open(config, state, eventBus, uiThread);
+        } catch (IOException e) {
+            throw new UncheckedIOException("BotMaker's core could not open " + config.projectName() + ": "
+                    + e.getMessage(), e);
+        }
+        try {
+            return assemble(config, state, eventBus, coreEdits, progress);
+        } catch (RuntimeException | Error e) {
+            // Nothing else holds it yet: left open, the core would keep the project's lock until Studio exits.
+            coreEdits.close();
+            throw e;
+        }
+    }
+
+    /** The rest of an open, once the core has the project. */
+    private static BotProject assemble(ProjectConfig config, EditorState state, EventBus eventBus,
+                                       CoreEdits coreEdits, ProgressReporter progress) {
         // 4. Create infrastructure services
         DiagnosticsManager diagnosticsManager = new DiagnosticsManager();
         BlockDragAndDropManager dragAndDropManager = new BlockDragAndDropManager(eventBus);
@@ -149,29 +166,8 @@ public class BotProject {
             classpath = List.of();
         }
 
-        // 5a. A bot whose own source imports the contract's annotations (a @Param written into a blank
-        //     project before Studio declared the jar for it) gets the jar now, and resolves again. Nothing is
-        //     written when the classpath already carries it, however it got there — see ContractDependency.
-        try {
-            if (ContractDependency.ensureFor(config, state, classpath)) {
-                classpath = MavenService.resolveClasspath(config.projectPath(), progress);
-                state.setResolvedClasspath(classpath);
-            }
-        } catch (Exception e) {
-            System.err.println("Warning: Could not declare the plugin contract: " + e.getMessage());
-        }
-
-        // 5a'. A declared plugin's editor dependencies the pom lost (the Pilot's javalin) are put back, and the
-        //      classpath resolved again. Only what a BotMaker plugin's own pom marks optional, never in the pom
-        //      of a bot opened read-only.
-        try {
-            if (!state.isReaderMode() && EditorCompanions.restore(config.projectPath(), classpath, progress)) {
-                classpath = MavenService.resolveClasspath(config.projectPath(), progress);
-                state.setResolvedClasspath(classpath);
-            }
-        } catch (Exception e) {
-            System.err.println("Warning: Could not restore a plugin's editor libraries: " + e.getMessage());
-        }
+        // 5a. The contract's dependency and a plugin's editor libraries are the core's open-time writes since
+        //     phase 10a1 (OpenProject.Libraries.MAVEN), made before the resolve above.
 
         // 5-. Bind the plugins this project's own jars declare, so the palette and the value vocabulary
         // describe the SDK it pins rather than the one Studio bundles. An empty or unresolvable classpath
@@ -246,6 +242,7 @@ public class BotProject {
                 projectSettingsService
         );
         project.blockConverter = blockConverter;
+        project.coreEdits = coreEdits;
 
         // 10. Create services
         project.initializeServices(config, state, eventBus, diagnosticsManager,
@@ -295,7 +292,7 @@ public class BotProject {
         this.codeEditorService = new CodeEditorService(
                 config, state, eventBus, blockConverter,
                 dragAndDropManager, diagnosticsManager, projectAnalyzer,
-                apiDocsService
+                apiDocsService, coreEdits::heardBy
         );
 
         // Execution, its compile/run/stop requests and its events on the bus (RunOnBus)
@@ -398,6 +395,8 @@ public class BotProject {
         // The plugin set then goes back to the bundled one, and this project's jars are released — an open
         // URLClassLoader holds every jar it read, which on Windows makes the file unreplaceable.
         PluginHost.unbind();
+        // The core closes the project, its plugins and its lock once no client is on it.
+        if (coreEdits != null) coreEdits.close();
         HostRuns.clear();
         HostPluginValues.clear();
         HostHistory.clear();

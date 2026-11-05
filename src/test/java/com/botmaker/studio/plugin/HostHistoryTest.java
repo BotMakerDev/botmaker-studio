@@ -7,10 +7,10 @@ import com.botmaker.core.events.EventBus;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.core.services.BotSources;
-import com.botmaker.core.edit.CoreEditor;
 import com.botmaker.core.event.CoreEvent;
-import com.botmaker.studio.events.BusEditorOutput;
+import com.botmaker.studio.services.EditPort;
 import com.botmaker.studio.services.HistoryOnBus;
+import com.botmaker.studio.services.LocalEdits;
 import com.botmaker.studio.services.PluginsOnBus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +43,7 @@ class HostHistoryTest {
         Path b = write(config, "B.java", "class B { int y = 1; }");
         EventBus bus = new EventBus(false);
         // The history is the core's; Studio's bus carries its steps and what it became.
-        CoreEditor core = new CoreEditor(config, new ProjectState(), new BusEditorOutput(bus), null, event -> {
+        EditPort core = LocalEdits.over(config, new ProjectState(), bus, null).apply(event -> {
             if (event instanceof CoreEvent.HistoryChanged changed) HostHistory.told(changed);
         });
         HistoryOnBus.attach(bus, core);

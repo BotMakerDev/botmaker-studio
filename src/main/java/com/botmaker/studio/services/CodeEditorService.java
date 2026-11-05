@@ -2,16 +2,13 @@ package com.botmaker.studio.services;
 
 import com.botmaker.core.run.DebuggingService;
 import com.botmaker.core.edit.CanvasEdit;
-import com.botmaker.core.edit.CoreEditor;
 import com.botmaker.core.edit.Edit;
 import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.event.CoreEvent;
-import com.botmaker.core.parser.EditorOutput;
 import com.botmaker.core.plugin.HostHistory;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.java.edit.BlockId;
 import com.botmaker.studio.core.AbstractCodeBlock;
-import com.botmaker.studio.events.BusEditorOutput;
 import com.botmaker.studio.core.BodyBlock;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.StatementBlock;
@@ -63,6 +60,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -73,7 +71,7 @@ public class CodeEditorService {
     private Path firstFile;
     private final EventBus eventBus;
     private final BlockConverter blockConverter;
-    private final CoreEditor coreEditor;
+    private final EditPort edits;
     private final BlockDragAndDropManager dragAndDropManager;
     private final DiagnosticsManager diagnosticsManager;
     private final ProjectAnalyzer projectAnalyzer;
@@ -150,7 +148,8 @@ public class CodeEditorService {
             BlockConverter blockConverter,
             BlockDragAndDropManager dragAndDropManager,
             DiagnosticsManager diagnosticsManager, ProjectAnalyzer projectAnalyzer,
-            ApiDocsService apiDocsService) {
+            ApiDocsService apiDocsService,
+            Function<Consumer<CoreEvent>, EditPort> edits) {
         this.config = config;
         this.state = state;
         this.eventBus = eventBus;
@@ -159,8 +158,9 @@ public class CodeEditorService {
         this.diagnosticsManager = diagnosticsManager;
         this.projectAnalyzer = projectAnalyzer;
         this.apiDocsService = apiDocsService;
-        // Studio redraws from what the core announces, whoever made the change (plan phase 6e).
-        this.coreEditor = new CoreEditor(config, state, new BusEditorOutput(eventBus), projectAnalyzer, this::announced);
+        // Studio redraws from what the core announces, whoever made the change (plan phase 6e); the core is its own
+        // process since phase 10a1, and edits is how it is reached.
+        this.edits = edits.apply(this::announced);
         setupEventHandlers();
     }
 
@@ -172,7 +172,7 @@ public class CodeEditorService {
      */
     private void announced(CoreEvent event) {
         switch (event) {
-            case CoreEvent.MethodsChanged changed when coreEditor.openFile().filter(changed.file()::equals).isPresent() -> {
+            case CoreEvent.MethodsChanged changed when state.activeFileName().filter(changed.file()::equals).isPresent() -> {
                 // Built before adopt(), which replaces the state's source: BlockReuse slices the outgoing nodes'
                 // offsets out of the source they were parsed from, and against the new text that is two different files.
                 BlockReuse reuse = reuseForThisEdit();
@@ -196,7 +196,7 @@ public class CodeEditorService {
      * announces it, so it is drawn and undone as an edit is.
      */
     public void rewritten(String newCode, String previousCode) {
-        coreEditor.rewritten(new EditorOutput.Write(newCode, previousCode, false, null, List.of()));
+        state.activeFileName().ifPresent(file -> edits.rewritten(file, previousCode, newCode));
     }
 
 
@@ -249,7 +249,7 @@ public class CodeEditorService {
 
         // The edit path, and the one place reuse is offered, is what the core announces: see announced().
 
-        HistoryOnBus.attach(eventBus, coreEditor);
+        HistoryOnBus.attach(eventBus, edits);
         eventBus.subscribe(CoreApplicationEvents.CopyRequestedEvent.class, e -> copySelectedBlock(), true);
         eventBus.subscribe(CoreApplicationEvents.PasteRequestedEvent.class, e -> pasteFromClipboard(), true);
 
@@ -649,6 +649,12 @@ public class CodeEditorService {
         keepRenderOfActiveFile(at);
         state.setActiveFile(path);
         state.setDocUri(file.getUri());
+        // The core edits the file Studio shows: it reads it again from disk, where every change of it is. A file it
+        // refuses, or one outside the sources (a library's), leaves it on no file, so no edit lands on the last one.
+        Optional<String> named = state.activeFileName().filter(name -> !Path.of(name).isAbsolute());
+        if (edits.show(named.orElse("")) instanceof EditResult.Refused refused && named.isPresent()) {
+            eventBus.publish(new CoreApplicationEvents.StatusMessageEvent(refused.reason()));
+        }
 
         String content = file.getContent();
         KeptRender kept = keptRenders.remove(at);
@@ -666,7 +672,7 @@ public class CodeEditorService {
         // the branch is somewhere a block can actually be dropped. Skipped for files the user can't edit
         // anyway (generated scaffolding), and a no-op when both are already true.
         if (!resolver.suppressesInteraction()) {
-            coreEditor.userEdit(new CanvasEdit.NormalizeSwitches());
+            edits.userEdit(new CanvasEdit.NormalizeSwitches());
         }
     }
 
@@ -943,12 +949,12 @@ public class CodeEditorService {
     /** The most recently rendered block tree root (published via {@code UIBlocksUpdatedEvent}), or empty. */
     public Optional<CodeBlock> getRootBlock() { return Optional.ofNullable(lastRootBlock); }
 
-    /** The core's editor: every edit goes through it, by {@code BlockId}. */
-    public CoreEditor getCoreEditor() { return coreEditor; }
+    /** The way to the core's editor: every edit goes through it, by {@code BlockId}. */
+    public EditPort edits() { return edits; }
 
     /** A gesture on {@code target}, a node drawn on the canvas: it reaches the core by the node's path. */
     public EditResult edit(ASTNode target, Function<String, Edit> edit) {
-        return isStale(target) ? DROPPED : coreEditor.userEdit(edit.apply(BlockId.of(target)));
+        return isStale(target) ? DROPPED : edits.userEdit(edit.apply(BlockId.of(target)));
     }
 
     /** A gesture naming its places by id, each drawn as one of {@code drawn}; {@code edit} with no node names none. */
@@ -956,7 +962,7 @@ public class CodeEditorService {
         for (ASTNode node : drawn) {
             if (isStale(node)) return DROPPED;
         }
-        return coreEditor.userEdit(edit);
+        return edits.userEdit(edit);
     }
 
     private static final EditResult DROPPED = new EditResult.Refused("That block was being redrawn. Try again.");
