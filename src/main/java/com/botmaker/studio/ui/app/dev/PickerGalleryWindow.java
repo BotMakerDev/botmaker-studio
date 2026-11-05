@@ -307,7 +307,7 @@ public final class PickerGalleryWindow {
         Type form = shape.formOf(type);
         ValueGrammar grammar = PluginHost.grammar();
         ParameterRow row = ParameterRow.named(identifier(type, shape), ValueTypes.sourceName(form))
-                .value(grammar.freshInitializer(form).map(JavaValue::source).orElse(""))
+                .value(grammar.freshInitializer(form))
                 .visibility(Visibility.PUBLIC)
                 .build();
         return new Sample(row, form);

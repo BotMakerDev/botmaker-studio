@@ -50,7 +50,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
     /** One row seeded with the form's fresh initialiser. */
     private static ParameterRow row(String name, Type form) {
         return ParameterRow.named(name, ValueTypes.sourceName(form))
-                .value(PluginHost.grammar().freshInitializer(form).map(JavaValue::source).orElse(""))
+                .value(PluginHost.grammar().freshInitializer(form))
                 .build();
     }
 
@@ -114,7 +114,7 @@ class ParamShapeWidgetTest extends FxHeadlessTest {
         JavaValue pair = grammar.compose(entry, List.of(grammar.spell(String.class, "a").orElseThrow(), numbers))
                 .orElseThrow();
         JavaValue seed = grammar.compose(table, List.of(pair)).orElseThrow();
-        ParameterRow row = ParameterRow.named("table", ValueTypes.sourceName(table)).value(seed.source()).build();
+        ParameterRow row = ParameterRow.named("table", ValueTypes.sourceName(table)).value(seed).build();
 
         List<ParamValueWidgets.ValueEditor> sink = new ArrayList<>();
         widgetFor(row, table, sink);

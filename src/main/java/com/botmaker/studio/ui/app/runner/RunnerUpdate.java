@@ -15,8 +15,9 @@ import java.util.List;
  * merged, and compiled; it is committed only when git merged every file and the result compiles. Anything else
  * is undone and left to Studio, where the conflict sheet and the errors can be shown: a runner has no editor.
  *
- * <p>The runner's own values come back afterwards from {@code RunnerValues}, so an update that brought the
- * author's defaults back loses nothing.
+ * <p>The runner's own values are the bot's {@code params/}, which git leaves alone: it is excluded, and no tag
+ * tracks it. The next compile fits it to the tag's {@code starting-params/}, so an update loses no value whose
+ * parameter it keeps.
  */
 public final class RunnerUpdate {
 

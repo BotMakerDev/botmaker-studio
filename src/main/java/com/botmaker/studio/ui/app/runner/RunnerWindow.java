@@ -3,7 +3,6 @@ package com.botmaker.studio.ui.app.runner;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.plugin.api.run.Readiness;
 import com.botmaker.core.project.params.ParameterRow;
-import com.botmaker.core.project.params.RunnerValues;
 import com.botmaker.core.project.vcs.SyncModel;
 import com.botmaker.studio.runtime.StopKeyPreference;
 import com.botmaker.core.sharing.CatalogClient;
@@ -58,7 +57,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -144,10 +142,6 @@ public final class RunnerWindow implements ProjectWindow {
     /** The author's repository, for <i>What changed</i>; empty for the user's own bot. */
     private Optional<SyncModel.Slug> original = Optional.empty();
 
-    /** The runner's values for this bot, kept apart from it ({@link RunnerValues}, 2026-10-25). */
-    private RunnerValues kept;
-    /** The kept values this version of the bot no longer takes, said once at the top of the settings. */
-    private List<String> dropped = List.of();
 
     /** Asks the plugins whether the bot can start, every few seconds while the window is open. */
     private ScheduledExecutorService readinessPoll;
@@ -290,8 +284,7 @@ public final class RunnerWindow implements ProjectWindow {
 
     /**
      * Who made the bot and which release it is at, off its repository, and the catalog's newer release from the
-     * copy kept on disk: quick reads, done once while the window is built. The runner's kept values are found by
-     * the same author ({@link RunnerValues#keyOf}).
+     * copy kept on disk: quick reads, done once while the window is built.
      */
     private RunnerHeader.About readAbout() {
         Path dir = config.projectPath();
@@ -303,8 +296,6 @@ public final class RunnerWindow implements ProjectWindow {
         // A bot opened from a .bmk has no history to merge into: its newer tag is a newer file, opened beside it.
         Optional<String> available = facts.unpacked() ? Optional.empty()
                 : listed.flatMap(e -> GalleryEntry.updateTarget(facts.version().orElse(""), e.tag()));
-        kept = RunnerValues.load(RunnerValues.keyOf(original.map(SyncModel.Slug::owner),
-                original.map(SyncModel.Slug::repo), dir));
         return new RunnerHeader.About(facts.title().orElse(config.projectName()), original.map(SyncModel.Slug::owner), facts.version(),
                 available);
     }
@@ -408,11 +399,6 @@ public final class RunnerWindow implements ProjectWindow {
         VBox column = new VBox(18);
         column.setPadding(new Insets(18));
         column.setMaxWidth(CONTENT_MAX_WIDTH);
-        if (!dropped.isEmpty()) {
-            // Said once: the values are forgotten as they are said (applyKeptValues).
-            column.getChildren().add(hint(about.name() + about.version().map(v -> " " + v).orElse("")
-                    + " no longer has: " + String.join(", ", dropped) + "."));
-        }
         column.getChildren().add(settingsSection());
 
         ScrollPane scroll = new ScrollPane(column);
@@ -456,42 +442,11 @@ public final class RunnerWindow implements ProjectWindow {
     private void reload() {
         rows.clear();
         HostParamScope scope = HostParamScope.over(HostPluginValues.live());
-        Set<String> declared = new HashSet<>();
         for (JavaParameter entry : JavaParameters.scan(config, state)) {
-            declared.add(entry.qualified());
             // A plugin's conditional parameter only while it applies (ManagedParam.ConditionStep.when, 2026-10-12).
             if (entry.row().isPublic() && entry.editable() && scope.shown(entry)) rows.add(entry);
         }
         records = BotRecords.scan(config, state, PluginHost.grammar());
-        applyKeptValues(declared);
-    }
-
-    /**
-     * Writes the runner's kept values that the source lacks — an update brought the author's defaults back, or
-     * this is a newer release beside the old one — and forgets, once said, those this version no longer takes.
-     * A value whose field is still {@code declared} but not shown now (a conditional one, one whose plugin did
-     * not load) is kept for later, untouched.
-     */
-    private void applyKeptValues(Set<String> declared) {
-        RunnerValues.Applied applied = kept.applyTo(rows, declared, this::fits);
-        applied.values().forEach((entry, source) -> JavaValue.parse(source).ifPresent(value -> {
-            Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, value);
-            int at = rows.indexOf(entry);
-            stored.ifPresent(row -> rows.set(at, entry.withRow(row)));
-        }));
-        dropped = applied.dropped();
-        if (!dropped.isEmpty()) {
-            kept = kept.without(dropped);
-            kept.save();
-        }
-    }
-
-    /** Whether {@code source} still reads as {@code entry}'s type: the grammar's, or one of the bot's records. */
-    private boolean fits(JavaParameter entry, String source) {
-        if (entry.form() instanceof ValueTypes.BotClass declared) {
-            return records.partsOf(declared, source).isPresent();
-        }
-        return PluginHost.grammar().valueOf(entry.form(), source).isPresent();
     }
 
     // sdkPin() stood here until 2026-09-22, reading the pom so the parameter data surface could be asked at
@@ -698,28 +653,20 @@ public final class RunnerWindow implements ProjectWindow {
      * pressing Run twice writes nothing the second time. The answer is the row <em>as stored</em> — clamped,
      * canonicalised, pruned to the choices still on offer by the owning plugin — and it is kept, so a second
      * Run compares against what the bot will actually get rather than against what was typed.
-     *
-     * <p>Each value written is kept for the runner too ({@link RunnerValues}), so the next release of the bot
-     * gets it again.
      */
     private void flushValues() {
-        RunnerValues was = kept;
         for (ParamValueWidgets.ValueEditor editor : valueEditors) {
             for (int i = 0; i < rows.size(); i++) {
                 JavaParameter entry = rows.get(i);
                 if (!editor.describes(entry.className(), entry.row().name())) continue;
                 Optional<JavaValue> typed = editor.read().get();
-                if (typed.isEmpty() || typed.get().source().equals(entry.row().value())) break;
+                if (typed.isEmpty() || entry.row().value().filter(typed.get()::sameJava).isPresent()) break;
                 Optional<ParameterRow> stored = JavaParameters.setValue(config, state, entry, typed.get());
                 int at = i;
-                stored.ifPresent(row -> {
-                    rows.set(at, entry.withRow(row));
-                    kept = kept.with(entry.qualified(), row.value());
-                });
+                stored.ifPresent(row -> rows.set(at, entry.withRow(row)));
                 break;
             }
         }
-        if (kept != was) kept.save();
     }
 
     private static String rootMessage(Throwable t) {

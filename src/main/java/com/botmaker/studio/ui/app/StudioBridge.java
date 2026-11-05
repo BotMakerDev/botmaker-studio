@@ -1434,7 +1434,7 @@ final class StudioBridge implements StudioDriver {
         List<String> lines = new ArrayList<>();
         for (JavaParameter p : params) {
             ParameterRow row = p.row();
-            lines.add(p.qualified() + "  " + row.typeName() + " = " + (p.editable() ? row.value() : p.initializer())
+            lines.add(p.qualified() + "  " + row.typeName() + " = " + (p.editable() ? row.valueText() : p.initializer())
                     + "  [" + row.categoryOrGeneral() + "]"
                     + (row.description().isBlank() ? "" : " — " + row.description().strip())
                     + (p.editable() ? "" : "  (not set here: " + p.note() + ")"));

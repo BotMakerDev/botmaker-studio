@@ -138,7 +138,7 @@ public final class ParamValueWidgets {
         ValueGrammar grammar = PluginHost.grammar();
         String why = whyNotEditable(form, records);
         if (why != null) return unreadable(row, why);
-        ValueEditors.Editor editor = editor(grammar, form, SourceNode.parse(row.value()), records, ctx);
+        ValueEditors.Editor editor = editor(grammar, form, row.value().map(JavaValue::written), records, ctx);
         ValueEditors.stretch(editor.node());
         sink.add(ValueEditor.of(group, row, editor.read()));
         return editor.node();
@@ -556,7 +556,7 @@ public final class ParamValueWidgets {
      * the author cannot see. Nothing is added to {@code sink}, so nothing can be written back over it.
      */
     private static Node unreadable(ParameterRow row, String why) {
-        Label written = new Label(row.value().isBlank() ? "—" : row.value());
+        Label written = new Label(row.valueText().isBlank() ? "—" : row.valueText());
         written.getStyleClass().add("dialog-hint-text");
         written.setTooltip(new Tooltip("Shown as written, not editable here: " + why + "."));
         return new VBox(2, written);

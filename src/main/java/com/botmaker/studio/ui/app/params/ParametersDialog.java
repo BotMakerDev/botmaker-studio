@@ -1244,7 +1244,7 @@ public final class ParametersDialog {
             if (held == null) {
                 // The snapshot's value is Java this file held, so it goes back as that expression, kept.
                 JavaParameters.add(config, state, entry.className(), row.name(), entry.form(),
-                        JavaValue.parse(row.value()).orElse(null), row.category(), row.description());
+                        row.value().orElse(null), row.category(), row.description());
                 held = find(entry.className(), row.name());
             }
             if (held == null) continue;
@@ -1281,7 +1281,7 @@ public final class ParametersDialog {
                 // for what is in it — an empty radio group, a leaf no editor draws — and writing nothing is the
                 // only honest answer to that. A value shown exactly as the row holds it is not an edit.
                 Optional<JavaValue> typed = editor.read().get();
-                if (typed.isEmpty() || typed.get().source().equals(entry.row().value())) break;
+                if (typed.isEmpty() || entry.row().value().filter(typed.get()::sameJava).isPresent()) break;
                 // The answer is the row as *stored*, which may differ from what was typed — a canonical
                 // spelling from the grammar, a constant for a value one holds. That is what goes into the
                 // list, so the next redraw shows what the bot will actually get.

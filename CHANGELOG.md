@@ -12,6 +12,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The Run window no longer keeps the runner's values in `<data>/runner-values/` (2026-11-05): they are the bot's
+  `params/`, which an update keeps, so the window no longer says which kept values a newer version dropped. A value
+  shown as the file holds it, whatever its spacing, is no edit.
+
 - Closing Studio while the bot runs asks "Stop the run or keep it running in the background?" (2026-11-05). Stop is
   the default, and Cancel keeps Studio open. A kept run goes on in BotMaker's core; reopening its project shows it
   running again, and Claude can stop it through the MCP.
