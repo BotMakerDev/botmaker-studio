@@ -12,6 +12,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- In dev mode, Reload in *Plugins & Libraries* checks each rebuilt `-SNAPSHOT` plugin against the bot (2026-11-09).
+  If the bot's values no longer fit it, a dialog lists the repair. Repair saves a version of the bot, writes the
+  repair, and reloads. Cancel leaves the bot as written. One plugin is checked at a time, and a jar that did not
+  change since its last check is skipped.
 - The Wayland notice no longer tells the user to log in to Xorg or offers to install X11 session packages (Plasma 6.8
   has none). `WaylandNotice` replaces `ForceX11Notice`: it shows once on Wayland only when gamescope, the private
   display a bot plays in there, is missing, and says how to install it (2026-11-09).

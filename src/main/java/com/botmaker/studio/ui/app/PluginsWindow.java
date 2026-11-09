@@ -3,17 +3,25 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginLoader;
 import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.plugin.ReleasedPlugins;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.UserLibrary;
+import com.botmaker.core.project.managed.ManagedRepairs;
 import com.botmaker.core.services.JitPackSearch;
 import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.services.LocalBuilds;
 import com.botmaker.studio.services.MavenCentralSearch;
 import com.botmaker.core.services.upgrade.InstalledPlugin;
+import com.botmaker.core.services.upgrade.PluginUpgradeService;
 import com.botmaker.core.sharing.PluginRegistry;
+import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Control;
@@ -28,9 +36,16 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -81,6 +96,13 @@ public final class PluginsWindow {
      * the whole local repository and opens jars. Touched on the FX thread only.
      */
     private CompletableFuture<List<LocalBuilds.Build>> localScan;
+    /** Whether a dev-mode reload's check of the bot's values runs, its dialogs included. Touched on the FX thread only. */
+    private boolean checkingRepairs;
+    /**
+     * Each dev plugin's jar as it was when its values in a project were last checked, by project and coordinate: a
+     * Reload that rebuilt nothing checks nothing, and a repair the user cancelled is not asked again until a rebuild.
+     */
+    private static final Map<String, String> CHECKED_JARS = new ConcurrentHashMap<>();
     private InstalledPluginsTab installed;
     private BrowsePluginsTab browse;
     private LibrariesTab libraries;
@@ -187,12 +209,139 @@ public final class PluginsWindow {
             // Named, not counted: a reload that found the same plugins looks exactly like one that did
             // nothing, and an author who forgot to run mvn install needs to tell those apart.
             status.setText(loadedText(PluginHost.plugins()) + devText(PluginHost.devBuilds()));
+            offerRebuiltRepairs();
             showLoadProblems();
             localScan = null;       // a rebuild or a dev-mode switch changes which ~/.m2 builds are offered
             installed.reload();
             browse.reload();
             browse.refreshInstalled();
         }));
+    }
+
+    /**
+     * In dev mode, after a reload (2026-11-09, the user's call): a plugin rebuilt under the same {@code -SNAPSHOT}
+     * may no longer declare an id the bot marks, or take a value the bot holds, and no version moved for an upgrade
+     * to repair it. Each such plugin's repair is shown, and written on Repair after a saved version; Cancel leaves the
+     * bot as written. One plugin at a time, each planned after the last one's write, so no plan writes over another;
+     * a jar unchanged since it was last checked is not checked again; one check runs at once.
+     */
+    private void offerRebuiltRepairs() {
+        if (!libraryService.devMode() || checkingRepairs) return;
+        checkingRepairs = true;
+        Predicate<UserLibrary> isPlugin = InstalledPlugin.jarDeclaresPlugin(config.projectPath());
+        CompletableFuture.supplyAsync(() -> {
+            Deque<PluginUpgradeService> rebuilt = new ArrayDeque<>();
+            for (UserLibrary library : libraryService.declaredLibraries()) {
+                if (!isPlugin.test(library)) continue;
+                PluginUpgradeService upgrades = new PluginUpgradeService(config, state, libraryService::removePlugin,
+                        jitpack, library);
+                if (ReleasedPlugins.isDevVersion(upgrades.currentVersion()) && !checkedAlready(upgrades)) {
+                    rebuilt.add(upgrades);
+                }
+            }
+            return rebuilt;
+        }).whenComplete((rebuilt, failure) -> Platform.runLater(() -> {
+            if (failure != null) {
+                checkingRepairs = false;
+                say("The bot's values could not be checked: " + causeOf(failure).getMessage());
+                return;
+            }
+            nextRepair(rebuilt, false);
+        }));
+    }
+
+    /** The next rebuilt plugin's repair, planned against the bot as the last one left it; then a reload, if any wrote. */
+    private void nextRepair(Deque<PluginUpgradeService> rebuilt, boolean wrote) {
+        PluginUpgradeService upgrades = rebuilt.poll();
+        if (upgrades == null) {
+            checkingRepairs = false;
+            // The bind and the tabs read the bot again; the jars are unchanged, so the check that follows is skipped.
+            if (wrote) reload(devMode, libraryService.reloadPlugins());
+            return;
+        }
+        CompletableFuture.supplyAsync(() -> {
+            PluginUpgradeService.Rebuilt found = upgrades.rebuiltRepair();
+            remember(upgrades);
+            return found;
+        }).whenComplete((found, failure) -> Platform.runLater(() -> {
+            if (failure != null) {
+                say(upgrades.displayName() + "'s values could not be checked: " + causeOf(failure).getMessage());
+                nextRepair(rebuilt, wrote);
+                return;
+            }
+            found.problems().forEach(this::say);
+            if (found.planned() == null || !askRepair(upgrades, found.planned())) {
+                nextRepair(rebuilt, wrote);
+                return;
+            }
+            String name = upgrades.displayName();
+            CompletableFuture.supplyAsync(() -> {
+                upgrades.snapshot("Before repairing values for the rebuilt " + name + " " + upgrades.currentVersion());
+                return upgrades.applyRepair(found.planned());
+            }).whenComplete((values, failed) -> Platform.runLater(() -> {
+                if (failed != null) {
+                    ThemedWindows.alert(Alert.AlertType.ERROR, "The repair did not run:\n\n"
+                            + causeOf(failed).getMessage()).showAndWait();
+                    nextRepair(rebuilt, wrote);
+                    return;
+                }
+                // A holder the repair deleted: its buffer goes, and the editor moves off it, as an upgrade does.
+                var active = state.getActiveFile();
+                values.deleted().forEach(state::removeFile);
+                if (active != null && values.deleted().contains(active.getPath())) {
+                    state.setActiveFile(config.entrySourceFile());
+                }
+                say("Repaired " + values.files() + (values.files() == 1 ? " file" : " files") + " for " + name + ".");
+                nextRepair(rebuilt, true);
+            }));
+        }));
+    }
+
+    /** Asks whether to write {@code planned}, what the rebuilt plugin needs of the bot's values. */
+    private boolean askRepair(PluginUpgradeService upgrades, ManagedRepairs.Planned planned) {
+        String name = upgrades.displayName();
+        String text = name + " " + upgrades.currentVersion() + " was rebuilt, and this bot's values no longer fit it:"
+                + "\n\n• " + String.join("\n• ", planned.sentences())
+                + "\n\nRepair writes this, after saving a version of the bot. Cancel leaves the bot as written.";
+        Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, text);
+        ask.initOwner(stage);
+        ask.setHeaderText("Repair the bot's values for the rebuilt " + name + "?");
+        ButtonType repair = new ButtonType("Repair", ButtonBar.ButtonData.OK_DONE);
+        ask.getButtonTypes().setAll(repair, ButtonType.CANCEL);
+        return ask.showAndWait().orElse(ButtonType.CANCEL) == repair;
+    }
+
+    /** Whether {@code upgrades}' pinned jar is the bytes it was when last checked for this project. Blocking. */
+    private boolean checkedAlready(PluginUpgradeService upgrades) {
+        return jarStamp(upgrades).equals(CHECKED_JARS.get(checkedKey(upgrades)));
+    }
+
+    private void remember(PluginUpgradeService upgrades) {
+        CHECKED_JARS.put(checkedKey(upgrades), jarStamp(upgrades));
+    }
+
+    private String checkedKey(PluginUpgradeService upgrades) {
+        return config.projectPath() + "|" + upgrades.coordinate();
+    }
+
+    /** The pinned jar's path, size and modification time; empty when it does not resolve. Blocking. */
+    private static String jarStamp(PluginUpgradeService upgrades) {
+        return upgrades.pinnedJar().map(jar -> {
+            try {
+                return jar + "|" + Files.size(jar) + "|" + Files.getLastModifiedTime(jar).toMillis();
+            } catch (IOException unreadable) {
+                return "";
+            }
+        }).orElse("");
+    }
+
+    /** Adds {@code line} to the footer's status, after what the reload said. */
+    private void say(String line) {
+        status.setText(status.getText().isBlank() ? line : status.getText() + " " + line);
+    }
+
+    private static Throwable causeOf(Throwable failure) {
+        return failure.getCause() != null ? failure.getCause() : failure;
     }
 
     private void afterInstalledChanged() {
