@@ -45,10 +45,6 @@ Then the plan picks again, from what the bot knows now. When nothing is due it w
 
 Studio writes the pom.xml and the project's first sources — an entry point, the screen map, goals and plans, the parameters — and then never writes them again. There is no generated half and nothing is locked: every file is yours from the moment it lands, to rename, split up or delete. A plugin you add later puts its own file under plugins/ the same way, once.
 
-Project Setup is also where you come back to later: it is a checklist of what the project still needs — something to launch, something to capture, a reference resolution and the pictures it looks for — and it says where to set each one.
-
-*In Studio:* 📋 Project Setup on the toolbar (contributed by the BotMaker SDK)
-
 ## 2. Tell the bot what to launch — the launch target
 
 > What gets started before the bot runs: a Steam, Epic, Heroic or Faugus game, an executable, a command line, or an app inside an emulator.

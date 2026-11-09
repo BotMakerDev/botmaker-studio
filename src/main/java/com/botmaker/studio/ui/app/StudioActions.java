@@ -300,8 +300,8 @@ final class StudioActions {
      */
     private void openGettingStarted() {
         GettingStartedDialog.Actions actions = GettingStartedDialog.Actions.builder()
-                // No PROJECT_SETUP entry, and no CAPTURE_TARGETS one, for the same reason as CAPTURE_TEMPLATES
-                // below: all three are the SDK plugin's toolbar items since 2026-08-31.
+                // No CAPTURE_TARGETS entry, for the same reason as CAPTURE_TEMPLATES below: it was the SDK
+                // plugin's toolbar item from 2026-08-31, and the capture source is a parameter since 2026-11-09.
                 // No LAUNCH_TARGET entry either, since 2026-09-01: the 🚀 dialog is gone and the shell has
                 // nothing to open. The step still reads, without an Open button.
                 // No CAPTURE_TEMPLATES entry: the tool is the SDK plugin's toolbar item since 2026-08-31 and

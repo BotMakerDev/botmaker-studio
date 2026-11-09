@@ -37,15 +37,12 @@ public final class Workflow {
         return List.of(
                 WorkflowStep.of("Create a project",
                         "A project is a normal Maven project under ~/BotMakerProjects/.",
-                        StudioAction.PROJECT_SETUP,
+                        null,
                         "Studio writes the pom.xml and the project's first sources — an entry point, the "
                         + "screen map, goals and plans, the parameters — and then never writes them again. There is no "
                         + "generated half and nothing is locked: every file is yours from the moment it "
                         + "lands, to rename, split up or delete. A plugin you add later puts its own file "
-                        + "under plugins/ the same way, once.",
-                        "Project Setup is also where you come back to later: it is a checklist of what the "
-                        + "project still needs — something to launch, something to capture, a reference "
-                        + "resolution and the pictures it looks for — and it says where to set each one."),
+                        + "under plugins/ the same way, once."),
 
                 WorkflowStep.of("Tell the bot what to launch — the launch target",
                         "What gets started before the bot runs: a Steam, Epic, Heroic or Faugus game, an "

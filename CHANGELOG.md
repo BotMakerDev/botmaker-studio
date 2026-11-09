@@ -12,6 +12,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- Getting Started's first step no longer sends you to 📋 Project Setup, which left the SDK's toolbar (2026-11-09).
 - A `@Facts` group's file opens locked, its badge `Facts - Read Only`, and the Parameters window no longer lets a fact
   be switched to *Outside a run*: only a run writes facts (2026-11-09).
 - In dev mode, Reload in *Plugins & Libraries* checks each rebuilt `-SNAPSHOT` plugin against the bot (2026-11-09).
