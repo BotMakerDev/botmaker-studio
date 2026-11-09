@@ -1,5 +1,6 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.services.BotSources;
 import com.botmaker.java.edit.EditContext;
 import com.botmaker.java.grammar.SourceParser;
@@ -8,16 +9,9 @@ import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
 import com.botmaker.java.parse.BotParser;
-import com.botmaker.core.project.vcs.ProjectVcs;
-import com.botmaker.core.project.vcs.VersionReader;
-import org.eclipse.jdt.core.dom.ASTVisitor;
 import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.core.dom.ImportDeclaration;
 import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.SimpleName;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -96,138 +90,16 @@ public final class ReviewService {
     }
 
     /**
-     * Where an undo stands: the earlier function found ({@link #findEarlier}), the version it came back from
-     * ({@link #restore}), or why it did not.
-     */
-    public sealed interface Undo {
-        record Ready(Earlier earlier) implements Undo {}
-
-        record Done(String version) implements Undo {}
-
-        record Refused(String reason) implements Undo {}
-    }
-
-    /**
      * Puts {@code item}'s function back as the newest version holds it <em>without</em> this mark — the state
-     * just before the refactor that wrote it, which every refactor saves first — and nothing else in the file.
-     * Any version counts, not only the refactor's own: the newest one without the mark is the one before it.
-     * Blocking (it reads the project's history) and on one thread: a window runs {@link #findEarlier} on a
-     * worker and {@link #restore} on the FX thread.
-     *
-     * <p>It refuses, with a sentence, when no version has the function without the mark, or when what it would
-     * write does not parse. What it brings back may not compile: the refactor ran because something it used
-     * went away.
+     * just before the refactor that wrote it — and nothing else in the file. The core reads the versions and writes
+     * it ({@code FunctionRestore}, asked by address through {@code edits}): one step of its history, its new text
+     * drawn from what the core tells. Refused, with a sentence the caller shows, when it cannot. Blocking.
      */
-    public static Undo undo(ProjectConfig config, ProjectState state, Item item) {
-        Undo found = findEarlier(config, item, parametersOf(config, state, item));
-        return found instanceof Undo.Ready ready ? restore(config, state, item, ready.earlier()) : found;
-    }
-
-    /**
-     * {@code item}'s function as an earlier version wrote it — the version's title, the declaration, and the
-     * single-type imports of that file the declaration names.
-     */
-    public record Earlier(String version, String declaration, List<String> imports) {}
-
-    /**
-     * The parameter types of {@code item}'s marked function as the file has it now — what tells it from an
-     * overload of the same name. Read the editor's buffers, so on the FX thread. Empty when it is not found.
-     */
-    public static List<String> parametersOf(ProjectConfig config, ProjectState state, Item item) {
-        if (config == null || item == null) return List.of();
-        CompilationUnit unit = BotSources.sourceOf(config, state, item.file()).map(BotParser::syntax).orElse(null);
-        if (unit == null) return List.of();
-        MethodDeclaration target = markedTarget(unit, item);
-        return target == null ? List.of() : parameterTypes(target);
-    }
-
-    /**
-     * The newest version's {@code item} without the mark, matched by name and {@code parameters}: an
-     * {@link Undo.Ready} holding it, or {@link Undo.Refused}. Reads the project's history and no editor state,
-     * so it may run off the FX thread.
-     */
-    public static Undo findEarlier(ProjectConfig config, Item item, List<String> parameters) {
-        if (config == null || item == null) return new Undo.Refused("Nothing to undo.");
-        String relative = config.projectPath().toAbsolutePath().normalize()
+    public static EditResult undo(EditPort edits, ProjectConfig config, Item item) {
+        if (config == null || item == null) return new EditResult.Refused("Nothing to undo.");
+        String file = config.sourceRoot().toAbsolutePath().normalize()
                 .relativize(item.file().toAbsolutePath().normalize()).toString().replace('\\', '/');
-        try {
-            VersionReader reader = new VersionReader(config.projectPath());
-            for (ProjectVcs.CommitInfo commit : new ProjectVcs(config.projectPath()).history()) {
-                byte[] bytes = reader.at(commit.sha(), relative);
-                if (bytes == null) continue;
-                Earlier before = unmarkedDeclaration(new String(bytes, StandardCharsets.UTF_8), item, parameters,
-                        commit.title());
-                if (before != null) return new Undo.Ready(before);
-            }
-        } catch (IOException e) {
-            return new Undo.Refused("This bot's versions could not be read: " + e.getMessage());
-        }
-        return new Undo.Refused("No saved version has " + item.function() + "() as it was before this change.");
-    }
-
-    /**
-     * Writes {@code earlier} in place of {@code item}'s function, with the imports it names. Through the editor's
-     * buffers, so on the FX thread.
-     */
-    public static Undo restore(ProjectConfig config, ProjectState state, Item item, Earlier earlier) {
-        boolean done = rewriteMarked(config, state, item, (ctx, method) -> {
-            ctx.rewriter().replace(method,
-                    ctx.rewriter().createStringPlaceholder(earlier.declaration(), method.getNodeType()), null);
-            // The refactor dropped the imports only the old body used; the canvas's unused-import pass takes
-            // back any the restored function does not need.
-            for (String name : earlier.imports()) ctx.addImport(name);
-            return true;
-        });
-        return done ? new Undo.Done(earlier.version())
-                : new Undo.Refused(item.function() + "() changed since the list was drawn, or the old version of it"
-                        + " does not fit the file as it is now.");
-    }
-
-    private static List<String> parameterTypes(MethodDeclaration method) {
-        List<String> types = new ArrayList<>();
-        for (Object each : method.parameters()) {
-            var parameter = (org.eclipse.jdt.core.dom.SingleVariableDeclaration) each;
-            types.add(parameter.getType().toString() + (parameter.isVarargs() ? "..." : ""));
-        }
-        return List.copyOf(types);
-    }
-
-    /** Whether {@code method}'s code says {@code simple}: a comment or a string says nothing. */
-    private static boolean names(MethodDeclaration method, String simple) {
-        boolean[] found = {false};
-        method.accept(new ASTVisitor() {
-            @Override
-            public boolean visit(SimpleName name) {
-                found[0] |= name.getIdentifier().equals(simple);
-                return false;
-            }
-        });
-        return found[0];
-    }
-
-    /** {@code item}'s function in {@code source} when it carries none of the item's entries, else null. */
-    private static Earlier unmarkedDeclaration(String source, Item item, List<String> parameters, String version) {
-        CompilationUnit unit = BotParser.syntax(source);
-        if (unit == null) return null;
-        for (Object type : unit.types()) {
-            if (!(type instanceof org.eclipse.jdt.core.dom.TypeDeclaration declaration)) continue;
-            for (MethodDeclaration method : declaration.getMethods()) {
-                if (!method.getName().getIdentifier().equals(item.function())) continue;
-                if (!parameterTypes(method).equals(parameters)) continue;
-                if (ReviewMarks.openEntriesOf(method).stream().anyMatch(item.entries()::contains)) continue;
-                String text = source.substring(method.getStartPosition(),
-                        method.getStartPosition() + method.getLength());
-                List<String> imports = new ArrayList<>();
-                for (Object each : unit.imports()) {
-                    ImportDeclaration imported = (ImportDeclaration) each;
-                    if (imported.isStatic() || imported.isOnDemand()) continue;
-                    String qualified = imported.getName().getFullyQualifiedName();
-                    if (names(method, qualified.substring(qualified.lastIndexOf('.') + 1))) imports.add(qualified);
-                }
-                return new Earlier(version, text, List.copyOf(imports));
-            }
-        }
-        return null;
+        return edits.restore(file, item.function(), item.entries());
     }
 
     /**

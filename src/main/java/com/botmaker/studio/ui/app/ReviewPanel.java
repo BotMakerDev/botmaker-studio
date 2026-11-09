@@ -13,6 +13,8 @@ import com.botmaker.java.index.BotIndex;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;
 import com.botmaker.core.services.BotSources;
+import com.botmaker.core.edit.EditResult;
+import com.botmaker.studio.services.EditPort;
 import com.botmaker.studio.services.ReviewService;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import javafx.application.Platform;
@@ -37,6 +39,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * The <b>Review</b> bottom tab: everything BotMaker changed for the user and could not finish on its own.
@@ -90,6 +93,9 @@ final class ReviewPanel {
 
         /** Opens Migrate, over what the last plugin change broke. */
         void openMigrate();
+
+        /** Where an undo of a refactor's change goes: the core, which reads the versions and writes the function. */
+        EditPort edits();
     }
 
     private final ProjectConfig config;
@@ -145,29 +151,28 @@ final class ReviewPanel {
         summarise(items, shown);
         List<ManagedValue<?>> declared = PluginHost.managedValues();
         long asked = ++pendingAsked;
-        boolean[] methods = {false};
-        if (config != null) {
-            // "@Migrate(", not "@Migrate": every copy a migration wrote carries @Migrated.
-            BotSources.scan(config, state, (file, source) -> methods[0] |= source.contains("@Migrate("));
-        }
         // A plugin change since the last load: what it broke is read too, by Migrate's own reading; so are the
         // deprecated elements a plugin ships a rule for.
         List<String> classpath = config == null ? List.of() : state.getResolvedClasspath();
         boolean changed = config != null && !state.isReaderMode()
                 && (!ApiCache.shared().previous(config.projectPath(), classpath).equals(classpath)
                     || PluginRules.shared().mayShip(classpath));
-        if (config == null || !MigrationSteps.anyRetired(declared) && !methods[0] && !changed) {
+        if (config == null) {
             shown(Migrations.NONE, items);
             return;
         }
-        // The buffers are read here; the parse, which a large bot pays for, on a worker.
-        java.util.function.Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
+        boolean retired = MigrationSteps.anyRetired(declared);
+        // The buffers are read here; the parse, which a large bot pays for, on a worker. Whether the bot has
+        // @Migrate methods is the index's answer, so the worker runs for every bot; the index is cached by content.
+        Supplier<BotIndex> index = BotSources.prepareIndex(config, state);
         Thread worker = new Thread(() -> {
             Migrations found;
             try {
                 BotIndex bot = index.get();
-                found = new Migrations(MigrationSteps.pending(bot, PluginHost.grammar(), declared),
-                        methods[0] ? MigrationCleanup.unneeded(bot, PluginHost.grammar()) : List.of(),
+                boolean methods = ManagedMigrations.anyMethod(bot);
+                found = !retired && !methods && !changed ? Migrations.NONE : new Migrations(
+                        MigrationSteps.pending(bot, PluginHost.grammar(), declared),
+                        methods ? MigrationCleanup.unneeded(bot, PluginHost.grammar()) : List.of(),
                         changed ? MigrateWindow.pendingSince(bot, config.projectPath()) : MigrateWindow.Pending.NONE);
             } catch (RuntimeException | LinkageError e) {
                 found = Migrations.NONE;
@@ -323,22 +328,18 @@ final class ReviewPanel {
         Checkpoints.take(config.projectPath(), state.snapshot(), VersionOrigin.SAFETY,
                 "Before undoing the change to " + item.function() + "()");
         summary.setText("Looking for " + item.function() + "() in this bot's versions…");
-        // The buffers are the FX thread's: read the signature here, the history on the worker, write back here.
-        List<String> parameters = ReviewService.parametersOf(config, state, item);
+        // The core reads the versions and writes the function; what it told is drawn on the FX thread, the canvas from
+        // its MethodsChanged, the version it came back from in the status bar.
+        EditPort edits = actions.edits();
         Thread worker = new Thread(() -> {
-            ReviewService.Undo found = ReviewService.findEarlier(config, item, parameters);
+            EditResult outcome = ReviewService.undo(edits, config, item);
             Platform.runLater(() -> {
-                ReviewService.Undo outcome = found instanceof ReviewService.Undo.Ready ready
-                        ? ReviewService.restore(config, state, item, ready.earlier()) : found;
                 refresh();
                 switch (outcome) {
-                    case ReviewService.Undo.Done done -> {
-                        actions.redraw(item.file());
-                        summary.setText(item.function() + "() is back as \"" + done.version() + "\" had it.");
-                    }
-                    case ReviewService.Undo.Refused refused -> ThemedWindows.alert(Alert.AlertType.INFORMATION,
+                    case EditResult.Accepted done ->
+                            summary.setText(item.function() + "() is back as it was before this change.");
+                    case EditResult.Refused refused -> ThemedWindows.alert(Alert.AlertType.INFORMATION,
                             refused.reason()).showAndWait();
-                    case ReviewService.Undo.Ready ignored -> { }
                 }
             });
         }, "review-undo");

@@ -24,6 +24,7 @@ import com.botmaker.studio.project.StudioContext;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.services.EditPort;
 import com.botmaker.shared.ipc.TelemetryEvent;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.java.edit.palette.FunctionDraft;
@@ -583,6 +584,11 @@ public class UIManager implements ProjectWindow {
             @Override
             public void openMigrate() {
                 UIManager.this.openMigrate();
+            }
+
+            @Override
+            public EditPort edits() {
+                return codeEditorService.edits();
             }
         });
         // A managed value's right-click Migrate type…: the same window, the plugin's replacement preselected.

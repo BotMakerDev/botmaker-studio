@@ -22,6 +22,14 @@ public interface EditPort {
     /** Makes {@code file} the open file, as Studio just did. */
     EditResult show(String file);
 
+    /**
+     * Review's Undo: the core puts {@code function} in {@code file} back as the version before the refactor whose
+     * open entries are {@code entries} had it ({@code Request.Restore}). Refused by a port with no core behind it.
+     */
+    default EditResult restore(String file, String function, List<String> entries) {
+        return new EditResult.Refused("This view edits nothing.");
+    }
+
     /** A view that edits nothing: a preview of another version of a file. */
     EditPort NONE = new EditPort() {
         private static final EditResult READ_ONLY = new EditResult.Refused("This view is read-only.");

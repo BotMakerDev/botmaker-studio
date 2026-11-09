@@ -498,22 +498,11 @@ final class StudioBridge implements StudioDriver {
 
     @Override
     public String undoChange(String id) {
-        record Asked(ReviewService.Item item, List<String> parameters) {}
-        Asked asked = onFx(() -> {
-            ReviewService.Item item = reviewItem(id);
-            return new Asked(item, ReviewService.parametersOf(ctx.config(), ctx.state(), item));
-        });
-        // The versions are read here, off the FX thread; the function is written back on it.
-        ReviewService.Undo found = ReviewService.findEarlier(ctx.config(), asked.item(), asked.parameters());
-        if (!(found instanceof ReviewService.Undo.Ready ready)) {
-            throw new IllegalArgumentException(found instanceof ReviewService.Undo.Refused refused ? refused.reason()
-                    : "Nothing to undo.");
-        }
-        ReviewService.Undo done = onFx(() -> ReviewService.restore(ctx.config(), ctx.state(), asked.item(), ready.earlier()));
-        return switch (done) {
-            case ReviewService.Undo.Done d -> "Put " + asked.item().where() + " back as \"" + d.version() + "\" had it.";
-            case ReviewService.Undo.Refused r -> throw new IllegalArgumentException(r.reason());
-            case ReviewService.Undo.Ready r -> throw new IllegalStateException("not written");
+        ReviewService.Item item = onFx(() -> reviewItem(id));
+        // The core reads the versions and writes the function back, off the FX thread; what it told is drawn on it.
+        return switch (ReviewService.undo(ctx.codeEditorService().edits(), ctx.config(), item)) {
+            case EditResult.Accepted done -> "Put " + item.where() + " back as it was before this change.";
+            case EditResult.Refused refused -> throw new IllegalArgumentException(refused.reason());
         };
     }
 

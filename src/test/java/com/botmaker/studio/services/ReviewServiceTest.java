@@ -1,16 +1,18 @@
 package com.botmaker.studio.services;
 
+import com.botmaker.core.edit.Edit;
+import com.botmaker.core.edit.EditResult;
+import com.botmaker.core.edit.HistoryStep;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
-import com.botmaker.core.project.vcs.ProjectVcs;
-import com.botmaker.core.project.vcs.VersionOrigin;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -181,139 +183,51 @@ class ReviewServiceTest {
         assertFalse(twice.contains("@Refactor"), twice);
     }
 
+    /**
+     * Undo is the core's (its {@code FunctionRestoreTest} pins what comes back): Studio asks it by the function's
+     * address, the file named below the source root, and passes its answer on.
+     */
     @Test
-    void undoPutsTheFunctionBackFromTheVersionBeforeTheMark(@TempDir Path root) throws IOException {
+    void undoAsksTheCoreByTheFunctionsAddress(@TempDir Path root) throws IOException {
         ProjectConfig config = project(root);
-        Path file = write(config, "Miner.java", """
-                package com.refbot;
-
-                import java.util.List;
-
-                class Miner {
-                    void mine() {
-                        List.of(1);
-                    }
-
-                    void rest() {}
-                }
-                """);
-        new ProjectVcs(config.projectPath()).checkpoint(VersionOrigin.SAFETY, "Before removing SDK");
-        Files.writeString(file, """
+        write(config, "com/refbot/Miner.java", """
                 package com.refbot;
 
                 %s
 
                 class Miner {
                     @Refactor("List.of is gone.")
-                    void mine() {
-                    }
-
-                    void rest() {}
-                }
-                """.formatted(IMPORT));
-
-        ReviewService.Undo outcome = ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst());
-
-        assertTrue(outcome instanceof ReviewService.Undo.Done, outcome.toString());
-        String now = Files.readString(file);
-        assertTrue(now.contains("List.of(1);"), now);
-        assertTrue(now.contains("import java.util.List;"), "the import the old body used comes back: " + now);
-        assertFalse(now.contains("@Refactor(\"List.of"), now);
-        assertTrue(ReviewService.scan(config, null).isEmpty());
-    }
-
-    @Test
-    void undoBringsBackOnlyTheImportsTheOldBodyUses(@TempDir Path root) throws IOException {
-        ProjectConfig config = project(root);
-        Path file = write(config, "Miner.java", """
-                package com.refbot;
-
-                import java.util.List;
-                import java.util.Set;
-
-                class Miner {
-                    void mine() {
-                        // a List would do
-                        Set.of("List");
-                    }
-
-                    Object kept = List.of();
-                }
-                """);
-        new ProjectVcs(config.projectPath()).checkpoint(VersionOrigin.SAFETY, "Before removing SDK");
-        Files.writeString(file, """
-                package com.refbot;
-
-                %s
-
-                class Miner {
-                    @Refactor("Set.of is gone.")
-                    void mine() {
-                    }
-                }
-                """.formatted(IMPORT));
-
-        ReviewService.Undo outcome = ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst());
-
-        assertTrue(outcome instanceof ReviewService.Undo.Done, outcome.toString());
-        String now = Files.readString(file);
-        assertTrue(now.contains("import java.util.Set;"), now);
-        assertFalse(now.contains("import java.util.List;"), "a comment and a string name no class: " + now);
-    }
-
-    @Test
-    void undoBringsBackTheMarkedOverloadNotAnotherOfTheSameName(@TempDir Path root) throws IOException {
-        ProjectConfig config = project(root);
-        Path file = write(config, "Miner.java", """
-                package com.refbot;
-
-                class Miner {
-                    void mine() {}
-
-                    void mine(int depth) {
-                        System.out.println(depth);
-                    }
-                }
-                """);
-        new ProjectVcs(config.projectPath()).checkpoint(VersionOrigin.SAFETY, "Before");
-        Files.writeString(file, """
-                package com.refbot;
-
-                %s
-
-                class Miner {
-                    void mine() {}
-
-                    @Refactor("depth went")
-                    void mine(int depth) {
-                    }
-                }
-                """.formatted(IMPORT));
-
-        ReviewService.Undo outcome = ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst());
-
-        assertTrue(outcome instanceof ReviewService.Undo.Done, outcome.toString());
-        String now = Files.readString(file);
-        assertTrue(now.contains("void mine() {}"), now);
-        assertTrue(now.contains("System.out.println(depth);"), now);
-    }
-
-    @Test
-    void undoWithNoVersionBeforeItSaysSo(@TempDir Path root) throws IOException {
-        ProjectConfig config = project(root);
-        write(config, "Miner.java", """
-                package com.refbot;
-
-                %s
-
-                class Miner {
-                    @Refactor("guessed")
                     void mine() {}
                 }
                 """.formatted(IMPORT));
+        List<String> asked = new ArrayList<>();
+        EditPort core = new EditPort() {
+            @Override
+            public EditResult userEdit(Edit edit) {
+                throw new AssertionError("no edit");
+            }
 
-        assertTrue(ReviewService.undo(config, null, ReviewService.scan(config, null).getFirst())
-                instanceof ReviewService.Undo.Refused);
+            @Override
+            public EditResult step(HistoryStep step) {
+                throw new AssertionError("no step");
+            }
+
+            @Override
+            public EditResult show(String file) {
+                throw new AssertionError("no show");
+            }
+
+            @Override
+            public EditResult restore(String file, String function, List<String> entries) {
+                asked.add(file + " " + function + " " + entries);
+                return new EditResult.Refused("no version");
+            }
+        };
+
+        EditResult result = ReviewService.undo(core, config, ReviewService.scan(config, null).getFirst());
+
+        assertEquals(List.of("com/refbot/Miner.java mine [List.of is gone.]"), asked);
+        assertEquals(new EditResult.Refused("no version"), result);
     }
 
     private static Path write(ProjectConfig config, String name, String source) throws IOException {

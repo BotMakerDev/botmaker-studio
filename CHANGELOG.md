@@ -12,6 +12,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- Review's Undo asks the core (`Request.Restore`, 2026-11-09). The core reads the versions and writes the function
+  back; the canvas redraws from what the core tells. Undo's message no longer names the version the function came
+  back from, and Studio's own copy of the restore is gone. Review now checks for `@Migrate` methods in the bot's index
+  (`ManagedMigrations.anyMethod`), not by searching the text for `@Migrate(`.
 - The Parameters window is a grid of small cards (2026-11-05, layout A). Each card shows a parameter's name, type and
   value, whether it changes outside or during a run, and when a run last wrote it. The cards sit under a heading per
   group class, in a section per plugin and one for the bot. *When* and *From* chips, each with its count, and a search

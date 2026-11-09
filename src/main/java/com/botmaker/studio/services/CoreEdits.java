@@ -267,6 +267,28 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         return ask(client -> client.show(file));
     }
 
+    /**
+     * The core reads the versions and writes the function back; the open file's new text comes as
+     * {@code MethodsChanged}, another file is read again. From another thread the answer is waited for there and what
+     * it told is drawn on the UI thread.
+     */
+    @Override
+    public EditResult restore(String file, String function, List<String> entries) {
+        if (ui.isCurrent()) {
+            EditResult result = ask(client -> client.restore(file, function, entries));
+            if (result instanceof EditResult.Accepted) readOthersFromDisk();
+            return result;
+        }
+        EditResult result = request(client -> client.restore(file, function, entries));
+        if (result instanceof EditResult.Accepted) {
+            ui.later(() -> {
+                drain();
+                readOthersFromDisk();
+            });
+        }
+        return result;
+    }
+
     /** One ask of the core. */
     public interface Ask {
         EditResult of(CoreClient client) throws IOException;
