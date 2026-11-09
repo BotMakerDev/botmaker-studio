@@ -10,6 +10,7 @@ import com.botmaker.core.project.params.Visibility;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.RunWritten;
 import com.botmaker.core.project.params.BotRecords;
 import com.botmaker.core.project.params.ClockSwitch;
 import com.botmaker.core.project.params.JavaParameter;
@@ -626,7 +627,8 @@ public final class ParametersDialog {
             ToggleButton button = new ToggleButton(side.displayName());
             button.setToggleGroup(group);
             button.setSelected(entry.row().changes() == side);
-            button.setDisable(!mine);
+            // A fact's group is the run's whole (@Facts): it changes during a run, never switched here.
+            button.setDisable(!mine || RunWritten.declaredIn(entry.file(), PluginHost.classLoader()));
             button.getStyleClass().add(i == 0 ? "choice-mode-first" : "choice-mode-last");
             button.setTooltip(new Tooltip(side == Param.Changes.DURING_RUN
                     ? "The bot writes it during a run; here it is read-only."

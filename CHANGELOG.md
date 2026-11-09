@@ -12,6 +12,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- A `@Facts` group's file opens locked, its badge `Facts - Read Only`, and the Parameters window no longer lets a fact
+  be switched to *Outside a run*: only a run writes facts (2026-11-09).
 - In dev mode, Reload in *Plugins & Libraries* checks each rebuilt `-SNAPSHOT` plugin against the bot (2026-11-09).
   If the bot's values no longer fit it, a dialog lists the repair. Repair saves a version of the bot, writes the
   repair, and reloads. Cancel leaves the bot as written. One plugin is checked at a time, and a jar that did not
