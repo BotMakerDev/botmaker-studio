@@ -75,7 +75,7 @@ An overlay opens over your game so you can draw a rectangle or an ellipse, or cu
 
 Templates are organised by tag, not by folder — a template used by two screens carries both tags instead of being copied. Tags render as folders in the pickers and in the Resource Manager, where you can also rename, re-tag or delete a template, and export a set as a .bmtemplates file to import into another project.
 
-*In Studio:* ✂ Capture Templates on the toolbar (contributed by the BotMaker SDK)
+*In Studio:* ✂ on a screen's panel in 🗺 Screens (contributed by the BotMaker SDK)
 
 ## 5. Manage your resources
 
@@ -83,7 +83,7 @@ Templates are organised by tag, not by folder — a template used by two screens
 
 Rename, preview, re-tag, delete, import and export all happen here, and they go through the template library so the tag manifest can never drift from the files on disk.
 
-*In Studio:* Project ▸ Resource Manager… (or 🗂 Resources on the toolbar)
+*In Studio:* 🗺 Screens on the toolbar, then 🖼 Pictures in its rail (contributed by the BotMaker SDK)
 
 ## 6. Map the game's screens
 
@@ -103,7 +103,7 @@ Goals.java holds the checks — gold at least 100, today's reward claimed — an
 
 Which plan runs is a parameter, so whoever runs the bot can pick another. Both files are ordinary Java under plugins/, readable without opening the window.
 
-*In Studio:* 🎯 Goals on the toolbar (contributed by the BotMaker SDK)
+*In Studio:* 🗺 Screens on the toolbar, then 🎯 Goals in its rail (contributed by the BotMaker SDK)
 
 ## 8. Give the bot its variables
 
