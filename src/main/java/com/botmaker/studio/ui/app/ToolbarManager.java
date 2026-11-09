@@ -228,10 +228,9 @@ public class ToolbarManager {
         // the button. That label is what the move cost: toolbarItems() is called with no StudioServices, so a
         // plugin's item has no project to name.
 
-        // 🔀 Flow stood here at AUTHORING/10 until 2026-09-11 and is the SDK plugin's 🔀 Activity Flow item
-        // now, in the same slot, placed by the same merge as any other plugin's. It went because a flow is
-        // the one thing on this bar that does not reduce to data the contract already carries: a parameter
-        // is a ParameterRow, and the window over those stayed here.
+        // 🔀 Flow stood here at AUTHORING/10 until 2026-09-11, then moved to the SDK plugin, which deleted
+        // flows on 2026-11-09. It went because a flow was the one thing on this bar that did not reduce to
+        // data the contract already carries: a parameter is a ParameterRow, and the window over those stayed.
 
         own.add(ToolbarItem.id("parameters").label("🎚 Parameters")
                 .tooltip("The project's variables: every value the bot reads, with its tag and its editor")

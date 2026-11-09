@@ -38,8 +38,8 @@ public final class Workflow {
                 WorkflowStep.of("Create a project",
                         "A project is a normal Maven project under ~/BotMakerProjects/.",
                         StudioAction.PROJECT_SETUP,
-                        "Studio writes the pom.xml and the project's first sources — an entry point, an "
-                        + "activity or three, the parameters — and then never writes them again. There is no "
+                        "Studio writes the pom.xml and the project's first sources — an entry point, the "
+                        + "screen map, goals and plans, the parameters — and then never writes them again. There is no "
                         + "generated half and nothing is locked: every file is yours from the moment it "
                         + "lands, to rename, split up or delete. A plugin you add later puts its own file "
                         + "under plugins/ the same way, once.",
@@ -78,7 +78,7 @@ public final class Workflow {
                         "An overlay opens over your game so you can draw a rectangle or an ellipse, or cut an "
                         + "object out with a transparent background so the match ignores whatever is behind it. "
                         + "\"Capture many\" takes a batch in one pass and names them together.",
-                        "Templates are organised by tag, not by folder — a template used by two activities "
+                        "Templates are organised by tag, not by folder — a template used by two screens "
                         + "carries both tags instead of being copied. Tags render as folders in the pickers and "
                         + "in the Resource Manager, where you can also rename, re-tag or delete a template, and "
                         + "export a set as a .bmtemplates file to import into another project."),
@@ -89,46 +89,43 @@ public final class Workflow {
                         "Rename, preview, re-tag, delete, import and export all happen here, and they go through "
                         + "the template library so the tag manifest can never drift from the files on disk."),
 
-                WorkflowStep.of("Break the bot into activities",
-                        "An activity is one thing the bot can be doing; the flow graph says what follows what.",
-                        StudioAction.ACTIVITY_FLOW,
-                        "Rather than one long script, a bot is a set of named activities — \"Mining\", "
-                        + "\"HandleFullInventory\", \"Login\" — each returning an outcome, and the flow editor "
-                        + "wires those outcomes to whatever runs next. \"" + RuntimeDiagram.TITLE + "\" above "
-                        + "is what that looks like at run time; it is worth reading before you draw a graph, "
-                        + "because activities do not run top to bottom, once each.",
-                        "Each activity is an enum in your Activities class, and its constants are what it "
-                        + "can report: enum Collect { NEXT, BAG_FULL }. Its work is a method you write — "
-                        + "public static Activities.Collect body() returning one of those constants — picked "
-                        + "under Runs in the flow editor, or made there with Create method…. The flow names it "
-                        + "as a method reference, Collect::body. That is the whole binding: rename or delete "
-                        + "the method and the compiler says so, pointing at the flow, instead of a card that "
-                        + "quietly stops doing anything; return another activity's outcome and it does not "
-                        + "compile either.",
-                        "The flow itself is a value in your own Sdk.java under plugins/, written by the editor "
-                        + "when you save and readable as ordinary Java when you do not. To stop an activity "
-                        + "running, turn its switch off — the card stays and so does your method. Delete "
-                        + "activity removes the card and its wires; the file you wrote the steps in is left "
-                        + "exactly as it is."),
+                WorkflowStep.of("Map the game's screens",
+                        "Each screen the bot can be on, how it knows it is there, and the buttons that lead on.",
+                        StudioAction.SCREENS,
+                        "A screen is a constant of your Screens class: the pictures that say the game is on it, "
+                        + "and its inputs — the buttons that open another screen, and the actions you want the "
+                        + "bot to take there (a Do field). The run walks this map to wherever an action is, so "
+                        + "no method of yours ever clicks its way from one screen to the next.",
+                        "Work a press cannot say — a puzzle, a fight — is a Custom input: a plain method of "
+                        + "yours, run when the bot is on that screen. Rename or delete it and the compiler says "
+                        + "so, pointing at the screen."),
+
+                WorkflowStep.of("Say what the bot wants — goals and plans",
+                        "A goal is a check on what the bot knows of the game; a plan is tiers of goals.",
+                        StudioAction.GOALS,
+                        "Goals.java holds the checks — gold at least 100, today's reward claimed — and each "
+                        + "action says which goal it serves. Plans.java orders them in tiers: the run works "
+                        + "the first tier with a goal still unmet, then the next. \"" + RuntimeDiagram.TITLE
+                        + "\" above is what that looks like at run time; it is worth reading first, because "
+                        + "a bot's actions do not run top to bottom, once each.",
+                        "Which plan runs is a parameter, so whoever runs the bot can pick another. Both files "
+                        + "are ordinary Java under plugins/, readable without opening the window."),
 
                 WorkflowStep.of("Give the bot its variables",
                         "The numbers, texts, durations and switches your logic reads — one list for the whole "
                         + "project, organised by category.",
                         StudioAction.PARAMETERS,
-                        "A variable belongs to the project, not to an activity: the delay two activities both "
-                        + "wait for is one variable they both read, rather than a copy each. A category says "
-                        + "where it is filed in the window and nothing more — a variable filed under "
-                        + "\"Mining\" is still readable from anywhere.",
-                        "Each one is a field in Parameters.java, marked @Param, in the package Studio keeps "
-                        + "for it (params) — so your blocks say "
-                        + "Parameters.maxAttempts, the compiler checks the type, and deleting a variable "
-                        + "something still reads is a compile error rather than a surprise at run time. The "
-                        + "window writes back into that file: changing a value rewrites one initialiser, "
-                        + "renaming repoints every use, adding appends a field, and your comments and "
-                        + "formatting survive all three.",
-                        "Mark a variable public — visibility = Param.PUBLIC on the field — to offer it to "
-                        + "whoever runs the bot: those appear in the Runner under their category's heading, "
-                        + "and the rest stay yours."),
+                        "A variable belongs to the project, not to one method: the delay two methods both "
+                        + "wait for is one variable they both read, rather than a copy each. Its group class "
+                        + "says where it is filed in the window and nothing more — a variable of the Mining "
+                        + "group is still readable from anywhere.",
+                        "Each one is a method of a @Param group in the package Studio keeps for it (params), "
+                        + "its body the value — so your blocks say Mining.maxAttempts(), the compiler checks "
+                        + "the type, and deleting a variable something still reads is a compile error rather "
+                        + "than a surprise at run time. The values are yours and private: the committed "
+                        + "starting-params/ holds the starting values whoever runs the bot begins with.",
+                        "Mark a variable shown with @Param.Shown to offer it to whoever runs the bot: those "
+                        + "appear in the Runner under their group's heading, and the rest stay yours."),
 
                 WorkflowStep.of("Author the logic with blocks",
                         "The centre canvas is your program: drag blocks to build loops, conditions, clicks and "
@@ -146,7 +143,7 @@ public final class Workflow {
                         StudioAction.OVERLAY_EDITOR,
                         "The only way to write or record a bot without leaving the game. Add blocks where the "
                         + "cursor is, or hit Record and let it write the clicks and drags you perform, then "
-                        + "insert the batch into an activity."),
+                        + "insert the batch where a plugin's overlay offers a place for it."),
 
                 WorkflowStep.of("Run and debug",
                         "Run executes the bot; Debug steps through it block by block with breakpoints.",

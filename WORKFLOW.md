@@ -7,43 +7,43 @@ A BotMaker bot watches a game or app on your screen, decides what it sees, and c
 
 ## How a bot runs
 
-Your activities are not a script that runs top to bottom. A run holds one current activity, calls the method the flow names for it, and follows the wire leaving the outcome that method reported — so the shape of a run is a loop, and it is the flow you drew that decides where it goes next. The flow is a value in your own Sdk.java, under plugins/: nothing is generated, and you can read what the bot will do without opening the editor.
+Your bot is not a script that runs top to bottom. Each round, the plan you picked looks at what the bot knows of the game, takes the goal that matters most and is not met yet, walks the screen map to an action that serves it, and presses it — so the shape of a run is a loop, and it is your plan's tiers that decide what comes next. Goals, plans and screens are ordinary Java under plugins/: nothing is generated, and you can read what the bot will do without opening a window.
 
 ```mermaid
 flowchart TD
     start(["main() — your bot class"])
     launch["Launch target"]
-    driver{{"The flow — which activity now?"}}
-    run["The method that card names"]
-    outcome(["The outcome it returns"])
+    driver{{"The plan — which goal now?"}}
+    run["Walk there and press"]
+    outcome(["Read and record"])
     start --> launch
     launch --> driver
     driver --> run
     run --> outcome
-    outcome -- "the wire you drew" --> driver
+    outcome -- "the next round" --> driver
     guard["Popup guard"]
     guard -. "before every vision step" .-> run
 ```
 
-- **main() — your bot class** — Calls Bot.runFlow(Sdk.class) — "Run activity flow" in the insert menu — which installs the flow and the capture source, then supervises the whole run and gets the game back to a known screen through the flow's home method if it crashes or gets stuck.
+- **main() — your bot class** — Calls Bot.run(Sdk.class) — "Run the bot's plan" in the insert menu — which installs the map, the plan and the capture source, then supervises the whole run and gets the game back to a known screen through the bot's home method if it crashes or gets stuck.
 
 - **Launch target** — The game or app you declared is started if it isn't already running. Nothing is captured or clicked until it is up.
 
-- **The flow — which activity now?** — The current card of the flow you drew. This is the only place that decides what runs next; an activity never calls another activity.
+- **The plan — which goal now?** — The first tier with a goal that is not met and not only waiting, and in it the goal with an action ready. This is the only place that decides what runs next.
 
-- **The method that card names** — Your own Collect::body, and the blocks you authored in it: capture, match, click, wait. An activity switched off is stepped over here, following the wire it would have taken.
+- **Walk there and press** — The run walks the screen map to the screen holding the action that serves that goal, then presses it: a button, or a method of yours run on that screen (a Custom input).
 
-- **The outcome it returns** — One of the activity's own named outcomes — the label on the wire leaving it in the flow editor.
+- **Read and record** — The facts the action changes are read again, and when it went through, the run records it — what a daily or a timer looks at next time.
 
-- **Popup guard** (before every vision step) — Before every vision step, whichever activity is running, the popups of the bot's screen map that show are closed by their way out, so a daily reward covering the button is dismissed in one place instead of by every activity that might trip over it. A body can switch it off around a step that works through a popup itself.
+- **Popup guard** (before every vision step) — Before every vision step, whatever is being pressed, the popups of the bot's screen map that show are closed by their way out, so a daily reward covering the button is dismissed in one place instead of by every action that might trip over it. A method of yours can switch it off around a step that works through a popup itself.
 
-The run follows the wire leaving that outcome and runs whatever is on the other end — for as long as there is one. A run ends when the outcome it reported has no wire leaving it: an unwired outcome is the stop, and there is no terminal node to draw.
+Then the plan picks again, from what the bot knows now. When nothing is due it waits for the soonest goal that will be; a run ends when every goal is met for good or nothing can move a tier forward, and says why.
 
 ## 1. Create a project
 
 > A project is a normal Maven project under ~/BotMakerProjects/.
 
-Studio writes the pom.xml and the project's first sources — an entry point, an activity or three, the parameters — and then never writes them again. There is no generated half and nothing is locked: every file is yours from the moment it lands, to rename, split up or delete. A plugin you add later puts its own file under plugins/ the same way, once.
+Studio writes the pom.xml and the project's first sources — an entry point, the screen map, goals and plans, the parameters — and then never writes them again. There is no generated half and nothing is locked: every file is yours from the moment it lands, to rename, split up or delete. A plugin you add later puts its own file under plugins/ the same way, once.
 
 Project Setup is also where you come back to later: it is a checklist of what the project still needs — something to launch, something to capture, a reference resolution and the pictures it looks for — and it says where to set each one.
 
@@ -77,7 +77,7 @@ Like the launch target, this belongs to the machine that runs the bot, not to th
 
 An overlay opens over your game so you can draw a rectangle or an ellipse, or cut an object out with a transparent background so the match ignores whatever is behind it. "Capture many" takes a batch in one pass and names them together.
 
-Templates are organised by tag, not by folder — a template used by two activities carries both tags instead of being copied. Tags render as folders in the pickers and in the Resource Manager, where you can also rename, re-tag or delete a template, and export a set as a .bmtemplates file to import into another project.
+Templates are organised by tag, not by folder — a template used by two screens carries both tags instead of being copied. Tags render as folders in the pickers and in the Resource Manager, where you can also rename, re-tag or delete a template, and export a set as a .bmtemplates file to import into another project.
 
 *In Studio:* ✂ Capture Templates on the toolbar (contributed by the BotMaker SDK)
 
@@ -89,31 +89,39 @@ Rename, preview, re-tag, delete, import and export all happen here, and they go 
 
 *In Studio:* Project ▸ Resource Manager… (or 🗂 Resources on the toolbar)
 
-## 6. Break the bot into activities
+## 6. Map the game's screens
 
-> An activity is one thing the bot can be doing; the flow graph says what follows what.
+> Each screen the bot can be on, how it knows it is there, and the buttons that lead on.
 
-Rather than one long script, a bot is a set of named activities — "Mining", "HandleFullInventory", "Login" — each returning an outcome, and the flow editor wires those outcomes to whatever runs next. "How a bot runs" above is what that looks like at run time; it is worth reading before you draw a graph, because activities do not run top to bottom, once each.
+A screen is a constant of your Screens class: the pictures that say the game is on it, and its inputs — the buttons that open another screen, and the actions you want the bot to take there (a Do field). The run walks this map to wherever an action is, so no method of yours ever clicks its way from one screen to the next.
 
-Each activity is an enum in your Activities class, and its constants are what it can report: enum Collect { NEXT, BAG_FULL }. Its work is a method you write — public static Activities.Collect body() returning one of those constants — picked under Runs in the flow editor, or made there with Create method…. The flow names it as a method reference, Collect::body. That is the whole binding: rename or delete the method and the compiler says so, pointing at the flow, instead of a card that quietly stops doing anything; return another activity's outcome and it does not compile either.
+Work a press cannot say — a puzzle, a fight — is a Custom input: a plain method of yours, run when the bot is on that screen. Rename or delete it and the compiler says so, pointing at the screen.
 
-The flow itself is a value in your own Sdk.java under plugins/, written by the editor when you save and readable as ordinary Java when you do not. To stop an activity running, turn its switch off — the card stays and so does your method. Delete activity removes the card and its wires; the file you wrote the steps in is left exactly as it is.
+*In Studio:* 🗺 Screens on the toolbar (contributed by the BotMaker SDK)
 
-*In Studio:* 🔀 Activity Flow on the toolbar (contributed by the BotMaker SDK)
+## 7. Say what the bot wants — goals and plans
 
-## 7. Give the bot its variables
+> A goal is a check on what the bot knows of the game; a plan is tiers of goals.
+
+Goals.java holds the checks — gold at least 100, today's reward claimed — and each action says which goal it serves. Plans.java orders them in tiers: the run works the first tier with a goal still unmet, then the next. "How a bot runs" above is what that looks like at run time; it is worth reading first, because a bot's actions do not run top to bottom, once each.
+
+Which plan runs is a parameter, so whoever runs the bot can pick another. Both files are ordinary Java under plugins/, readable without opening the window.
+
+*In Studio:* 🎯 Goals on the toolbar (contributed by the BotMaker SDK)
+
+## 8. Give the bot its variables
 
 > The numbers, texts, durations and switches your logic reads — one list for the whole project, organised by category.
 
-A variable belongs to the project, not to an activity: the delay two activities both wait for is one variable they both read, rather than a copy each. A category says where it is filed in the window and nothing more — a variable filed under "Mining" is still readable from anywhere.
+A variable belongs to the project, not to one method: the delay two methods both wait for is one variable they both read, rather than a copy each. Its group class says where it is filed in the window and nothing more — a variable of the Mining group is still readable from anywhere.
 
-Each one is a field in Parameters.java, marked @Param, in the package Studio keeps for it (params) — so your blocks say Parameters.maxAttempts, the compiler checks the type, and deleting a variable something still reads is a compile error rather than a surprise at run time. The window writes back into that file: changing a value rewrites one initialiser, renaming repoints every use, adding appends a field, and your comments and formatting survive all three.
+Each one is a method of a @Param group in the package Studio keeps for it (params), its body the value — so your blocks say Mining.maxAttempts(), the compiler checks the type, and deleting a variable something still reads is a compile error rather than a surprise at run time. The values are yours and private: the committed starting-params/ holds the starting values whoever runs the bot begins with.
 
-Mark a variable public — visibility = Param.PUBLIC on the field — to offer it to whoever runs the bot: those appear in the Runner under their category's heading, and the rest stay yours.
+Mark a variable shown with @Param.Shown to offer it to whoever runs the bot: those appear in the Runner under their group's heading, and the rest stay yours.
 
 *In Studio:* Project ▸ Parameters… (or 🎚 Parameters on the toolbar)
 
-## 8. Author the logic with blocks
+## 9. Author the logic with blocks
 
 > The centre canvas is your program: drag blocks to build loops, conditions, clicks and image searches.
 
@@ -121,15 +129,15 @@ Blocks are the Java, not a picture of it — every edit rewrites the real source
 
 Blocks that call the SDK come from the palette on the left, grouped by facade: vision, interaction, capture, timing. Expression slots accept a drop from the palette or an existing expression, and refuse a drop whose type would not compile.
 
-## 9. Author over the running game — the Overlay Editor
+## 10. Author over the running game — the Overlay Editor
 
 > An always-on-top HUD that mirrors your program as one-line rows over the game itself.
 
-The only way to write or record a bot without leaving the game. Add blocks where the cursor is, or hit Record and let it write the clicks and drags you perform, then insert the batch into an activity.
+The only way to write or record a bot without leaving the game. Add blocks where the cursor is, or hit Record and let it write the clicks and drags you perform, then insert the batch where a plugin's overlay offers a place for it.
 
 *In Studio:* ⧉ Overlay on the toolbar
 
-## 10. Run and debug
+## 11. Run and debug
 
 > Run executes the bot; Debug steps through it block by block with breakpoints.
 
@@ -137,7 +145,7 @@ The Terminal tab shows what the bot printed and the Errors tab what did not comp
 
 If a bot needs to run without taking over your screen, it can run on a private display — a nested X server it owns — so you keep using your machine while it works.
 
-## 11. Watch and drive it from your phone — Remote Pilot
+## 12. Watch and drive it from your phone — Remote Pilot
 
 > Streams what the bot sees to a phone or a browser, and lets you start, stop and touch it from anywhere.
 
@@ -145,7 +153,7 @@ Scan the QR code to pair; no VPN and no port forwarding. Turning on Interact mak
 
 *In Studio:* 🎮 Pilot on the toolbar (contributed by the BotMaker SDK)
 
-## 12. Publish and share
+## 13. Publish and share
 
 > Push the bot to your own GitHub repo, and optionally list it in the gallery.
 
@@ -155,7 +163,7 @@ The Gallery browses what everyone else has published; installing from it creates
 
 *In Studio:* Project ▸ Publish to Gallery…
 
-## 13. Browse the gallery
+## 14. Browse the gallery
 
 > Install someone else's bot, or see how one is put together.
 

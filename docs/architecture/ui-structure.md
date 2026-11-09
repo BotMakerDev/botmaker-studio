@@ -54,7 +54,8 @@ The `ui/` package is split by concern:
   `StudioServices` (built from the project with `HostServices.forProject`) until it follows, which is the
   step that makes *Capture Templates* a `ToolbarItem`.
 - **`ui/app/flow/` is gone (2026-09-11)** — the activity-flow graph editor is
-  `com.botmaker.sdk.internal.plugin.flow`, opened from a 🔀 Activity Flow toolbar item. A flow is the one
+  `com.botmaker.sdk.internal.plugin.flow`, opened from a 🔀 Activity Flow toolbar item (and flows were deleted
+  from the SDK on 2026-11-09: a bot runs a plan, its windows 🗺 Screens and 🎯 Goals). A flow is the one
   thing here that does not reduce to a `ParameterRow`, which is why it moved while the Parameters window and
   the Runner stayed. **`activities.json` has no reader in Studio at all**: `project/activity/`,
   `services/ActivityService`, `ActivitiesChangedEvent` and `ProjectState.activities` went with it. What a

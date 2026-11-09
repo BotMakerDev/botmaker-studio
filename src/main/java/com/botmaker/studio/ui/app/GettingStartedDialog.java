@@ -120,8 +120,8 @@ public final class GettingStartedDialog {
      * do, this says what happens when you press Run.
      *
      * <p>It sits <em>above</em> step 1 rather than next to the "Run and debug" step, because the thing it
-     * corrects (that activities run top to bottom, once each) is a belief people form while drawing the flow
-     * graph, long before they run anything.
+     * corrects (that a bot's actions run top to bottom, once each) is a belief people form while mapping the
+     * screens, long before they run anything.
      */
     private VBox runtimeDiagram() {
         Label title = new Label(RuntimeDiagram.TITLE);
@@ -140,7 +140,7 @@ public final class GettingStartedDialog {
         box.getChildren().add(arrow("↺  " + RuntimeDiagram.LOOP_NOTE));
 
         Label asideEdge = new Label("⇢  " + RuntimeDiagram.GUARD_EDGE_LABEL
-                + ", whichever activity is running:");
+                + ", whatever is being pressed:");
         asideEdge.setWrapText(true);
         asideEdge.getStyleClass().add("runtime-arrow");
         box.getChildren().addAll(asideEdge, node(RuntimeDiagram.guard()));

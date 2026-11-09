@@ -219,7 +219,7 @@ public final class ExpressionMenu {
                     collectVariableLeaves(expectedType, context, contextNode, onSelect, leaves);
                     MenuBuilders.collectMenuLeaves(arrayItemSubmenu(expectedType, context, contextNode, onSelect), leaves);
                 }
-            } else if (expr == ExpressionCatalog.ACTIVITY) {
+            } else if (expr == ExpressionCatalog.PARAMETER) {
                 MenuBuilders.collectMenuLeaves(parametersSubmenu(expectedType, context, onSelect), leaves);
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT && expectedType.isEnum()) {
                 Menu sub = specificEnumSubmenu(expectedType, onSelect);
@@ -254,7 +254,7 @@ public final class ExpressionMenu {
                     MenuBuilders.addIfNonNull(menu.getItems(), variableSubmenu(expectedType, context, contextNode, onSelect));
                     MenuBuilders.addIfNonNull(menu.getItems(), arrayItemSubmenu(expectedType, context, contextNode, onSelect));
                 }
-            } else if (expr == ExpressionCatalog.ACTIVITY) {
+            } else if (expr == ExpressionCatalog.PARAMETER) {
                 MenuBuilders.addIfNonNull(menu.getItems(), parametersSubmenu(expectedType, context, onSelect));
             } else if (expr == ExpressionCatalog.ENUM_CONSTANT && expectedType.isEnum()) {
                 MenuBuilders.addIfNonNull(menu.getItems(), specificEnumSubmenu(expectedType, onSelect));

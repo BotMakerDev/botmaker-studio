@@ -243,11 +243,11 @@ public class MenuBarManager {
             if (onPlugins != null) onPlugins.run();
         });
 
-        // No Activity Flow entry since 2026-09-11: the graph editor is the SDK plugin's 🔀 Activity Flow
-        // toolbar item, and a menu is a place the shell can only offer what it can open itself.
+        // No Screens or Goals entry: both are the SDK plugin's toolbar items, and a menu is a place the shell
+        // can only offer what it can open itself.
 
-        // Where a parameter is defined, retyped and exposed. Separate from the flow editor on purpose: that
-        // one is about where the bot goes next, this one about what it is configured with.
+        // Where a parameter is defined, retyped and exposed: what the bot is configured with, apart from what
+        // it does next.
         MenuItem parametersItem = new MenuItem("Parameters...");
         parametersItem.setOnAction(e -> {
             if (onParameters != null) onParameters.run();

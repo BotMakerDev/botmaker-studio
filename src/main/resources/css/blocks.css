@@ -680,7 +680,7 @@
 
 /*
  * The Activity Flow canvas's forty-odd rules stood here — .flow-card through .flow-minimap-card — and left
- * on 2026-09-11 with the canvas, into the SDK plugin's own flow.css. A host stylesheet naming one plugin's
+ * on 2026-09-11 with the canvas, into the SDK plugin's own flow.css (deleted with flows, 2026-11-09). A host stylesheet naming one plugin's
  * concepts is a look no second plugin could ever have had; what stays here is the palette they were written
  * against, which every plugin's stylesheet may build on because the host's sheets are applied first.
  */

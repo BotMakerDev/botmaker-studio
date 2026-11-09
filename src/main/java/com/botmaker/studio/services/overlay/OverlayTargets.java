@@ -21,9 +21,9 @@ import java.util.Map;
  * Where the overlay editor's blocks go: every method of the bot passed by method reference where a plugin's
  * declared target type is expected ({@link OverlayPart#targets()}).
  *
- * <p>Read off the compiler's bindings ({@link BotIndex}), never off text: {@code Flow.activity(COLLECT,
- * Collect::body, …)} is a target because javac types {@code Collect::body} as the SDK's {@code ActivityBody}
- * there, whatever the call around it is called. A lambda names no method and is not a target; a reference to a
+ * <p>Read off the compiler's bindings ({@link BotIndex}), never off text: {@code Farm.daily(Crops::water)}
+ * is a target when javac types {@code Crops::water} as a type a plugin declared as a target there, whatever
+ * the call around it is called. A lambda names no method and is not a target; a reference to a
  * library's method has no file in the bot and is left out, since there is nothing to open.
  *
  * <p>Replaces {@code ManagedTargets} (2026-10-06), which offered every method reference inside a

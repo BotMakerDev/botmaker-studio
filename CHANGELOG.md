@@ -12,6 +12,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- Help ▸ Getting Started and `WORKFLOW.md` describe a bot that runs a plan (2026-11-09, flows deleted from the SDK):
+  "How a bot runs" is the plan's loop — pick a goal, walk there and press, read and record — and the activities step
+  is two steps, *Map the game's screens* (🗺 Screens) and *Say what the bot wants* (🎯 Goals). The parameters step says
+  what a parameter is now, a method of a `@Param` group.
 - Review's Undo asks the core (`Request.Restore`, 2026-11-09). The core reads the versions and writes the function
   back; the canvas redraws from what the core tells. Undo's message no longer names the version the function came
   back from, and Studio's own copy of the restore is gone. Review now checks for `@Migrate` methods in the bot's index

@@ -95,7 +95,7 @@ public class AssistTurnTest {
 
     /**
      * A step of a turn sees the bot's other files, so an entry point inserted in main is handed the bot's holder
-     * of values (Bot.runFlow(Sdk.class)); staged alone, it was handed null (2026-10-14).
+     * of values (Bot.run(Sdk.class)); staged alone, it was handed null (2026-10-14).
      */
     @Test
     void aStagedStepSeesTheBotsOtherFilesAndItsOwnSource() {

@@ -202,11 +202,10 @@ class UIManagerSceneTest extends FxHeadlessTest {
         List<String> labels = allLabels();
 
         // No "Launch": the 🚀 launch-target button and its dialog went together on 2026-09-01. This list is
-        // what the shell still assembles by hand plus what plugins place on it — Pilot and Activity Flow are
-        // both the SDK plugin's, and they are here on purpose, because a bar that silently loses a plugin's
-        // item is the failure this test exists to catch. (Flow was the shell's own button until 2026-09-11
-        // and is contributed now, which is why it moved into that half of the sentence rather than out of
-        // the list.)
+        // what the shell still assembles by hand plus what plugins place on it — Pilot and Screens are both
+        // the SDK plugin's, and they are here on purpose, because a bar that silently loses a plugin's item
+        // is the failure this test exists to catch. (Activity Flow stood where Screens is until flows were
+        // deleted on 2026-11-09.)
         for (String expected : List.of("Run", "Debug", "Compile", "Stop")) {
             assertTrue(labels.stream().anyMatch(l -> l.contains(expected)),
                     "the toolbar lost '" + expected + "'; it has: " + labels);
@@ -214,7 +213,7 @@ class UIManagerSceneTest extends FxHeadlessTest {
         // The plugin half needs the plugin on the classpath, which Studio's own is not (2026-09-02). Split
         // rather than skipped whole, so the shell's half is still asserted everywhere.
         com.botmaker.studio.TestSupport.assumeSdkPluginBound();
-        for (String expected : List.of("Activity Flow", "Pilot")) {
+        for (String expected : List.of("Screens", "Pilot")) {
             assertTrue(labels.stream().anyMatch(l -> l.contains(expected)),
                     "the toolbar lost '" + expected + "'; it has: " + labels);
         }

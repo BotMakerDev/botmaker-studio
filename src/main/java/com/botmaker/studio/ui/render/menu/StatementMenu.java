@@ -369,7 +369,7 @@ public final class StatementMenu {
      * <p>A name survives when the SDK offers at least one of its overloads. Which overload the insert then
      * creates is {@code StatementFactory}'s business, and it applies the same set.
      *
-     * <p>An entry point ({@code @EntryPoint}, the SDK's {@code Bot.runFlow}) is offered only inside {@code main};
+     * <p>An entry point ({@code @EntryPoint}, the SDK's {@code Bot.run}) is offered only inside {@code main};
      * a menu with no insertion target says nothing about where it is, and offers it.
      */
     private static List<String> facadeMethodNames(FacadeEntry facade, Build b) {
