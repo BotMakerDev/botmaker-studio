@@ -36,7 +36,7 @@
         <botmaker.contract.tag>${botmaker.studioapi.version}</botmaker.contract.tag>
         <!-- botmaker-plugin-host version: the loader Studio gets a project's plugins from. Same contract
              again. -->
-        <botmaker.pluginhost.version>0.10.2-SNAPSHOT</botmaker.pluginhost.version>
+        <botmaker.pluginhost.version>0.11.1-SNAPSHOT</botmaker.pluginhost.version>
         <!-- botmaker-java version: the parser and the value grammar. Same contract again. -->
         <botmaker.java.version>0.1.1-SNAPSHOT</botmaker.java.version>
         <!-- botmaker-cli version: its main jar, the silent library Studio's Publish runs. Same contract again. -->
