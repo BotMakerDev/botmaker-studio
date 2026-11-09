@@ -36,6 +36,11 @@ public final class PluginsOnBus {
             }
 
             @Override
+            public void startEntry(String title, String mainClass) {
+                bus.publish(new CoreApplicationEvents.EntryRunRequestedEvent(title, mainClass));
+            }
+
+            @Override
             public void stop() {
                 bus.publish(new CoreApplicationEvents.StopRunRequestedEvent());
             }

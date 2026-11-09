@@ -302,12 +302,14 @@ public class ToolbarManager {
 
     /**
      * {@code bars} with each plugin's declared runs ({@link RunEntries}) last on its tab, one "▶ title" button
-     * each, pressable while nothing runs; a plugin with runs and no buttons gets a tab for them (2026-11-03).
+     * each, pressable while nothing runs; a plugin with runs and no buttons gets a tab for them (2026-11-03). An entry
+     * declared off the bar gets no button: its plugin's own window starts it (2026-11-09).
      */
     private List<PluginBar> withRuns(List<PluginBar> bars) {
         Map<PluginCoordinate, PluginBar> byPlugin = new LinkedHashMap<>();
         bars.forEach(bar -> byPlugin.put(bar.plugin(), bar));
         for (RunEntries.Declared run : RunEntries.all()) {
+            if (!run.onBar()) continue;
             PluginBar bar = byPlugin.get(run.plugin());
             List<ToolbarItem> items = new ArrayList<>(bar == null ? List.of() : bar.items());
             items.add(ToolbarItem.id("run:" + run.plugin() + ":" + run.title()).label("▶ " + run.title())
