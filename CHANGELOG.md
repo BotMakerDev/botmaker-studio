@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The Wayland notice no longer tells the user to log in to Xorg or offers to install X11 session packages (Plasma 6.8
+  has none). `WaylandNotice` replaces `ForceX11Notice`: it shows once on Wayland only when gamescope, the private
+  display a bot plays in there, is missing, and says how to install it (2026-11-09).
 - Help ▸ Getting Started and `WORKFLOW.md` describe a bot that runs a plan (2026-11-09, flows deleted from the SDK):
   "How a bot runs" is the plan's loop — pick a goal, walk there and press, read and record — and the activities step
   is two steps, *Map the game's screens* (🗺 Screens) and *Say what the bot wants* (🎯 Goals). The parameters step says

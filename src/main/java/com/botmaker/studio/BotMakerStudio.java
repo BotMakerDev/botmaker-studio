@@ -36,7 +36,7 @@ import com.botmaker.core.project.migration.ProjectSchema;
 import com.botmaker.core.project.migration.ProjectSchemaTooNew;
 import com.botmaker.studio.ui.FxThread;
 import com.botmaker.studio.ui.app.CommunityPluginPrompt;
-import com.botmaker.studio.ui.app.ForceX11Notice;
+import com.botmaker.studio.ui.app.WaylandNotice;
 import com.botmaker.studio.ui.app.KeepRunDialog;
 import com.botmaker.studio.ui.app.ProjectWindow;
 import com.botmaker.studio.ui.app.home.BmkFlow;
@@ -607,10 +607,10 @@ public class BotMakerStudio extends Application {
                 try {
                     currentProject.getCodeEditorService().openInitialFile(sources);
 
-                    // One-time-per-session: on Wayland, guide the user to switch to X11 (and offer install).
+                    // One-time-per-session: on Wayland with no gamescope, say a bot's private display needs it.
                     if (!waylandNoticeChecked) {
                         waylandNoticeChecked = true;
-                        ForceX11Notice.maybeShow(primaryStage);
+                        WaylandNotice.maybeShow(primaryStage);
                     }
 
                     // A brand-new project used to auto-open the Project Setup checklist here. That checklist

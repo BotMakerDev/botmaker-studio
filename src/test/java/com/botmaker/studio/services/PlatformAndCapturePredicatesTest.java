@@ -7,7 +7,6 @@ import org.junit.jupiter.api.condition.DisabledIf;
 
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -169,24 +168,5 @@ class PlatformAndCapturePredicatesTest {
         String desktop = SessionEnvironment.currentDesktop();
         assertNotNull(desktop, "never null — callers use contains() on it directly");
         assertEquals(desktop.toLowerCase(), desktop, "lower-cased, so callers need not");
-    }
-
-    /**
-     * The install command is env-dependent (which package manager is on PATH, which desktop is running), so
-     * what is asserted is its <em>shape</em>: either "we could not tell" (null) or a runnable argv. A command
-     * with a blank element in it fails at exec with an unreadable error, and this is the only place that can
-     * catch it — the real invocation needs a polkit prompt.
-     */
-    @Test
-    void theX11InstallCommandIsEitherAbsentOrRunnable() {
-        List<String> cmd = assertDoesNotThrow(SessionEnvironment::x11InstallCommand);
-        if (cmd == null) return; // no supported package manager here — a legitimate answer
-
-        assertEquals("pkexec", cmd.get(0), "it must ask for privilege, not assume it");
-        assertTrue(cmd.size() >= 4, "pkexec + manager + subcommand + at least one package: " + cmd);
-        for (String arg : cmd) {
-            assertNotNull(arg, cmd.toString());
-            assertFalse(arg.isBlank(), "a blank argv element fails at exec with no useful message: " + cmd);
-        }
     }
 }
