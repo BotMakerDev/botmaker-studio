@@ -256,15 +256,18 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        # The key is unlocked once here, in gpg-agent, for the whole job: rpm's gpg and appimagetool's gpgme
+        # then sign without a passphrase or a tty. rpm keeps its own sign command (only `_gpg_name` and
+        # `--batch` are added): the command it was once replaced by named gpg twice, which rpm 6 (ubuntu-26.04)
+        # execs as written, so the rpm went unsigned, the agent stayed locked and the AppImage's signing then
+        # failed the job (v1.12.0, which got no assets).
         run: |
           mkdir -p ~/.gnupg && chmod 700 ~/.gnupg
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          printf 'allow-loopback-pinentry\ndefault-cache-ttl 7200\nmax-cache-ttl 7200\n' >> ~/.gnupg/gpg-agent.conf
           gpgconf --reload gpg-agent || true
           echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
-          cat >> ~/.rpmmacros <<EOF
-          %_gpg_name ${GPG_KEY_ID}
-          %__gpg_sign_cmd %{__gpg} gpg --batch --no-verbose --no-armor --pinentry-mode loopback --passphrase "${GPG_PASSPHRASE}" --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} %{__plaintext_filename}
-          EOF
+          echo unlock | gpg --batch --pinentry-mode loopback --passphrase-fd 3 -u "$GPG_KEY_ID" --sign 3<<<"$GPG_PASSPHRASE" >/dev/null
+          printf '%%_gpg_name %s\n%%_gpg_sign_cmd_extra_args --batch\n' "$GPG_KEY_ID" >> ~/.rpmmacros
           echo "BOTMAKER_SIGN=1" >> "$GITHUB_ENV"
 
       - name: Resolve version label
@@ -354,8 +357,6 @@ jobs:
       # (.deb/.rpm on Linux, .msi on Windows) are emitted by `-Pdist` into target/dist alongside it.
       - name: Sign .rpm/.deb (Linux)
         if: runner.os == 'Linux'
-        env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         # Never let a signing hiccup abort the release — unsigned packages still ship.
         continue-on-error: true
         run: bash .github/scripts/sign-packages.sh

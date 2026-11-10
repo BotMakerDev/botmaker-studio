@@ -10,6 +10,11 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+- The Linux installers and AppImage are built and signed again, so the release has its downloads and the in-app
+  updater finds them; 1.12.0 shipped none (2026-11-10).
+
 ## [1.12.0] — 2026-11-10
 
 - A plugin's run declared off the bar (`RunEntry.offBar()`) gets no ▶ button on its toolbar tab; the plugin's own
