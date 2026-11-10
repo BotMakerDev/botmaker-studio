@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.12.1] — 2026-11-10
 
 - The Linux installers and AppImage are built and signed again, so the release has its downloads and the in-app
   updater finds them; 1.12.0 shipped none (2026-11-10).
