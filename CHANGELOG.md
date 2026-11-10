@@ -10,6 +10,10 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+- A plugin's MCP tool keeps its name whether Studio or BotMaker's core serves it: the core names them now.
+
 ## [1.12.1] — 2026-11-10
 
 - The Linux installers and AppImage are built and signed again, so the release has its downloads and the in-app

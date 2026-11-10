@@ -13,6 +13,7 @@ import com.botmaker.plugin.api.overlay.Watched;
 import com.botmaker.plugin.api.source.ManagedValue;
 import com.botmaker.core.assist.AssistedSetting;
 import com.botmaker.core.assist.LiveBot;
+import com.botmaker.core.assist.PluginTools;
 import com.botmaker.studio.assist.OnScreen;
 import com.botmaker.studio.assist.PluginMove;
 import com.botmaker.core.assist.RunLog;
@@ -1591,20 +1592,8 @@ final class StudioBridge implements StudioDriver {
 
     @Override
     public List<PluginTool> pluginTools() {
-        // A tool is served as <artifactId>_<name>; two plugins with one artifactId keep the first's.
-        List<PluginTool> out = new ArrayList<>();
-        Set<String> served = new LinkedHashSet<>();
-        for (PluginHost.OwnedTool owned : PluginHost.assistantTools()) {
-            String name = owned.plugin().artifactId().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "_")
-                    + "_" + owned.tool().name();
-            if (!served.add(name)) {
-                System.err.println("Warning: " + owned.plugin() + "'s assistant tool " + name + " is already served"
-                        + " by another plugin.");
-                continue;
-            }
-            out.add(new PluginTool(name, owned.pluginName(), owned.tool()));
-        }
-        return out;
+        // The core names them, so a tool keeps its name whether Studio or the core serves it.
+        return PluginTools.named();
     }
 
     @Override
