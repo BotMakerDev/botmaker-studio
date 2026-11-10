@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.12.0] — 2026-11-10
 
 - A plugin's run declared off the bar (`RunEntry.offBar()`) gets no ▶ button on its toolbar tab; the plugin's own
   window starts it through `Runs.start(RunEntry)`, which Studio runs as the button did (2026-11-09).
@@ -303,6 +303,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - A plugin's telemetry frame reaches its window without the wire's length prefix (`RunTelemetry.payload`).
 - The GitHub and Google account bars run one sign-in handshake (`ui/app/DeviceSignIn`), and `GoogleAuth` runs
   shared's `oauth.DeviceFlow` and `Credentials` instead of its own copy of GitHub's. Nothing a user sees changes.
+- Built against botmaker-shared 0.8.0 (was 0.6.1).
+- Built against botmaker-session 0.7.0 (was 0.6.1).
+- Built against botmaker-studio-api 0.17.0 (was 0.14.1).
+- Built against botmaker-plugin-host 0.12.0 (was 0.10.1).
+- Built against botmaker-cli 0.12.0 (was 0.10.1).
+- Built against botmaker-java 0.2.0.
+- Built against botmaker-core 0.1.0.
 
 ### Fixed
 
