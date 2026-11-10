@@ -171,4 +171,4 @@ An installed bot opens in the Runner — someone else's bot is something you run
 
 - [docs/display-pipeline.md](../docs/display-pipeline.md) — capture → encode → transport → render, and the path a touch takes back — for both the pilot's stream and a bot's own read of the same pixels
 - [the umbrella CLAUDE.md](../CLAUDE.md) — how the four modules fit together, the JitPack coordinate model, and how a release is cut
-- [ROADMAP.md](ROADMAP.md) — what landed when, and what is still on the backlog
+- [CHANGELOG.md](CHANGELOG.md) — what landed in each release, and what is unreleased

@@ -34,11 +34,9 @@ where they disagree.
 At the end of the planning stage, write the plan to a dedicated plan file before starting implementation,
 so work can be resumed if a session is interrupted.
 
-## Roadmap
+## Changelog
 
-`ROADMAP.md` (repo root) is the **open** backlog for the Studio only. A finished change writes `CHANGELOG.md`
-under `## [Unreleased]`; `ROADMAP.md` changes only when open work is added or removed — never a dated
-done-entry.
+A finished change writes `CHANGELOG.md` under `## [Unreleased]`. There is no roadmap file (2026-11-10).
 
 ## Commands
 

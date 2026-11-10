@@ -180,8 +180,7 @@ separate JVM; **Debug** attaches over JDI with breakpoints set on blocks.
 talk to Studio only through the contract, `botmaker-studio-api`. Studio never names an SDK or toolkit type.
 
 For the architecture in depth see [`docs/architecture/`](docs/architecture), indexed by
-[`CLAUDE.md`](CLAUDE.md); the open work and changelog are in [`ROADMAP.md`](ROADMAP.md) and
-[`CHANGELOG.md`](CHANGELOG.md).
+[`CLAUDE.md`](CLAUDE.md); the changelog is [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Packaging a Release
 

@@ -192,7 +192,6 @@ public final class Workflow {
                         + "pilot's stream and a bot's own read of the same pixels"),
                 new Reference("the umbrella CLAUDE.md", "../CLAUDE.md",
                         "how the four modules fit together, the JitPack coordinate model, and how a release is cut"),
-                new Reference("ROADMAP.md", "ROADMAP.md",
-                        "what landed when, and what is still on the backlog"));
+                new Reference("CHANGELOG.md", "CHANGELOG.md", "what landed in each release, and what is unreleased"));
     }
 }
