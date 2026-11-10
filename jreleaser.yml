@@ -49,8 +49,13 @@ release:
     # one thing JReleaser has no way to express.
     skipTag: true
     overwrite: false
+    # sluice writes the release page as it tags (its notes from the changelog), so it exists when this job
+    # runs: it is updated with the assets only, its notes left as sluice wrote them. Refusing to update made
+    # JReleaser fail at "Releasing" and v1.12.0 got no assets. With no page yet, JReleaser creates one.
     update:
-      enabled: false
+      enabled: true
+      sections:
+        - ASSETS
     # A tag with a hyphen is a pre-release (v1.0.0-rc1), which is what the softprops step this replaced
     # expressed as `contains(github.ref_name, '-')`.
     prerelease:
