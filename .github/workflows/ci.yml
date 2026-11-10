@@ -117,6 +117,14 @@ jobs:
           repository: BotMakerDev/botmaker-cli
           path: .deps/botmaker-cli
 
+      # The core Studio runs in-process (2026-11-05), at its main -SNAPSHOT; installed last, after every
+      # upstream of its own.
+      - name: Check out botmaker-core
+        uses: actions/checkout@v7
+        with:
+          repository: BotMakerDev/botmaker-core
+          path: .deps/botmaker-core
+
       # botmaker-sdk was checked out here too, "for type identity (palette/SdkType)". SdkType was deleted
       # in plugin-platform phase 7, and on 2026-09-02 the dependency itself left this pom: Studio bundles
       # no plugin at all now and loads every one from the open project's own resolved classpath. Installing
@@ -136,10 +144,12 @@ jobs:
           mvn_retry mvn -B -f .deps/botmaker-plugin-toolkit/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-plugin-parent/pom.xml install
           mvn_retry mvn -B -f .deps/botmaker-plugin-archetype/pom.xml install -DskipTests
-          mvn_retry mvn -B -f .deps/botmaker-cli/pom.xml install -DskipTests
+          # runlog before the cli and shared, which both pin it.
           mvn_retry mvn -B -f .deps/botmaker-runlog/pom.xml install -DskipTests
+          mvn_retry mvn -B -f .deps/botmaker-cli/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-shared/pom.xml install -DskipTests
           mvn_retry mvn -B -f .deps/botmaker-session/pom.xml install -DskipTests
+          mvn_retry mvn -B -f .deps/botmaker-core/pom.xml install -DskipTests
 
       # Deliberately not `-Pdist`: the native installers are the `package` job's business, not the gate's.
       - name: Build
