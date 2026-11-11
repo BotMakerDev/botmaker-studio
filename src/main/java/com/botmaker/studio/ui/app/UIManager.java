@@ -222,7 +222,7 @@ public class UIManager implements ProjectWindow {
         // It keeps itself subscribed.
         this.assistantPane = new AssistantPane(ctx,
                 new com.botmaker.studio.ui.app.trial.Trials(eventBus, ctx.state(), config));
-        this.assistantWindow = new AssistantWindow(assistantPane, config.projectName());
+        this.assistantWindow = new AssistantWindow(assistantPane, config.projectName(), this::revealMethod);
 
         this.actions = new StudioActions(ctx, primaryStage, screenCaptureService,
                 menuBarManager, toolbarManager,
@@ -919,11 +919,19 @@ public class UIManager implements ProjectWindow {
      * and the block this row is about does not exist until that has happened.
      */
     private void revealMarkedFunction(ReviewService.Item item) {
-        if (item == null || editorCanvas == null) return;
+        if (item != null) reveal(item.file(), item.function());
+    }
+
+    /** {@code function} of {@code file} scrolled into view, the file opened first unless it is the active one. */
+    private void reveal(Path file, String function) {
+        if (editorCanvas == null) return;
         Path active = state.getActiveFile() == null ? null : state.getActiveFile().getPath();
-        if (active == null || !active.equals(item.file())) codeEditorService.switchToFile(item.file());
+        // Compared as switchToFile keeps them: the core names a file absolute, the editor as it opened it.
+        if (active == null || !active.toAbsolutePath().normalize().equals(file.toAbsolutePath().normalize())) {
+            codeEditorService.switchToFile(file);
+        }
         Platform.runLater(() -> codeEditorService.getRootBlock()
-                .map(root -> functionBlock(root, item.function()))
+                .map(root -> functionBlock(root, function))
                 .ifPresent(editorCanvas::scrollToBlock));
     }
 
@@ -947,6 +955,17 @@ public class UIManager implements ProjectWindow {
                             reviewPanel.node().getScene() == null ? null : reviewPanel.node().getScene().getWindow()));
             reviewPanel.refresh();
         });
+    }
+
+    /**
+     * Takes the user to {@code method} of {@code file}, the Assistant window's link to a method an edit changed: the
+     * project's window in front, the file opened if it is not the active one, its block scrolled to on the next pulse.
+     * By name, as a review row's: an overload lands on the first. The class only names the link.
+     */
+    private void revealMethod(Path file, String className, String method) {
+        if (editorCanvas == null) return;
+        primaryStage.toFront();
+        reveal(file, method);
     }
 
     private static void functionBlocks(CodeBlock block, String name, List<MethodDeclarationBlock> out) {

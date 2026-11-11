@@ -16,6 +16,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   terminal (Chat) it lists every MCP call the core serves this session (Calls) and shows the chosen one (Detail): its
   arguments, its reply, its device steps. The header's toggles hide any pane but the last one shown, choosing a call
   shows Detail, and the choice is kept on this computer.
+- The Assistant window's Calls pane lists every MCP tool called, each by its own name with its plugin, its count and a
+  bar, ● while one runs, and *Only*; All, None and a search over the names. Sort it by *Most called*, *Last 5 min*,
+  *By plugin* (a plugin's box ticks all its tools) or *A–Z*. Filter the calls by plugin, device, status, and a search
+  over the tool, the arguments and the reply.
+- Detail draws a call by what it holds: its arguments indented, its text as written, its images at the pane's width
+  with the point a tap or swipe touched drawn on them (on the next screenshot of that device when the call took none),
+  the methods an edit changed as links that open them in the editor, its device steps, and a running call's progress.
 - A plugin's MCP tool keeps its name whether Studio or BotMaker's core serves it: the core names them now.
 
 ## [1.12.1] — 2026-11-10

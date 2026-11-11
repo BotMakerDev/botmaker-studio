@@ -1,28 +1,35 @@
 package com.botmaker.studio.ui.app;
 
 import com.botmaker.core.config.AppVersion;
+import com.botmaker.core.edit.EditResult;
 import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.event.CoreEvent.ToolCallEnded;
-import com.botmaker.core.event.CoreEvent.ToolCallStep;
-import com.botmaker.core.edit.EditResult;
+import com.botmaker.core.event.CoreEvent.ToolCallStarted;
 import com.botmaker.core.server.CoreClient;
 import com.botmaker.core.server.CoreLauncher;
 import com.botmaker.core.server.CoreLink;
 import com.botmaker.studio.services.CoreEdits;
 import com.botmaker.studio.ui.app.AssistantPanes.Pane;
+import com.botmaker.studio.ui.app.ToolCalls.Status;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.PauseTransition;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SplitPane;
-import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TitledPane;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
@@ -34,21 +41,24 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.stage.WindowEvent;
+import javafx.util.Duration;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.UnaryOperator;
 
 /**
  * The Assistant window (spec {@code 2026-11-11-assistant-window-design.md}), opened from the toolbar: the AI tool's
- * terminal ({@link AssistantPane}, the Chat pane), every MCP call the core serves (Calls) and the chosen one (Detail),
- * side by side. Its header's toggles hide any pane but the last one shown; choosing a call shows Detail; the choice is
- * this computer's ({@link AssistantPanes}).
+ * terminal ({@link AssistantPane}, the Chat pane), every MCP call the core serves (Calls, with its tool checklist and
+ * filters) and the chosen one (Detail, drawn by {@link CallDetail}), side by side. Its header's toggles hide any pane
+ * but the last one shown; choosing a call shows Detail; the choice is this computer's ({@link AssistantPanes}).
  *
  * <p>The calls come over a channel of the window's own ({@code Request.WatchCalls}), opened the first time the window is
  * shown, so a call made before that is in the core's backlog, not lost. Closing the window hides it: the tool keeps
@@ -56,23 +66,37 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class AssistantWindow {
 
-    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
     private static final String WATCHING = "Every MCP call this session, newest last.";
+    private static final String PICK = "Pick a call to see it here.";
     /** How much of a call's arguments its row shows. */
     private static final int SUMMARY = 90;
+    /** How often the checklist recounts while sorted by the last 5 minutes. */
+    private static final Duration RECOUNT = Duration.seconds(15);
+    /** How often a running call's Detail is drawn again as its steps come. */
+    private static final Duration REDRAW = Duration.millis(250);
 
     private final AssistantPane chat;
     private final String project;
+    private final CallDetail drawer;
     private final Stage stage = new Stage();
     private final SplitPane split = new SplitPane();
     private final Map<Pane, ToggleButton> toggles = new EnumMap<>(Pane.class);
     private final Map<Pane, Node> panes = new EnumMap<>(Pane.class);
     private final ToolCalls calls = new ToolCalls();
-    private final ObservableList<ToolCalls.Call> rows = FXCollections.observableArrayList();
-    private final ListView<ToolCalls.Call> callList = new ListView<>(rows);
+    private final FilteredList<ToolCalls.Call> shownCalls = new FilteredList<>(calls.view(), CallFilter.ALL);
+    private final ListView<ToolCalls.Call> callList = new ListView<>(shownCalls);
+    private final ToolChecklist checklist = new ToolChecklist(this::refilter, this::recount);
+    private final ComboBox<Choice<String>> pluginChoice = new ComboBox<>();
+    private final ComboBox<Choice<String>> deviceChoice = new ComboBox<>();
+    private final ComboBox<Choice<Status>> statusChoice = new ComboBox<>();
+    private final TextField search = new TextField();
     private final Label callsStatus = new Label();
-    private final Label detailHeading = new Label();
-    private final TextArea detailText = new TextArea();
+    private final Label detailHeading = new Label(PICK);
+    private final ScrollPane detailBody = new ScrollPane();
+    private final Timeline recount = new Timeline(new KeyFrame(RECOUNT, e -> recount()));
+    /** Draws the shown call again once its steps have paused for a moment ({@link #REDRAW}). */
+    private final PauseTransition redraw = new PauseTransition(REDRAW);
+    private CallFilter filter = CallFilter.ALL;
     private AssistantPanes shown = AssistantPanes.load();
     private boolean built;
     /** The project's window, and what closes this one with it; removed on dispose (it outlives this project). */
@@ -81,13 +105,19 @@ final class AssistantWindow {
     /** The channel the calls come over; null until the window is first shown, and once lost. */
     private CoreLink link;
     private boolean watching;
-    /** While a told call's row is replaced: its reselection is a redraw, not the user's choice. */
+    /** While the list changes under the selection: a reselection then is a redraw, not the user's choice. */
     private boolean redrawing;
     private boolean disposed;
+    /** The call Detail shows, by id; -1 for none. */
+    private long detailed = -1;
 
-    AssistantWindow(AssistantPane chat, String project) {
+    /** {@code opener} opens a method an edit changed, from Detail's links. */
+    AssistantWindow(AssistantPane chat, String project, CallDetail.MethodOpener opener) {
         this.chat = chat;
         this.project = project;
+        this.drawer = new CallDetail(opener);
+        recount.setCycleCount(Timeline.INDEFINITE);
+        redraw.setOnFinished(e -> calls.find(detailed).ifPresent(this::showDetail));
     }
 
     /** Shows the window, in front, the chat given the keyboard; the first time, starts watching the calls. */
@@ -103,6 +133,8 @@ final class AssistantWindow {
     /** Closes the window and its channel; the project's window calls this when it goes. The chat is its own to end. */
     void dispose() {
         disposed = true;
+        recount.stop();
+        redraw.stop();
         stage.close();
         // The owner is the one primary stage every project's window reuses: left on it, the handler keeps this
         // project's window, chat and terminals alive.
@@ -153,39 +185,135 @@ final class AssistantWindow {
         }
         stage.setTitle("Assistant — " + project);
         stage.setScene(ThemedWindows.scene(root, 1280, 760));
+        stage.setOnShown(e -> recount.play());
+        stage.setOnHidden(e -> recount.stop());
     }
+
+    // ---- Calls ------------------------------------------------------------------------------------------------
 
     private Node callsPane() {
         callList.setPlaceholder(new Label("No MCP call yet. Each one an assistant makes shows here."));
         callList.setCellFactory(list -> new CallCell());
         callList.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
-            if (now == null) return;
+            if (now == null || redrawing) return;
             // The same call told again (a step, its end) is redrawn, not chosen: Detail stays as the user left it.
-            boolean chosen = !redrawing && (was == null || was.id() != now.id());
-            if (chosen && !shown.shows(Pane.DETAIL)) setShown(shown.showing(Pane.DETAIL));
+            if (was != null && was.id() == now.id()) return;
+            if (!shown.shows(Pane.DETAIL)) setShown(shown.showing(Pane.DETAIL));
             showDetail(now);
         });
+
+        pluginChoice.setOnAction(e -> {
+            if (!redrawing && pluginChoice.getValue() != null) refilter(f -> f.withPlugin(pluginChoice.getValue().value()));
+        });
+        deviceChoice.setOnAction(e -> {
+            if (!redrawing && deviceChoice.getValue() != null) refilter(f -> f.withDevice(deviceChoice.getValue().value()));
+        });
+        List<Choice<Status>> statuses = new ArrayList<>(List.of(new Choice<>(Optional.empty(), "Any status")));
+        for (Status status : Status.values()) statuses.add(new Choice<>(Optional.of(status), status.mark() + " " + status.displayName()));
+        statusChoice.getItems().setAll(statuses);
+        statusChoice.setValue(statuses.getFirst());
+        statusChoice.setOnAction(e -> {
+            if (statusChoice.getValue() != null) refilter(f -> f.withStatus(statusChoice.getValue().value()));
+        });
+        search.setPromptText("Search tool, arguments, reply");
+        search.textProperty().addListener((o, was, now) -> refilter(f -> f.withSearch(now)));
+        HBox.setHgrow(search, Priority.ALWAYS);
+        choices();
+        HBox filters = new HBox(6, pluginChoice, deviceChoice, statusChoice, search);
+        filters.setAlignment(Pos.CENTER_LEFT);
+
+        TitledPane tools = new TitledPane("Tools", checklist.node());
+        tools.setAnimated(false);
+
         callsStatus.setWrapText(true);
         callsStatus.setMinHeight(Region.USE_PREF_SIZE);
-        VBox box = new VBox(6, callsStatus, callList);
+        VBox box = new VBox(6, callsStatus, tools, filters, callList);
         VBox.setVgrow(callList, Priority.ALWAYS);
         box.setPadding(new Insets(6));
         box.setMinWidth(0);
         return box;
     }
 
+    /** The filter changed by {@code change}: the list and the checklist follow. */
+    private void refilter(UnaryOperator<CallFilter> change) {
+        CallFilter now = change.apply(filter);
+        if (now.equals(filter)) return;
+        filter = now;
+        redrawing = true;
+        try {
+            shownCalls.setPredicate(filter);
+            reselect();
+        } finally {
+            redrawing = false;
+        }
+        recount();
+    }
+
+    /** The checklist counted again, in its sort's order. */
+    private void recount() {
+        checklist.show(calls.tallies(checklist.sort(), System.currentTimeMillis()), filter);
+    }
+
+    /** The plugin and device choices, as the calls name them, each kept as chosen. */
+    private void choices() {
+        redrawing = true;
+        try {
+            List<Choice<String>> plugins = new ArrayList<>(List.of(new Choice<>(Optional.empty(), "Any plugin")));
+            for (String plugin : calls.plugins()) {
+                plugins.add(new Choice<>(Optional.of(plugin), plugin.equals(ToolCalls.CORE) ? "BotMaker core" : plugin));
+            }
+            keep(pluginChoice, plugins, filter.plugin());
+            List<Choice<String>> devices = new ArrayList<>(List.of(new Choice<>(Optional.empty(), "Any device")));
+            for (String device : calls.devices()) devices.add(new Choice<>(Optional.of(device), device));
+            keep(deviceChoice, devices, filter.device());
+        } finally {
+            redrawing = false;
+        }
+    }
+
+    private static <T> void keep(ComboBox<Choice<T>> box, List<Choice<T>> items, Optional<T> chosen) {
+        if (box.getItems().equals(items)) return;
+        box.getItems().setAll(items);
+        box.setValue(items.stream().filter(c -> c.value().equals(chosen)).findFirst().orElse(items.getFirst()));
+    }
+
+    /** The call Detail shows selected again, if the list still shows it. */
+    private void reselect() {
+        if (detailed < 0) return;
+        for (int i = 0; i < shownCalls.size(); i++) {
+            if (shownCalls.get(i).id() == detailed) {
+                callList.getSelectionModel().select(i);
+                return;
+            }
+        }
+        callList.getSelectionModel().clearSelection();
+    }
+
+    // ---- Detail -----------------------------------------------------------------------------------------------
+
     private Node detailPane() {
         detailHeading.setWrapText(true);
-        detailHeading.setText("Pick a call to see it here.");
-        detailText.setEditable(false);
-        detailText.setWrapText(true);
-        detailText.getStyleClass().add("monospace");
-        VBox box = new VBox(6, detailHeading, detailText);
-        VBox.setVgrow(detailText, Priority.ALWAYS);
+        detailHeading.setStyle("-fx-font-weight: bold;");
+        detailHeading.setMinHeight(Region.USE_PREF_SIZE);
+        detailBody.setFitToWidth(true);
+        VBox box = new VBox(6, detailHeading, detailBody);
+        VBox.setVgrow(detailBody, Priority.ALWAYS);
         box.setPadding(new Insets(6));
         box.setMinWidth(0);
         return box;
     }
+
+    private void showDetail(ToolCalls.Call call) {
+        boolean same = call.id() == detailed;
+        double scrolled = detailBody.getVvalue();
+        detailed = call.id();
+        detailHeading.setText(CallDetail.heading(call));
+        detailBody.setContent(drawer.draw(CallDetail.blocks(call, calls)));
+        // A step told to the call shown keeps the reader where they were.
+        if (same) Platform.runLater(() -> detailBody.setVvalue(scrolled));
+    }
+
+    // ---- panes ------------------------------------------------------------------------------------------------
 
     private void setShown(AssistantPanes now) {
         if (now.equals(shown)) {
@@ -205,8 +333,8 @@ final class AssistantWindow {
         split.getItems().setAll(panes.entrySet().stream().filter(e -> shown.shows(e.getKey()))
                 .map(Map.Entry::getValue).toList());
         split.setDividerPositions(switch (split.getItems().size()) {
-            case 3 -> new double[] {0.5, 0.75};
-            case 2 -> new double[] {0.6};
+            case 3 -> new double[] {0.45, 0.72};
+            case 2 -> new double[] {0.55};
             default -> new double[0];
         });
         for (Map.Entry<Pane, ToggleButton> each : toggles.entrySet()) {
@@ -219,6 +347,8 @@ final class AssistantWindow {
                     : (shown.shows(pane) ? "Hide " : "Show ") + pane.displayName()));
         }
     }
+
+    // ---- the channel ------------------------------------------------------------------------------------------
 
     /** Opens the window's own channel to the core, off the FX thread, and asks it for every call. */
     private void watch() {
@@ -282,79 +412,56 @@ final class AssistantWindow {
     }
 
     private void forget() {
-        calls.clear();
-        rows.clear();
-        detailHeading.setText("Pick a call to see it here.");
-        detailText.clear();
+        redrawing = true;
+        try {
+            calls.clear();
+        } finally {
+            redrawing = false;
+        }
+        detailed = -1;
+        redraw.stop();
+        detailHeading.setText(PICK);
+        detailBody.setContent(null);
+        choices();
+        recount();
     }
 
     private void told(CoreEvent event) {
         if (disposed) return;
-        ToolCalls.Call changed = calls.told(event);
+        ToolCalls.Call changed;
+        redrawing = true;
+        try {
+            changed = calls.told(event);
+            if (changed != null && changed.id() == detailed) reselect();
+        } finally {
+            redrawing = false;
+        }
         if (changed == null) return;
-        ToolCalls.Call selected = callList.getSelectionModel().getSelectedItem();
-        int at = indexOf(changed.id());
-        if (at >= 0) {
-            redrawing = true;
-            try {
-                rows.set(at, changed);
-                if (selected != null && selected.id() == changed.id()) {
-                    callList.getSelectionModel().select(at);
-                    showDetail(changed);
-                }
-            } finally {
-                redrawing = false;
+        if (changed.id() == detailed) {
+            // A call's end is drawn at once; its steps at most once a pulse of REDRAW, so a call of hundreds of steps
+            // does not rebuild Detail at each.
+            if (event instanceof ToolCallEnded) {
+                redraw.stop();
+                showDetail(changed);
+            } else if (redraw.getStatus() != Animation.Status.RUNNING) {
+                redraw.playFromStart();
             }
-        } else {
-            rows.add(changed);
-            while (rows.size() > ToolCalls.KEPT) rows.removeFirst();
+        } else if (event instanceof ToolCallEnded && detailed >= 0) {
+            // A shown tap waits for the frame after it: a later call's screenshot may be it.
+            calls.find(detailed)
+                    .filter(c -> c.ended() != null && !c.ended().extras().tap().isEmpty() && c.image().isEmpty())
+                    .ifPresent(this::showDetail);
         }
+        // A count, a running mark or a new plugin or device changes only as a call starts or ends, or a step names one.
+        if (event instanceof ToolCallStarted || event instanceof ToolCallEnded) recount();
+        if (!(event instanceof ToolCallEnded)) choicesIfNew(changed);
     }
 
-    private int indexOf(long id) {
-        for (int i = rows.size() - 1; i >= 0; i--) if (rows.get(i).id() == id) return i;
-        return -1;
-    }
-
-    private void showDetail(ToolCalls.Call call) {
-        detailHeading.setText(heading(call));
-        detailText.setText(detail(call));
-    }
-
-    /** The call's tool, status, plugin, start and duration, on one line. */
-    static String heading(ToolCalls.Call call) {
-        StringBuilder line = new StringBuilder(call.started().tool()).append(" · ").append(call.status().displayName());
-        if (!call.started().plugin().isEmpty()) line.append(" · ").append(call.started().plugin());
-        line.append(" · ").append(CLOCK.format(Instant.ofEpochMilli(call.started().atMillis())));
-        if (call.ended() != null) line.append(" · ").append(call.ended().millis()).append(" ms");
-        return line.toString();
-    }
-
-    /** The call's arguments, its reply's parts, its progress and its device steps, as text (phase 5 draws them). */
-    static String detail(ToolCalls.Call call) {
-        StringBuilder text = new StringBuilder("Arguments\n").append(call.started().arguments()).append("\n");
-        if (call.progress() != null) {
-            text.append("\nProgress: ").append(call.progress().command()).append(" ")
-                    .append(call.progress().done()).append(" of ").append(call.progress().total()).append("\n");
-        }
-        ToolCallEnded ended = call.ended();
-        if (ended != null) {
-            text.append("\nReply\n");
-            for (ToolCallEnded.Part part : ended.reply()) {
-                text.append(part.kind() == ToolCallEnded.Part.Kind.TEXT ? part.value() : "[image]").append("\n");
-            }
-        }
-        List<ToolCallStep> steps = call.steps();
-        if (!steps.isEmpty() || (ended != null && ended.elsewhere() > 0)) text.append("\nDevice steps\n");
-        for (ToolCallStep step : steps) {
-            text.append(step.ok() ? "✓ " : "✗ ").append(step.device()).append("  ").append(step.command())
-                    .append("  ").append(step.millis()).append(" ms");
-            if (!step.result().isBlank()) text.append("  → ").append(step.result().strip());
-            text.append("\n");
-        }
-        if (call.moreSteps() > 0) text.append("… and ").append(call.moreSteps()).append(" more steps\n");
-        if (ended != null && ended.elsewhere() > 0) text.append("elsewhere: ").append(ended.elsewhere()).append(" steps\n");
-        return text.toString();
+    private void choicesIfNew(ToolCalls.Call changed) {
+        boolean newPlugin = pluginChoice.getItems().stream().noneMatch(c -> c.value().equals(Optional.of(changed.plugin())));
+        boolean newDevice = changed.devices().stream().anyMatch(d -> deviceChoice.getItems().stream()
+                .noneMatch(c -> c.value().equals(Optional.of(d))));
+        if (newPlugin || newDevice) choices();
     }
 
     /** The row's one-line summary of a call's arguments. */
@@ -362,6 +469,18 @@ final class AssistantWindow {
         String flat = arguments.replaceAll("\\s+", " ").strip();
         if (flat.equals("{}")) return "";
         return flat.length() > SUMMARY ? flat.substring(0, SUMMARY - 1) + "…" : flat;
+    }
+
+    /** A filter choice: a value, or any ({@code value} empty), and how it is shown. */
+    private record Choice<T>(Optional<T> value, String label) {
+        Choice {
+            Objects.requireNonNull(value);
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
     }
 
     private static final class CallCell extends ListCell<ToolCalls.Call> {
@@ -373,9 +492,11 @@ final class AssistantWindow {
                 setTooltip(null);
                 return;
             }
-            setText(call.status().mark() + "  " + call.started().tool() + "  " + summary(call.started().arguments())
-                    + "  " + CLOCK.format(Instant.ofEpochMilli(call.started().atMillis())));
-            setTooltip(new Tooltip(call.status().displayName()));
+            setText(call.status().mark() + "  " + call.tool() + "  " + summary(call.started().arguments())
+                    + "  " + CallDetail.CLOCK.format(Instant.ofEpochMilli(call.started().atMillis())));
+            setTooltip(new Tooltip(call.status().displayName()
+                    + (call.plugin().isEmpty() ? "" : " · " + call.plugin())
+                    + (call.devices().isEmpty() ? "" : " · " + String.join(", ", call.devices()))));
         }
     }
 }
