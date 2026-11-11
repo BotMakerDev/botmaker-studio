@@ -2,7 +2,7 @@ package com.botmaker.studio.ui.app;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.studio.services.RunLogOnBus;
-import com.botmaker.core.assist.AiTool;
+import com.botmaker.cli.ai.AiTool;
 import com.botmaker.core.assist.McpConfig;
 import com.botmaker.core.assist.McpEndpoint;
 import com.botmaker.core.assist.McpTools;
@@ -245,7 +245,7 @@ final class AssistantPane {
             if (started == null) return;
             try {
                 AiTool.Launch launch = chosen.launch(where.get(),
-                        new AiTool.Connection(McpEndpoint.url(started.port()), started.token(), configDir()), shell);
+                        new AiTool.Connection.Http(McpEndpoint.url(started.port()), started.token(), configDir()), shell);
                 addSession(chosen, launch, shell);
             } catch (IOException | RuntimeException e) {
                 status.setText("Could not prepare " + chosen.displayName() + ": " + e.getMessage());

@@ -4,7 +4,7 @@ import com.botmaker.cli.bmk.BotJson;
 import com.botmaker.session.remote.DisplayAgent;
 import com.botmaker.shared.capture.linux.X11ErrorTrap;
 import com.botmaker.session.Sessions;
-import com.botmaker.core.assist.BotGuard;
+import com.botmaker.cli.ai.BotGuard;
 import com.botmaker.core.assist.HomeTools;
 import com.botmaker.studio.assist.CoreTools;
 import com.botmaker.studio.assist.StudioToolGroup;
