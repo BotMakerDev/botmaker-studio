@@ -24,6 +24,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   with the point a tap or swipe touched drawn on them (on the next screenshot of that device when the call took none),
   the methods an edit changed as links that open them in the editor, its device steps, and a running call's progress.
 - A plugin's MCP tool keeps its name whether Studio or BotMaker's core serves it: the core names them now.
+- Opening a project guards every AI tool in the bot's folder, not only Claude Code: opencode's `opencode.json` (edits
+  denied, shell asks first), Codex's `.codex/config.toml` (its read-only sandbox, once you trust the folder in Codex)
+  and an `AGENTS.md` saying to change the bot through BotMaker's tools. They are kept out of the bot's versions. A
+  setting of yours that differs is kept and named on Studio's console.
+- The Assistant window's opencode session keeps its shell denied even where the bot's `opencode.json` says ask.
+- The same guarded session runs without Studio: `botmaker ai <tool>` in the bot's folder.
 
 ## [1.12.1] — 2026-11-10
 
