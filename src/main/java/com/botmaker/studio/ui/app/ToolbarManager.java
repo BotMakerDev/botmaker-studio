@@ -51,6 +51,8 @@ public class ToolbarManager {
     private Runnable onParameters;
     /** Shows the Reports tab, read again; wired by {@link UIManager}. */
     private Runnable onReports;
+    /** Shows the Assistant window; wired by {@link UIManager}. */
+    private Runnable onAssistant;
 
     /** Turns the reader-mode preview on and off, and what it is when the bar is built. */
     private Runnable onPreviewAsUser;
@@ -151,6 +153,11 @@ public class ToolbarManager {
     /** Sets the callback invoked when the toolbar's Reports button is clicked. */
     public void setOnReports(Runnable callback) {
         this.onReports = callback;
+    }
+
+    /** Sets the callback invoked when the toolbar's Assistant button is clicked. */
+    public void setOnAssistant(Runnable callback) {
+        this.onAssistant = callback;
     }
 
     /**
@@ -267,6 +274,13 @@ public class ToolbarManager {
                         + "switches and values you chose to expose. Its header brings you back.")
                 .onBar(40)
                 .onPress(() -> c -> run(onPreviewAsUser)));
+
+        // The Assistant was a bottom tab until 2026-11-11: a window now, its chat beside every MCP call it made.
+        own.add(ToolbarItem.id("assistant").label("🤖 Assistant")
+                .tooltip("An AI tool's terminal working on this bot, and every MCP call it makes: the tool, "
+                        + "its arguments, its reply and what it did to the device")
+                .onBar(45)
+                .onPress(() -> c -> run(onAssistant)));
 
         // 🖱 Input stood here at TOOLS/10 until 2026-09-27, opening Studio's Input & Clicks window over
         // botmaker-project.properties. The action moved and the sentence moved with it, as this comment said

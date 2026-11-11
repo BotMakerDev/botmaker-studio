@@ -31,9 +31,9 @@ enum BottomTab {
      * The project's versions, and sharing them — see {@link com.botmaker.studio.ui.app.versions.VersionsPane}.
      * Keyed {@code VCS} until 2026-09-25; a layout saved under that key opens on the default tab.
      */
-    VERSIONS("Versions"),
-    /** AI command-line tools changing the bot over MCP, direct edits denied — see {@link AssistantPane}. */
-    ASSISTANT("Assistant");
+    VERSIONS("Versions");
+    // ASSISTANT("Assistant") stood here until 2026-11-11 and is the Assistant window now (AssistantWindow); a layout
+    // saved on it opens on the default tab.
 
     private final String title;
 

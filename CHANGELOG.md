@@ -12,6 +12,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- The Assistant is a window now, opened by the toolbar's 🤖 Assistant, no longer a bottom tab. Beside the AI tool's
+  terminal (Chat) it lists every MCP call the core serves this session (Calls) and shows the chosen one (Detail): its
+  arguments, its reply, its device steps. The header's toggles hide any pane but the last one shown, choosing a call
+  shows Detail, and the choice is kept on this computer.
 - A plugin's MCP tool keeps its name whether Studio or BotMaker's core serves it: the core names them now.
 
 ## [1.12.1] — 2026-11-10

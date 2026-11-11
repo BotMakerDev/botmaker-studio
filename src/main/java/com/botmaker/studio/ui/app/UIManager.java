@@ -155,8 +155,10 @@ public class UIManager implements ProjectWindow {
     /** The Trace bottom tab: the running bot's debug lines. Built by {@link #createScene()}. */
     private TracePanel tracePanel;
     private ReportsPanel reportsPanel;
-    /** The Assistant bottom tab. Built with the window, so its conversation lasts as long as the window does. */
+    /** The Assistant window's Chat pane. Built with the window, so its conversation lasts as long as the window does. */
     private final AssistantPane assistantPane;
+    /** The Assistant window, the toolbar's 🤖; it shows {@link #assistantPane} and every MCP call. */
+    private final AssistantWindow assistantWindow;
     /** The bottom tool window's tabs, keyed by the closed set so nothing selects one by index. */
     private final EnumMap<BottomTab, Tab> bottomTabs = new EnumMap<>(BottomTab.class);
     /** Restores the dividers and the open tab at open, and writes them back from {@link #dispose()}. */
@@ -220,6 +222,7 @@ public class UIManager implements ProjectWindow {
         // It keeps itself subscribed.
         this.assistantPane = new AssistantPane(ctx,
                 new com.botmaker.studio.ui.app.trial.Trials(eventBus, ctx.state(), config));
+        this.assistantWindow = new AssistantWindow(assistantPane, config.projectName());
 
         this.actions = new StudioActions(ctx, primaryStage, screenCaptureService,
                 menuBarManager, toolbarManager,
@@ -267,6 +270,7 @@ public class UIManager implements ProjectWindow {
         BlockTheme.removeThemeChangeListener(themeListener);
         // The AI tools are child processes, and the MCP endpoint holds a port and serves this window's project;
         // the next window starts its own.
+        assistantWindow.dispose();
         assistantPane.dispose();
         if (identityCluster != null) {
             identityCluster.dispose();
@@ -392,6 +396,7 @@ public class UIManager implements ProjectWindow {
             if (reportsPanel != null) reportsPanel.showRuns();
             selectBottomTab(BottomTab.REPORTS);
         });
+        toolbarManager.setOnAssistant(() -> assistantWindow.show(primaryStage));
 
         // --- 1. Top Bar Construction (edit controls left, project actions centered, run controls right) ---
         // A BorderPane, not a FlowPane. Only the *center* group wraps; left and right are pinned to their
@@ -610,7 +615,6 @@ public class UIManager implements ProjectWindow {
         bottomTabs.put(BottomTab.DEBUG, bottomTab(BottomTab.DEBUG, debugPanel.node()));
         bottomTabs.put(BottomTab.REVIEW, bottomTab(BottomTab.REVIEW, reviewPanel.node()));
         bottomTabs.put(BottomTab.VERSIONS, bottomTab(BottomTab.VERSIONS, versionsPane.node()));
-        bottomTabs.put(BottomTab.ASSISTANT, bottomTab(BottomTab.ASSISTANT, assistantPane.node()));
 
         bottomTabPane = new TabPane();
         bottomTabPane.getTabs().addAll(bottomTabs.values());
@@ -620,12 +624,10 @@ public class UIManager implements ProjectWindow {
         Tab reviewTab = bottomTabs.get(BottomTab.REVIEW);
         // The first shell starts when the Terminal tab is first shown, never at open.
         Tab terminalTab = bottomTabs.get(BottomTab.TERMINAL);
-        Tab assistantTab = bottomTabs.get(BottomTab.ASSISTANT);
         bottomTabPane.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             if (now == versionsTab) versionsPane.refresh();
             if (now == reviewTab && reviewPanel != null) reviewPanel.refresh();
             if (now == terminalTab) terminalPane.activate();
-            if (now == assistantTab) assistantPane.activate();
         });
 
         // --- 5. Layout Assembly ---
