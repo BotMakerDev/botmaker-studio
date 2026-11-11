@@ -401,8 +401,9 @@ public class BotMakerStudio extends Application {
                     // Reading the sources belongs here rather than in finishOpen: it is a disk walk plus one
                     // readString per file, and on FX it ran with the main window already shown — a project with a
                     // few dozen activities froze it for as long as the disk took.
-                    // A Claude Code session started in the bot's folder edits it only through Studio's tools.
-                    BotGuard.ensure(projectDir);
+                    // An AI tool started in the bot's folder (Claude Code, opencode, Codex) edits it only through
+                    // the MCP tools.
+                    BotGuard.ensure(projectDir).forEach(g -> g.warning(projectDir).ifPresent(System.err::println));
                     progress.step(OpenStep.FILES);
                     return new OpenedProject(project, project.getCodeEditorService().readProjectSources());
                 } catch (RuntimeException e) {
