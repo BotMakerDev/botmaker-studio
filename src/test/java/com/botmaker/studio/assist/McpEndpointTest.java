@@ -833,7 +833,7 @@ class McpEndpointTest {
         assertTrue(Files.readString(file).contains("Bearer " + config.token()));
         assertTrue(command.startsWith("claude --mcp-config " + file + " --allowedTools mcp__botmaker-studio"),
                 command);
-        assertTrue(command.contains("--disallowedTools Edit MultiEdit Write NotebookEdit \"Bash(sed -i *)\""),
+        assertTrue(command.contains("--disallowedTools Edit Write NotebookEdit \"Bash(sed -i *)\""),
                 command);
         assertTrue(command.contains("--append-system-prompt \"You are running inside BotMaker Studio."), command);
     }
