@@ -10,6 +10,11 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+- Built against botmaker-cli 0.12.1 and botmaker-core 0.1.1: the catalog's check fills a bot's `params/` from
+  `starting-params/` before it compiles the tag, so a published bot with its own `@Param` group is listed.
+
 ## [1.12.1] — 2026-11-10
 
 - The Linux installers and AppImage are built and signed again, so the release has its downloads and the in-app
