@@ -30,6 +30,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   setting of yours that differs is kept and named on Studio's console.
 - The Assistant window's opencode session keeps its shell denied even where the bot's `opencode.json` says ask.
 - The same guarded session runs without Studio: `botmaker ai <tool>` in the bot's folder.
+- Built against botmaker-cli 0.12.1 and botmaker-core 0.1.1: the catalog's check fills a bot's `params/` from
+  `starting-params/` before it compiles the tag, so a published bot with its own `@Param` group is listed.
 
 ## [1.12.1] — 2026-11-10
 
