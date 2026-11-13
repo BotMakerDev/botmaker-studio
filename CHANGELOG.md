@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **A plugin's folder of this PC is not a project** (2026-11-13): *Open folder…* on a folder under BotMaker's
+  `plugins` folder of this PC says "A plugin's folder" and opens nothing, and My bots never lists one; that
+  plugin's own windows (Emulators, Accounts) show and change what it keeps there.
 - **The assistant's `ui` tool never shows an email** (2026-11-13), so it can drive the Emulators and Accounts windows:
   every email in its answers reads as `account-N@masked`, the same N for the same email; a find matches only what
   a read shows, placeholders and all, and text typed with a placeholder types the real email. `look` refuses a
