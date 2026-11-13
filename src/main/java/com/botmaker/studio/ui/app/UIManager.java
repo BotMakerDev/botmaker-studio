@@ -128,6 +128,10 @@ public class UIManager implements ProjectWindow {
     private IdentityCluster identityCluster;
 
     private final VersionsPane versionsPane;
+    /** The Versions window, ⟲ Versions and Project ▸ History; it shows {@link #versionsPane}. */
+    private final ToolWindow versionsWindow;
+    /** The Reports window, ▤ Reports; it shows each scene's {@link #reportsPanel}. */
+    private final ToolWindow reportsWindow;
 
     /**
      * The toolbar, kept so its centre group can be rebuilt when the project's plugins change.
@@ -234,13 +238,30 @@ public class UIManager implements ProjectWindow {
                 menuBarManager, toolbarManager,
                 () -> ProjectRecoveryAction.recover(ctx, fileExplorerManager::refreshTree));
         this.actions.wire();
-        this.versionsPane = new VersionsPane(primaryStage, ctx, actions.gitHubAuth(), actions.gitHubClient());
-        menuBarManager.setOnShowHistory(() -> selectBottomTab(BottomTab.VERSIONS));
+        // Versions and Reports were bottom tabs until 2026-11-13: a window each now. The versions are read from the
+        // project rather than held, so each show reads them again, and so does the window coming back into focus
+        // (a version the assistant saved meanwhile); Reports reads what it shows again, runs or issues.
+        this.versionsWindow = new ToolWindow("Versions", config.projectName(), 1000, 700);
+        // Its dialogs and sheets are over its own window, which may be on another screen.
+        this.versionsPane = new VersionsPane(versionsWindow.stage(), ctx, actions.gitHubAuth(), actions.gitHubClient());
+        versionsWindow.content(versionsPane.node());
+        versionsWindow.onShow(versionsPane::refresh);
+        versionsWindow.stage().focusedProperty().addListener((o, was, now) -> {
+            if (now) versionsPane.refresh();
+        });
+        this.reportsWindow = new ToolWindow("Reports", config.projectName(), 1100, 720);
+        reportsWindow.onShow(() -> {
+            if (reportsPanel != null) reportsPanel.refresh();
+        });
+        menuBarManager.setOnShowHistory(() -> versionsWindow.show(primaryStage));
         // Dev's Open in terminal is the Terminal tab, whose first shell starts in the project directory.
-        versionsPane.setOnOpenTerminal(() -> selectBottomTab(BottomTab.TERMINAL));
-        // Project ▸ Publish… is the tab's publish sheet (39 §8), not a window of its own.
+        versionsPane.setOnOpenTerminal(() -> {
+            selectBottomTab(BottomTab.TERMINAL);
+            primaryStage.toFront();
+        });
+        // Project ▸ Publish… is the Versions window's publish sheet (39 §8).
         actions.setOnPublish(() -> {
-            selectBottomTab(BottomTab.VERSIONS);
+            versionsWindow.show(primaryStage);
             versionsPane.openPublish();
         });
 
@@ -279,6 +300,8 @@ public class UIManager implements ProjectWindow {
         // the next window starts its own.
         assistantWindow.dispose();
         assistantPane.dispose();
+        versionsWindow.dispose();
+        reportsWindow.dispose();
         if (identityCluster != null) {
             identityCluster.dispose();
             identityCluster = null;
@@ -399,10 +422,8 @@ public class UIManager implements ProjectWindow {
         menuBarManager.setOnPreviewAsUser(() -> { if (onPreviewAsUser != null) onPreviewAsUser.run(); });
         // The toolbar's 👁 is the same action, not a lookalike — see ToolbarManager for what it replaced.
         toolbarManager.setOnPreviewAsUser(() -> { if (onPreviewAsUser != null) onPreviewAsUser.run(); });
-        toolbarManager.setOnReports(() -> {
-            if (reportsPanel != null) reportsPanel.showRuns();
-            selectBottomTab(BottomTab.REPORTS);
-        });
+        toolbarManager.setOnReports(() -> reportsWindow.show(primaryStage));
+        toolbarManager.setOnVersions(() -> versionsWindow.show(primaryStage));
         toolbarManager.setOnAssistant(() -> assistantWindow.show(primaryStage));
 
         // --- 1. Top Bar Construction (edit controls left, project actions centered, run controls right) ---
@@ -542,7 +563,12 @@ public class UIManager implements ProjectWindow {
         tracePanel = new TracePanel(eventBus, config.projectPath(), config.sourceRoot(), projectSettingsService, navigation::revealLine);
         runConsole.trace(tracePanel);
         if (reportsPanel != null) reportsPanel.dispose();
-        reportsPanel = new ReportsPanel(eventBus, config.projectPath(), config.sourceRoot(), navigation::revealLine);
+        // A problem's line is revealed in the project's window, brought in front of the Reports window.
+        reportsPanel = new ReportsPanel(eventBus, config.projectPath(), config.sourceRoot(), (file, line) -> {
+            primaryStage.toFront();
+            navigation.revealLine(file, line);
+        });
+        reportsWindow.content(reportsPanel.node());
         // The same pause, on the canvas: a value chip beside each live variable. It keeps itself subscribed.
         new LiveValues(eventBus, state);
         navigation.wire(menuBarManager, binding -> {
@@ -629,22 +655,15 @@ public class UIManager implements ProjectWindow {
 
         Map<BottomTab, Node> tabContents = new EnumMap<>(BottomTab.class);
         tabContents.put(BottomTab.RUN, runConsole.node());
-        tabContents.put(BottomTab.REPORTS, reportsPanel.node());
         tabContents.put(BottomTab.TERMINAL, terminalPane.node());
         tabContents.put(BottomTab.USAGES, usagesPanel.node());
         tabContents.put(BottomTab.DEBUG, debugPanel.node());
-        tabContents.put(BottomTab.VERSIONS, versionsPane.node());
         BottomTabs tabs = new BottomTabs(tabContents);
         bottomTabs = tabs;
         TabPane bottomTabPane = tabs.node();
-        // Keep the versions fresh whenever the user opens their tab: they are read from the project rather than
-        // held, which is why opening is the right moment to re-read. The review list does the same on the status
-        // bar's open.
-        Tab versionsTab = tabs.tabs().get(BottomTab.VERSIONS);
         // The first shell starts when the Terminal tab is first shown, never at open.
         Tab terminalTab = tabs.tabs().get(BottomTab.TERMINAL);
         bottomTabPane.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
-            if (now == versionsTab) versionsPane.refresh();
             if (now == terminalTab) terminalPane.activate();
         });
         // Terminal: View ▸ Terminal, and always in dev mode, which a settings change may turn on or off.

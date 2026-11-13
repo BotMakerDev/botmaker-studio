@@ -65,7 +65,7 @@ class ProjectUpgradeFeedbackTest {
 
         assertTrue(summary.startsWith("Removed Basics from this project."), summary);
         assertTrue(summary.contains("5 uses migrated in 2 files"), summary);
-        assertTrue(summary.contains("Versions tab"), summary);
+        assertTrue(summary.contains("Versions window"), summary);
     }
 
     @Test

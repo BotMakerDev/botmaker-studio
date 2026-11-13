@@ -784,7 +784,7 @@ public final class InstalledPluginsTab {
         String left = leftForYou.isEmpty() ? "" : " " + leftForYou.size()
                 + (leftForYou.size() == 1 ? " thing was" : " things were") + " left for you to finish: "
                 + String.join(" ", leftForYou);
-        String back = " The previous state is one restore away in the Versions tab.";
+        String back = " The previous state is one restore away in the Versions window.";
         if (filesRewritten == 0) {
             return head + (deleted.isBlank() ? " This bot called nothing in it, so only the pom changed."
                     : " Nothing else in this bot named it.") + left + back;

@@ -37,13 +37,14 @@ class BottomTabsTest extends FxHeadlessTest {
 
     @Test
     void onlyTheAlwaysTabsAreThereAtOpen() {
-        assertEquals(List.of(BottomTab.RUN, BottomTab.REPORTS, BottomTab.VERSIONS), shown());
+        assertEquals(List.of(BottomTab.RUN), shown());
     }
 
     @Test
     void debugComesWithItsSessionAndGoesWithIt() {
         fx(() -> tabs.show(BottomTab.DEBUG));
-        assertEquals(List.of(BottomTab.RUN, BottomTab.REPORTS, BottomTab.DEBUG, BottomTab.VERSIONS), shown());
+        fx(() -> tabs.show(BottomTab.TERMINAL));
+        assertEquals(List.of(BottomTab.RUN, BottomTab.TERMINAL, BottomTab.DEBUG), shown(), "in the enum's order");
         fx(() -> tabs.select(BottomTab.DEBUG));
         fx(() -> tabs.hide(BottomTab.DEBUG));
         assertFalse(fx(() -> tabs.isShown(BottomTab.DEBUG)));
@@ -76,7 +77,7 @@ class BottomTabsTest extends FxHeadlessTest {
     void theTerminalFollowsTheMenuItemBothWays() {
         fx(() -> tabs.terminalProperty().set(true));
         assertEquals(BottomTab.TERMINAL, fx(tabs::selected), "ticked from the menu, it comes forward");
-        assertEquals(List.of(BottomTab.RUN, BottomTab.REPORTS, BottomTab.TERMINAL, BottomTab.VERSIONS), shown());
+        assertEquals(List.of(BottomTab.RUN, BottomTab.TERMINAL), shown());
         fx(() -> tabs.node().getTabs().remove(tabs.tabs().get(BottomTab.TERMINAL)));
         assertFalse(fx(() -> tabs.terminalProperty().get()), "the tab's ✕ unticks View ▸ Terminal");
     }
@@ -96,13 +97,13 @@ class BottomTabsTest extends FxHeadlessTest {
 
     @Test
     void aSavedLayoutOnATabThatIsNotThereOpensOnRun() {
-        fx(() -> tabs.select(BottomTab.VERSIONS));
+        fx(() -> tabs.select(BottomTab.USAGES));
         fx(() -> tabs.restore(BottomTab.DEBUG));
         assertEquals(BottomTab.RUN, fx(tabs::selected));
         fx(() -> tabs.restore(null));
         assertEquals(BottomTab.RUN, fx(tabs::selected));
-        fx(() -> tabs.restore(BottomTab.REPORTS));
-        assertEquals(BottomTab.REPORTS, fx(tabs::selected));
+        fx(() -> tabs.restore(BottomTab.USAGES));
+        assertEquals(BottomTab.USAGES, fx(tabs::selected), "one that is there is selected");
     }
 
     private List<BottomTab> shown() {

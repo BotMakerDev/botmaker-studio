@@ -16,8 +16,8 @@ enum BottomTab {
     RUN("Run", true, false),
     // TRACE("Trace") stood here from 2026-09-29 until 2026-11-13 and is the Run tab's Trace chip now (RunConsole.View);
     // a layout saved on it opens on the default tab, Run.
-    /** A bot's problems, from its runs here or its runners' issues, charted — see {@code ReportsPanel} (2026-11-03). */
-    REPORTS("Reports", true, false),
+    // REPORTS("Reports") stood here from 2026-11-03 until 2026-11-13 and is the Reports window now (ToolWindow); a
+    // layout saved on it opens on the default tab.
     /**
      * Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}.
      * From View ▸ Terminal, and always in dev mode.
@@ -28,12 +28,9 @@ enum BottomTab {
     /** Where the selected block's name is used, across the bot — see {@link UsagesPanel} (2026-09-26). From Find Usages. */
     USAGES("Usages", false, true),
     /** The paused bot's call stack and variables — see {@link DebugPanel} (2026-09-26). While a debug session lasts. */
-    DEBUG("Debug", false, false),
-    /**
-     * The project's versions, and sharing them — see {@link com.botmaker.studio.ui.app.versions.VersionsPane}.
-     * Keyed {@code VCS} until 2026-09-25; a layout saved under that key opens on the default tab.
-     */
-    VERSIONS("Versions", true, false);
+    DEBUG("Debug", false, false);
+    // VERSIONS("Versions"), keyed VCS until 2026-09-25, stood here until 2026-11-13 and is the Versions window now
+    // (ToolWindow); a layout saved on it opens on the default tab.
     // ASSISTANT("Assistant") stood here until 2026-11-11 and is the Assistant window now (AssistantWindow); a layout
     // saved on it opens on the default tab.
 

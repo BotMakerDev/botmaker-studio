@@ -12,7 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
-- **Tabs that come and go** (2026-11-13): the bottom window opens with Run, Reports and Versions. *Debug* is there
+- **Versions and Reports windows** (2026-11-13): each is a window of its own, one per project, from the toolbar's
+  ⟲ Versions and ▤ Reports, titled "Versions — <bot>" and "Reports — <bot>". Project ▸ Versions and Publish… open
+  the Versions window; each show reads the pane again, and both close with the project. A window saved on either
+  tab opens on Run.
+- **Tabs that come and go** (2026-11-13): the bottom window opens with Run (Reports and Versions until they became
+  windows, the same day). *Debug* is there
   while a debug session lasts, *Usages* comes with Find Usages and has its ✕, and *Terminal* comes from the new
   View ▸ Terminal (ticked while it is there; its ✕ unticks it) — always there, without its ✕, in dev mode. A window
   saved on a tab that is not there at open opens on Run.

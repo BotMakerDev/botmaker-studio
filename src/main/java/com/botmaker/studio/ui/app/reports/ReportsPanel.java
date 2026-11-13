@@ -195,7 +195,12 @@ public final class ReportsPanel {
         return root;
     }
 
-    /** Shows this computer's runs, read again (the toolbar's Reports button). */
+    /** Reads what is shown again, runs or issues, as the user left it (the Reports window coming forward). */
+    public void refresh() {
+        load();
+    }
+
+    /** Shows this computer's runs, read again. */
     public void showRuns() {
         if (source.getValue() == Source.RUNS) load();
         else source.setValue(Source.RUNS); // its action loads

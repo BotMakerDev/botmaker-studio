@@ -932,7 +932,7 @@ public class MenuBarManager {
     }
 
     /**
-     * Sets the callback for when "Versions" is clicked (it selects the Versions tab)
+     * Sets the callback for when "Versions" is clicked (it shows the Versions window)
      */
     public void setOnShowHistory(Runnable callback) {
         this.onShowHistory = callback;

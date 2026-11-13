@@ -19,19 +19,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ToolbarManagerTest {
 
     @Test
-    void theStudioRowHasReports() {
+    void theStudioRowHasReportsAndVersions() {
         ToolbarManager toolbar = new ToolbarManager(new EventBus(false), null);
-        AtomicInteger shown = new AtomicInteger();
-        toolbar.setOnReports(shown::incrementAndGet);
+        AtomicInteger reportsShown = new AtomicInteger();
+        AtomicInteger versionsShown = new AtomicInteger();
+        toolbar.setOnReports(reportsShown::incrementAndGet);
+        toolbar.setOnVersions(versionsShown::incrementAndGet);
 
         List<ToolbarItem> items = toolbar.studioItems();
         ToolbarItem reports = items.stream().filter(i -> i.id().equals("reports")).findFirst().orElseThrow();
+        ToolbarItem versions = items.stream().filter(i -> i.id().equals("versions")).findFirst().orElseThrow();
 
-        assertEquals("📊 Reports", reports.label().get());
+        assertEquals("▤ Reports", reports.label().get());
+        assertEquals("⟲ Versions", versions.label().get());
         assertEquals(EnabledWhen.PROJECT_OPEN, reports.enabledWhen());
-        assertEquals(List.of("parameters", "reports"), items.stream().limit(2).map(ToolbarItem::id).toList());
+        assertEquals(EnabledWhen.PROJECT_OPEN, versions.enabledWhen());
+        assertEquals(List.of("parameters", "reports", "versions"),
+                items.stream().limit(3).map(ToolbarItem::id).toList());
         reports.onClick().accept(null);
-        assertEquals(1, shown.get());
+        versions.onClick().accept(null);
+        assertEquals(1, reportsShown.get());
+        assertEquals(1, versionsShown.get());
     }
 
     /** Project Settings went on 2026-11-13, and the overlay editor shows only in a dev-mode project. */

@@ -53,8 +53,10 @@ public class ToolbarManager {
 
     /** Opens the Parameters dialog; the same action the Project menu fires. */
     private Runnable onParameters;
-    /** Shows the Reports tab, read again; wired by {@link UIManager}. */
+    /** Shows the Reports window, read again; wired by {@link UIManager}. */
     private Runnable onReports;
+    /** Shows the Versions window, read again; wired by {@link UIManager}. */
+    private Runnable onVersions;
     /** Shows the Assistant window; wired by {@link UIManager}. */
     private Runnable onAssistant;
 
@@ -159,6 +161,11 @@ public class ToolbarManager {
         this.onReports = callback;
     }
 
+    /** Sets the callback invoked when the toolbar's Versions button is clicked. */
+    public void setOnVersions(Runnable callback) {
+        this.onVersions = callback;
+    }
+
     /** Sets the callback invoked when the toolbar's Assistant button is clicked. */
     public void setOnAssistant(Runnable callback) {
         this.onAssistant = callback;
@@ -247,12 +254,20 @@ public class ToolbarManager {
                 .onBar(20)
                 .onPress(() -> c -> run(onParameters)));
 
-        // The bottom Reports tab, read again: a run's problems were one tab among six, found only by looking.
-        own.add(ToolbarItem.id("reports").label("📊 Reports")
+        // The Reports window, read again: a run's problems were one bottom tab among six, found only by looking,
+        // and a window of their own since 2026-11-13.
+        own.add(ToolbarItem.id("reports").label("▤ Reports")
                 .tooltip("The bot's runs: logs, problems and charts")
                 .onBar(25)
                 .enabledWhen(EnabledWhen.PROJECT_OPEN)
                 .onPress(() -> c -> run(onReports)));
+
+        // The Versions window, a bottom tab until 2026-11-13: the bot's history, sync and publishing.
+        own.add(ToolbarItem.id("versions").label("⟲ Versions")
+                .tooltip("The bot's versions: save one, go back to one, sync and publish")
+                .onBar(26)
+                .enabledWhen(EnabledWhen.PROJECT_OPEN)
+                .onPress(() -> c -> run(onVersions)));
 
         // 🎮 Pilot stood here until 2026-08-30 and is the SDK plugin's item now, placed by the same merge as
         // any other plugin's. It is the case this surface was added for: a whole feature behind one button,

@@ -150,7 +150,7 @@ final class StudioActions {
         // Get More Bots goes home, to its Get more bots section: the shell's, so UIManager wires it (2026-10-25).
         menuBar.setOnPublishGallery(this::openPublish);
         menuBar.setOnExportBmk(this::exportBmk);
-        // Project History selects the Versions tab; UIManager wires it, since the tab is the window's.
+        // Project ▸ Versions shows the Versions window; UIManager wires it, since that window is the project's.
         menuBar.setProjectRepoUrl(BotSource.read(config.projectPath())
                 .map(s -> "https://github.com/" + s.slug()).orElse(null));
 
@@ -164,8 +164,8 @@ final class StudioActions {
     GitHubClient gitHubClient() { return gitHubClient; }
 
     /**
-     * Where <i>Project ▸ Publish…</i> goes: the Versions tab's publish sheet, which is the window's, so
-     * {@link UIManager} sets it once the tab exists.
+     * Where <i>Project ▸ Publish…</i> goes: the Versions window's publish sheet, which is the project's, so
+     * {@link UIManager} sets it once the window exists.
      */
     void setOnPublish(Runnable onPublish) {
         this.onPublish = onPublish;

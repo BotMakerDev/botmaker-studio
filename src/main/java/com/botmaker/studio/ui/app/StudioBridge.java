@@ -588,7 +588,7 @@ final class StudioBridge implements StudioDriver {
         ProjectVcs vcs = new ProjectVcs(dir);
         if (vcs.merging()) {
             throw new IllegalArgumentException("An update is in progress; the user finishes or cancels it in the "
-                    + "Versions tab first.");
+                    + "Versions window first.");
         }
         List<ProjectVcs.CommitInfo> matching = wanted.length() < 4 ? List.of()
                 : history().stream().filter(c -> c.sha().startsWith(wanted)).toList();
@@ -641,7 +641,7 @@ final class StudioBridge implements StudioDriver {
         Path dir = ctx.config().projectPath();
         if (new ProjectVcs(dir).sharedRepository()) {
             throw new IllegalArgumentException("This bot's history is another repository's too, so the assistant "
-                    + "saves and restores no version of it; the user does that in the Versions tab.");
+                    + "saves and restores no version of it; the user does that in the Versions window.");
         }
         return dir;
     }

@@ -570,7 +570,7 @@ public final class VersionsPane {
     // Publishing (39 §8)
     // -------------------------------------------------------------------------
 
-    /** Opens the publish sheet on the tab's right — <i>Publish…</i> here, and <i>Project ▸ Publish…</i>. */
+    /** Opens the publish sheet on the window's right — <i>Publish…</i> here, and <i>Project ▸ Publish…</i>. */
     public void openPublish() {
         if (publishSheet == null) {
             publishSheet = new PublishSheet(owner, ctx.config(), auth, client,
