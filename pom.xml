@@ -548,7 +548,9 @@
                         --add-exports javafx.graphics/com.sun.glass.ui.monocle=ALL-UNNAMED
                         --add-opens javafx.graphics/com.sun.glass.ui=ALL-UNNAMED
                         --add-opens javafx.graphics/com.sun.glass.ui.monocle=ALL-UNNAMED
-                        --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED</argLine>
+                        --add-opens javafx.graphics/com.sun.javafx.application=ALL-UNNAMED
+                        --add-exports javafx.graphics/com.sun.javafx.util=ALL-UNNAMED
+                        --add-exports javafx.base/com.sun.javafx.logging=ALL-UNNAMED</argLine>
                     <!-- Run the JavaFX UI tests headless via Monocle: no X server / display needed.
                          These are read at FX Toolkit init, so they must be set here (before the first
                          ApplicationTest boots the FX runtime). FxHeadlessTest re-applies them in a

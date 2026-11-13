@@ -5,8 +5,10 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.ButtonBase;
 import javafx.scene.control.Labeled;
+import javafx.scene.control.Menu;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Region;
 
@@ -96,7 +98,7 @@ public class OverflowBar extends Region {
     @Override
     protected double computePrefWidth(double height) {
         Insets in = getInsets();
-        return in.getLeft() + rowWidth(items) + in.getRight();
+        return in.getLeft() + rowWidth(laidOut()) + in.getRight();
     }
 
     /**
@@ -147,18 +149,27 @@ public class OverflowBar extends Region {
         return item instanceof Region region ? Math.min(pref, region.maxWidth(-1)) : pref;
     }
 
-    /** The rows and the overflow at {@code width}, as nodes — the arithmetic is {@link ToolbarPacking}. */
+    /**
+     * The rows and the overflow at {@code width}, as nodes — the arithmetic is {@link ToolbarPacking}. An item
+     * that is not managed (the toolbar's Step and Continue outside a debug session) takes no room and is in
+     * neither.
+     */
     private Packing packFor(double width) {
-        double[] widths = new double[items.size()];
-        for (int i = 0; i < widths.length; i++) widths[i] = itemWidth(items.get(i));
+        List<Node> laid = laidOut();
+        double[] widths = new double[laid.size()];
+        for (int i = 0; i < widths.length; i++) widths[i] = itemWidth(laid.get(i));
         ToolbarPacking.Packing packing = ToolbarPacking.pack(widths, width, hgap, maxRows, more.prefWidth(-1));
         List<List<Node>> rows = new ArrayList<>();
-        for (List<Integer> row : packing.rows()) rows.add(row.stream().map(items::get).toList());
-        return new Packing(rows, packing.overflow().stream().map(items::get).toList());
+        for (List<Integer> row : packing.rows()) rows.add(row.stream().map(laid::get).toList());
+        return new Packing(rows, packing.overflow().stream().map(laid::get).toList());
+    }
+
+    private List<Node> laidOut() {
+        return items.stream().filter(Node::isManaged).toList();
     }
 
     private void applyOverflow(List<Node> overflow) {
-        for (Node item : items) item.setVisible(!overflow.contains(item));
+        for (Node item : items) item.setVisible(item.isManaged() && !overflow.contains(item));
         more.setVisible(!overflow.isEmpty());
         if (overflow.equals(overflowed)) return;
         overflowed = List.copyOf(overflow);
@@ -168,7 +179,19 @@ public class OverflowBar extends Region {
     /** The menu stand-in for a control that didn't fit. See the class note for why it is derived, not declared. */
     private static MenuItem menuItemFor(Node node) {
         String text = node instanceof Labeled labeled ? labeled.getText() : node.getId();
-        MenuItem item = new MenuItem(text == null || text.isBlank() ? "…" : text);
+        String label = text == null || text.isBlank() ? "…" : text;
+        if (node instanceof SplitMenuButton split) {
+            // The Run split button: its menu comes along whole, so Debug, Follow and Compile stay reachable.
+            Menu menu = new Menu(label);
+            for (MenuItem choice : split.getItems()) {
+                MenuItem copy = new MenuItem(choice.getText());
+                copy.setOnAction(e -> choice.fire());
+                menu.getItems().add(copy);
+            }
+            menu.disableProperty().bind(split.disabledProperty());
+            return menu;
+        }
+        MenuItem item = new MenuItem(label);
         if (node instanceof ButtonBase button) {
             item.setOnAction(e -> button.fire());
             item.disableProperty().bind(button.disabledProperty());

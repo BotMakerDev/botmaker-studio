@@ -10,6 +10,17 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+- **Run is one split button** (2026-11-13): its ▾ menu holds ▶ Run, 🐞 Debug, 👁 Follow and ⚙ Compile, which were
+  four buttons, and pressing the button repeats the last one chosen, kept per project. ⤵ Step and ⏩ Continue show
+  only while debugging.
+- **Project ▸ Bot Info…** (2026-11-13) edits the bot's name, description and icon. The Project Settings dialog and
+  its ⚙ toolbar button are gone.
+- **The overlay editor is hidden** (2026-11-13): ⧉ Overlay shows only in a dev-mode project, and Getting Started no
+  longer has its step.
+- Studio's JavaFX tests start again on JDK 26: surefire exports the two JavaFX packages TestFX's Monocle reads.
+
 ## [1.12.2] — 2026-11-13
 
 - **A plugin's folder of this PC is not a project** (2026-11-13): *Open folder…* on a folder under BotMaker's

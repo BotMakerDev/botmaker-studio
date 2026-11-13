@@ -79,14 +79,15 @@ final class WorkspaceLayoutStore {
                 .filter(e -> e.getValue() == selected)
                 .map(e -> e.getKey().key())
                 .findFirst().orElse(null);
-        // The Versions tab saves its own divider as it moves; keep whatever it last wrote.
+        // The Versions tab saves its own divider as it moves, and the toolbar its Run choice; keep what they wrote.
         WorkspaceLayout saved = settings.current().workspaceLayout();
         Path shown = centerTabs.shownJavaFile();
         return new WorkspaceLayout(dividerOf(explorerSplit), dividerOf(bottomSplit), tabKey,
                 saved == null ? null : saved.publishDivider(),
                 centerTabs.javaFiles().stream().filter(file -> file.startsWith(projectDir)).map(this::relative)
                         .toList(),
-                shown == null ? null : relative(shown));
+                shown == null ? null : relative(shown),
+                saved == null ? null : saved.runChoice());
     }
 
     /** A saved {@code relative} path resolved in the project, or null when it leaves it or is not a Java file. */

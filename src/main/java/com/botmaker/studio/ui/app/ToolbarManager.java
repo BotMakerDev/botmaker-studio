@@ -10,6 +10,7 @@ import com.botmaker.core.events.EventBus;
 import com.botmaker.core.plugin.HostActionContext;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.core.plugin.PluginHost.PluginBar;
+import com.botmaker.core.project.StudioProjectSettings;
 import com.botmaker.studio.services.ProjectSettingsService;
 import com.botmaker.core.run.RunEntries;
 import javafx.geometry.HPos;
@@ -17,6 +18,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -40,8 +43,11 @@ public class ToolbarManager {
     private final ProjectSettingsService settings;
     // Controls
     private Button undoButton, redoButton;
-    private Button runButton, debugButton, followButton, unifiedStopButton;
+    private SplitMenuButton runButton;
+    private Button unifiedStopButton;
     private Button stepOverButton, continueButton;
+    /** The Run split button's choice while no project keeps it. */
+    private RunChoice lastRunChoice = RunChoice.RUN;
     /** The plugin tabs, most recent first, while no project is open to keep them. */
     private List<String> sessionTabs = List.of();
 
@@ -61,6 +67,8 @@ public class ToolbarManager {
 
     private enum AppState { IDLE, RUNNING, DEBUGGING }
     private AppState currentAppState = AppState.IDLE;
+    /** Whether the debug session is paused, so Step and Continue can be pressed; kept across a rebuild. */
+    private boolean debugPaused;
 
     public ToolbarManager(EventBus eventBus, ProjectSettingsService settings) {
         this.eventBus = eventBus;
@@ -71,7 +79,10 @@ public class ToolbarManager {
     private void setupEventHandlers() {
         // Every item re-reads itself on a settings change: a supplier is a field read by contract, so
         // refreshing the bar costs less than knowing which button a settings change touched.
-        eventBus.subscribe(CoreApplicationEvents.SettingsChangedEvent.class, e -> refreshItems(), true);
+        eventBus.subscribe(CoreApplicationEvents.SettingsChangedEvent.class, e -> {
+            refreshItems();
+            showRunChoice();
+        }, true);
         // A plugin's write to the bot's Java — its game or capture source is a @Param now — relabels the bar too.
         eventBus.subscribe(CoreApplicationEvents.PluginWroteEvent.class, e -> refreshItems(), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> setAppState(AppState.RUNNING), true);
@@ -103,8 +114,8 @@ public class ToolbarManager {
     }
 
     /**
-     * Creates the left-side group: Undo and Redo, and nothing else. Compile used to live here and now sits with
-     * Run in {@link #createExecutionGroup()} — it is the first step of the same "make this bot go" sequence, and
+     * Creates the left-side group: Undo and Redo, and nothing else. Compile used to live here and now sits in
+     * Run's menu in {@link #createExecutionGroup()} — it is the first step of the same "make this bot go" sequence, and
      * keeping it here made the left group wide enough to matter when the window narrows. Undo/Redo stay because
      * they're two glyph-sized buttons that edit code rather than run it.
      */
@@ -438,8 +449,11 @@ public class ToolbarManager {
     }
 
     /**
-     * Creates the right-side group: Compile, Run, Debug, Follow, Stop, Step, Continue — the whole "make this bot
-     * go" sequence in the order you'd use it.
+     * Creates the right-side group: the Run split button, Stop, and Step and Continue while debugging.
+     *
+     * <p>One split button since 2026-11-13 (spec {@code 2026-11-13-studio-window-cleanup}): Compile, Run, Debug
+     * and Follow were four buttons, and its menu holds them now; its face repeats the last {@link RunChoice},
+     * which the project's workspace layout keeps. Step and Continue are not laid out outside a debug session.
      *
      * <p>An {@link OverflowBar}, like the rows of {@link #createCentre()}, and for the same reason turned inside out:
      * as an {@code HBox} this cluster held one line at any width, so a narrow window took the space out of the
@@ -451,22 +465,18 @@ public class ToolbarManager {
      * width, so a group left to compute its own would report one row's worth and never be squeezed.
      */
     public OverflowBar createExecutionGroup() {
-        Button compileButton = new Button("⚙ Compile");
-        compileButton.getStyleClass().add("toolbar-btn");
-        compileButton.setOnAction(e -> eventBus.publish(new CoreApplicationEvents.CompilationRequestedEvent()));
-
-        runButton = new Button("▶ Run");
+        runButton = new SplitMenuButton();
         runButton.getStyleClass().addAll("toolbar-btn", "btn-run");
-        runButton.setOnAction(e -> eventBus.publish(new CoreApplicationEvents.ExecutionRequestedEvent()));
-
-        debugButton = new Button("🐞 Debug");
-        debugButton.getStyleClass().addAll("toolbar-btn", "btn-debug");
-        debugButton.setOnAction(e -> eventBus.publish(new CoreApplicationEvents.DebugStartRequestedEvent()));
-
-        followButton = new Button("👁 Follow");
-        followButton.getStyleClass().addAll("toolbar-btn", "btn-follow");
-        followButton.setTooltip(new Tooltip("Run and highlight each executing block live (never pauses at breakpoints)"));
-        followButton.setOnAction(e -> eventBus.publish(new CoreApplicationEvents.FollowStartRequestedEvent()));
+        runButton.setOnAction(e -> eventBus.publish(runChoice().request()));
+        for (RunChoice choice : RunChoice.values()) {
+            MenuItem item = new MenuItem(choice.displayName());
+            item.setOnAction(e -> {
+                chooseRun(choice);
+                eventBus.publish(choice.request());
+            });
+            runButton.getItems().add(item);
+        }
+        showRunChoice();
 
         unifiedStopButton = new Button("⏹ Stop");
         unifiedStopButton.getStyleClass().addAll("toolbar-btn", "btn-stop");
@@ -488,41 +498,64 @@ public class ToolbarManager {
         continueButton.setDisable(true);
         continueButton.setOnAction(e -> eventBus.publish(new CoreApplicationEvents.DebugContinueRequestedEvent()));
 
+        updateToolbarState();
         return new OverflowBar(5, 5, TOOLBAR_MAX_ROWS, HPos.RIGHT,
-                compileButton, runButton, debugButton, followButton, unifiedStopButton, stepOverButton, continueButton);
+                runButton, unifiedStopButton, stepOverButton, continueButton);
+    }
+
+    /** The Run split button's choice, as the project last saved it; Run when it never chose. */
+    private RunChoice runChoice() {
+        if (settings == null || settings.projectConfig() == null) return lastRunChoice;
+        StudioProjectSettings.WorkspaceLayout layout = settings.current().workspaceLayout();
+        return RunChoice.fromId(layout == null ? null : layout.runChoice());
+    }
+
+    /** Remembers {@code choice} as the button's face, in the project when one is open. */
+    private void chooseRun(RunChoice choice) {
+        lastRunChoice = choice;
+        if (settings != null && settings.projectConfig() != null) {
+            StudioProjectSettings current = settings.current();
+            StudioProjectSettings.WorkspaceLayout layout = current.workspaceLayout() == null
+                    ? new StudioProjectSettings.WorkspaceLayout(null, null, null) : current.workspaceLayout();
+            settings.saveNow(current.withWorkspaceLayout(layout.withRunChoice(choice.id())));
+        }
+        showRunChoice();
+    }
+
+    private void showRunChoice() {
+        if (runButton == null) return;
+        RunChoice choice = runChoice();
+        // Most settings changes are not this one; the face is redrawn only when it changes.
+        if (choice.displayName().equals(runButton.getText())) return;
+        runButton.setText(choice.displayName());
+        runButton.setTooltip(new Tooltip(choice.tooltip() + " — ▾ for Run, Debug, Follow or Compile"));
     }
 
     private void setAppState(AppState state) {
         this.currentAppState = state;
+        debugPaused = false;
         updateToolbarState();
         // A plugin's BOT_RUNNING or BOT_STOPPED item follows the run as the Run/Stop cluster does.
         refreshItems();
     }
 
     private void updateToolbarState() {
+        if (runButton == null) return;
         boolean isBusy = (currentAppState != AppState.IDLE);
         runButton.setDisable(isBusy);
-        debugButton.setDisable(isBusy);
-        followButton.setDisable(isBusy);
         unifiedStopButton.setDisable(!isBusy);
+        unifiedStopButton.setStyle(isBusy ? "-fx-background-color: #E74C3C; -fx-text-fill: white;" : "");
 
-        if (currentAppState == AppState.DEBUGGING) {
-            unifiedStopButton.setStyle("-fx-background-color: #E74C3C; -fx-text-fill: white;");
-        } else if (currentAppState == AppState.RUNNING) {
-            unifiedStopButton.setStyle("-fx-background-color: #E74C3C; -fx-text-fill: white;");
-            stepOverButton.setDisable(true);
-            continueButton.setDisable(true);
-        } else {
-            unifiedStopButton.setStyle("");
-            stepOverButton.setDisable(true);
-            continueButton.setDisable(true);
+        // Step and Continue exist only while debugging: outside a session they are neither shown nor laid out.
+        boolean debugging = currentAppState == AppState.DEBUGGING;
+        for (Button b : List.of(stepOverButton, continueButton)) {
+            b.setManaged(debugging);
+            b.setDisable(!(debugging && debugPaused));
         }
     }
 
     private void updateDebugControls(boolean isPaused) {
-        if (currentAppState == AppState.DEBUGGING) {
-            stepOverButton.setDisable(!isPaused);
-            continueButton.setDisable(!isPaused);
-        }
+        debugPaused = isPaused;
+        if (runButton != null) updateToolbarState();
     }
 }

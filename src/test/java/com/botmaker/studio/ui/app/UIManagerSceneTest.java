@@ -19,6 +19,8 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Labeled;
 import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TabPane;
 import javafx.stage.Stage;
@@ -206,9 +208,16 @@ class UIManagerSceneTest extends FxHeadlessTest {
         // the SDK plugin's, and they are here on purpose, because a bar that silently loses a plugin's item
         // is the failure this test exists to catch. (Activity Flow stood where Screens is until flows were
         // deleted on 2026-11-09.)
-        for (String expected : List.of("Run", "Debug", "Compile", "Stop")) {
+        for (String expected : List.of("Run", "Stop")) {
             assertTrue(labels.stream().anyMatch(l -> l.contains(expected)),
                     "the toolbar lost '" + expected + "'; it has: " + labels);
+        }
+        // Debug, Follow and Compile are the Run split button's menu since 2026-11-13.
+        List<String> runMenu = nodesOfType(SplitMenuButton.class).stream()
+                .flatMap(b -> b.getItems().stream()).map(MenuItem::getText).toList();
+        for (String expected : List.of("Debug", "Follow", "Compile")) {
+            assertTrue(runMenu.stream().anyMatch(l -> l.contains(expected)),
+                    "Run's menu lost '" + expected + "'; it has: " + runMenu);
         }
         // The plugin half needs the plugin on the classpath, which Studio's own is not (2026-09-02). Split
         // rather than skipped whole, so the shell's half is still asserted everywhere.
