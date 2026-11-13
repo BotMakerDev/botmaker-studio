@@ -38,6 +38,7 @@ import com.botmaker.studio.ui.app.versions.VersionsPane;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.validation.DiagnosticsManager;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.geometry.Insets;
@@ -54,6 +55,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -146,10 +148,14 @@ public class UIManager implements ProjectWindow {
 
     /** The centre column — block canvas, Reader banner, scrolling. Built by {@link #createScene()}. */
     private EditorCanvas editorCanvas;
-    /** The Errors bottom tab. Built by {@link #createScene()}. */
+    /** The status bar's Problems. Built by {@link #createScene()}. */
     private DiagnosticsPanel diagnosticsPanel;
-    /** The Review bottom tab — the marks every refactor leaves. Built by {@link #createScene()}. */
+    /** The status bar's To review — the marks every refactor leaves. Built by {@link #createScene()}. */
     private ReviewPanel reviewPanel;
+    /** The window's last row: name, SDK, status line, and the problems and review badge. Built by {@link #createScene()}. */
+    private ProjectStatusBar statusBar;
+    /** The review list's re-scan, once compiles have stopped for a while — not one scan per keystroke. */
+    private final PauseTransition reviewRescan = new PauseTransition(Duration.seconds(2));
     private UsagesPanel usagesPanel;
     private DebugPanel debugPanel;
     /** The Run tab's Trace view: the running bot's debug lines. Built by {@link #createScene()}. */
@@ -262,6 +268,7 @@ public class UIManager implements ProjectWindow {
     @Override
     public void dispose() {
         disposed = true;
+        reviewRescan.stop();
         topBar = null;
         if (workspaceLayout != null) {
             workspaceLayout.save();
@@ -550,9 +557,10 @@ public class UIManager implements ProjectWindow {
         eventBus.subscribe(CoreApplicationEvents.DebugSnapshotEvent.class,
                 e -> selectBottomTab(BottomTab.DEBUG), true);
 
-        // --- 4. Bottom Panel: Run/Errors ---
+        // --- 4. The status bar's list: Problems and To review ---
+        // A compile with errors no longer raises anything: the blocks are marked and the badge counts them.
         diagnosticsPanel = new DiagnosticsPanel(diagnosticsManager, editorCanvas::scrollToBlock,
-                () -> selectBottomTab(BottomTab.ERRORS));
+                count -> { if (statusBar != null) statusBar.problems(count); });
 
         // What the last refactor changed and could not finish. Scanned from the sources, never cached.
         reviewPanel = new ReviewPanel(config, state, new ReviewPanel.Actions() {
@@ -596,6 +604,17 @@ public class UIManager implements ProjectWindow {
             public EditPort edits() {
                 return codeEditorService.edits();
             }
+
+            @Override
+            public Stage owner() {
+                return primaryStage;
+            }
+
+            @Override
+            public void found(List<ReviewService.Item> marks, int rows) {
+                if (statusBar != null) statusBar.toReview(rows);
+                fileExplorerManager.toReview(marks.stream().map(ReviewService.Item::file).toList());
+            }
         });
         // A managed value's right-click Migrate type…: the same window, the plugin's replacement preselected.
         eventBus.subscribe(CoreApplicationEvents.MigrateTypeRequestedEvent.class,
@@ -610,23 +629,20 @@ public class UIManager implements ProjectWindow {
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
         bottomTabs.put(BottomTab.REPORTS, bottomTab(BottomTab.REPORTS, reportsPanel.node()));
         bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, terminalPane.node()));
-        bottomTabs.put(BottomTab.ERRORS, bottomTab(BottomTab.ERRORS, diagnosticsPanel.node()));
         bottomTabs.put(BottomTab.USAGES, bottomTab(BottomTab.USAGES, usagesPanel.node()));
         bottomTabs.put(BottomTab.DEBUG, bottomTab(BottomTab.DEBUG, debugPanel.node()));
-        bottomTabs.put(BottomTab.REVIEW, bottomTab(BottomTab.REVIEW, reviewPanel.node()));
         bottomTabs.put(BottomTab.VERSIONS, bottomTab(BottomTab.VERSIONS, versionsPane.node()));
 
         bottomTabPane = new TabPane();
         bottomTabPane.getTabs().addAll(bottomTabs.values());
-        // Keep the versions and the review list fresh whenever the user opens their tab. Both read the project
-        // rather than holding a copy of it, which is why opening is the right moment to re-read.
+        // Keep the versions fresh whenever the user opens their tab: they are read from the project rather than
+        // held, which is why opening is the right moment to re-read. The review list does the same on the status
+        // bar's open.
         Tab versionsTab = bottomTabs.get(BottomTab.VERSIONS);
-        Tab reviewTab = bottomTabs.get(BottomTab.REVIEW);
         // The first shell starts when the Terminal tab is first shown, never at open.
         Tab terminalTab = bottomTabs.get(BottomTab.TERMINAL);
         bottomTabPane.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             if (now == versionsTab) versionsPane.refresh();
-            if (now == reviewTab && reviewPanel != null) reviewPanel.refresh();
             if (now == terminalTab) terminalPane.activate();
         });
 
@@ -662,12 +678,24 @@ public class UIManager implements ProjectWindow {
         statusLabel = new Label(openReport.isEmpty() ? "Ready" : openReport.getFirst());
         if (openReport.size() > 1) statusLabel.setTooltip(new Tooltip(String.join("\n", openReport)));
         statusLabel.setId("status-label");
-        // Fill, hairline and padding come from blocks.css: unstyled, the last row of the window was the one
-        // place Modena's own background showed through a dark theme.
-        statusLabel.getStyleClass().add("status-bar");
-        statusLabel.setMaxWidth(Double.MAX_VALUE);
+        // The status line sits in the status bar (2026-11-13), between the bot's name and the badge whose list
+        // holds what the Errors and Review tabs held. The bar carries the band's fill, hairline and padding.
+        statusBar = new ProjectStatusBar(config.projectName(), statusLabel, diagnosticsPanel.node(),
+                reviewPanel.node(), reviewPanel::refresh);
+        statusBar.sdk(libraryService.currentSdkVersion());
+        statusBar.problems(DiagnosticsPanel.counts(diagnosticsManager.getDiagnostics()).problems());
+        eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> {
+            if (statusBar != null) statusBar.sdk(libraryService.currentSdkVersion());
+            if (reviewPanel != null) reviewPanel.refresh();
+        }, true);
+        // The badge counts what there is to review from the start, not from the first open of its list, and again
+        // a moment after each compile settles: a refactor through the core (a signature edit, a rename) writes its
+        // marks into files the user may not be looking at, and each such edit is followed by a compile.
+        reviewPanel.refresh();
+        reviewRescan.setOnFinished(e -> { if (reviewPanel != null && !disposed) reviewPanel.refresh(); });
+        eventBus.subscribe(CoreApplicationEvents.DiagnosticsUpdatedEvent.class, e -> reviewRescan.playFromStart(), true);
 
-        VBox root = new VBox(menuBarManager.getMenuBar(), toolbarColumn, mainSplit, statusLabel);
+        VBox root = new VBox(menuBarManager.getMenuBar(), toolbarColumn, mainSplit, statusBar.node());
         VBox.setVgrow(mainSplit, Priority.ALWAYS);
         // Initialize with the current theme - add the appropriate theme class
         ThemedWindows.applyThemeClass(root);
@@ -756,28 +784,24 @@ public class UIManager implements ProjectWindow {
     }
 
     /**
-     * Project ▸ Review Changes: raises the Review tab and re-reads the marks. The only way in besides the tab
-     * itself, and the one a user who has just closed a migration dialog will look for.
+     * Project ▸ Review Changes: opens the status bar's list, which re-reads the marks. The only way in besides the
+     * badge itself, and the one a user who has just closed a migration dialog will look for.
      */
     private void openReview() {
-        if (reviewPanel != null) reviewPanel.refresh();
-        selectBottomTab(BottomTab.REVIEW);
+        if (statusBar != null) statusBar.open();
     }
 
     /** The migration window on {@code from}'s values; once applied, the Review list re-read. */
     private void openMigration(Class<?> from, Class<?> to) {
         if (from == null || reviewPanel == null) return;
-        javafx.stage.Window owner = reviewPanel.node().getScene() == null ? null
-                : reviewPanel.node().getScene().getWindow();
-        MigrationWindow.open(owner, config, state, from, to, this::redrawIfActive, reviewPanel::refresh);
+        // The window, never the review list's: that is the status bar's popup now, gone at the first click away.
+        MigrationWindow.open(primaryStage, config, state, from, to, this::redrawIfActive, reviewPanel::refresh);
     }
 
     /** Migrate, over what the last plugin change broke; once it writes, the Review list and the banner re-read. */
     private void openMigrate() {
         if (reviewPanel == null) return;
-        javafx.stage.Window owner = reviewPanel.node().getScene() == null ? null
-                : reviewPanel.node().getScene().getWindow();
-        MigrateWindow.open(owner, config, state, eventBus, this::redrawIfActive, () -> {
+        MigrateWindow.open(primaryStage, config, state, eventBus, this::redrawIfActive, () -> {
             reviewPanel.refresh();
             checkBroken();
         }, from -> openMigration(from, null));
@@ -895,8 +919,7 @@ public class UIManager implements ProjectWindow {
 
     /** The steps after a migration, owned by the main window, the Review list re-read after each. */
     private MigrationActions migrationActions() {
-        return new MigrationActions(config, state, () -> reviewPanel.node().getScene() == null ? null
-                : reviewPanel.node().getScene().getWindow(), this::redrawIfActive, reviewPanel::refresh);
+        return new MigrationActions(config, state, () -> primaryStage, this::redrawIfActive, reviewPanel::refresh);
     }
 
     /** What a step after a migration did, in a dialog once it is done. */
@@ -951,8 +974,7 @@ public class UIManager implements ProjectWindow {
                     .map(block -> block.getAstNode() instanceof MethodDeclaration md ? md : null)
                     .filter(md -> md != null && ReviewMarks.openEntriesOf(md).equals(item.entries()))
                     .findFirst()
-                    .ifPresent(md -> then.accept(md,
-                            reviewPanel.node().getScene() == null ? null : reviewPanel.node().getScene().getWindow()));
+                    .ifPresent(md -> then.accept(md, primaryStage));
             reviewPanel.refresh();
         });
     }

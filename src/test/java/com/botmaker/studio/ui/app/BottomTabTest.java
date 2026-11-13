@@ -28,4 +28,11 @@ class BottomTabTest {
     void theTraceTabIsGone() {
         assertNull(BottomTab.named("TRACE"));
     }
+
+    /** Errors and Review are the status bar's list since 2026-11-13: a layout saved on either opens on Run. */
+    @Test
+    void theErrorsAndReviewTabsAreGone() {
+        assertNull(BottomTab.named("ERRORS"));
+        assertNull(BottomTab.named("REVIEW"));
+    }
 }

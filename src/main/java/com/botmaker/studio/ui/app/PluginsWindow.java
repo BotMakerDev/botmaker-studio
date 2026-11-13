@@ -109,7 +109,7 @@ public final class PluginsWindow {
     private Stage stage;
 
     /**
-     * @param onOpenReview raises the shell's Review tab; offered after a pass rewrote the bot's code
+     * @param onOpenReview opens the status bar's review list; offered after a pass rewrote the bot's code
      * @param onMigrate    opens the shell's migration window on a type; offered before a move that strands its values
      * @param onMigrateRules opens the shell's Migrate; offered before a move that breaks what no rule covers
      */

@@ -20,13 +20,12 @@ enum BottomTab {
     REPORTS("Reports"),
     /** Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}. */
     TERMINAL("Terminal"),
-    ERRORS("Errors"),
+    // ERRORS("Errors") and REVIEW("Review") stood here until 2026-11-13 and are the status bar's list now
+    // (ProjectStatusBar); a layout saved on either opens on the default tab.
     /** Where the selected block's name is used, across the bot — see {@link UsagesPanel} (2026-09-26). */
     USAGES("Usages"),
     /** The paused bot's call stack and variables — see {@link DebugPanel} (2026-09-26). */
     DEBUG("Debug"),
-    /** What a refactor changed and could not finish — see {@link ReviewPanel}. */
-    REVIEW("Review"),
     /**
      * The project's versions, and sharing them — see {@link com.botmaker.studio.ui.app.versions.VersionsPane}.
      * Keyed {@code VCS} until 2026-09-25; a layout saved under that key opens on the default tab.

@@ -108,7 +108,7 @@ public final class InstalledPluginsTab {
     /** The success block, hidden until there is one. See {@link #showResult}. */
     private final VBox resultBox = new VBox(6);
     private final Label resultText = new Label();
-    private final Button openReview = new Button("Open Review tab");
+    private final Button openReview = new Button("Show what to review");
 
     private final Runnable onAddPlugin;
     private final Runnable onOpenReview;
@@ -136,7 +136,7 @@ public final class InstalledPluginsTab {
 
     /**
      * @param onAddPlugin  <i>Add a plugin…</i>: the window switches to Browse
-     * @param onOpenReview the result block's <i>Open Review tab</i>; the tab is the shell's, so the shell
+     * @param onOpenReview the result block's <i>Show what to review</i>; the list is the shell's, so the shell
      *                     supplies the verb, and the window closes behind it
      * @param onChanged    after a pass or a removal wrote the pom, so the window's other tabs read it again
      * @param onMigrate    <i>Migrate first</i>: the migration window on a type the move would strand, which the
@@ -858,7 +858,7 @@ public final class InstalledPluginsTab {
         if (first.isPresent()) {
             out.append("\n\nMigrate first copies them to another type on the version you have now, starting with ")
                     .append(first.get().typeName())
-                    .append(dropped.size() > 1 ? "; migrate the others the same way, from the Review tab or a"
+                    .append(dropped.size() > 1 ? "; migrate the others the same way, from the status bar's to review list or a"
                             + " value's menu, then upgrade again." : ", then upgrade again.");
         }
         return out.toString();
@@ -1025,7 +1025,7 @@ public final class InstalledPluginsTab {
     /**
      * The success block: what happened, and the one door that follows from it.
      *
-     * <p>Shown instead of closing the window. The Review tab button is there only when this bot's own code
+     * <p>Shown instead of closing the window. The review button is there only when this bot's own code
      * was rewritten, because that is the only case where there is anything to review.
      */
     private void showResult(String summary, boolean marks) {

@@ -12,6 +12,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **A status bar** (2026-11-13): the window's last row shows the bot's name and SDK version, the status line, and
+  a badge *⚠ n problems · ⚑ n to review ▴*. A click on it opens one list holding what the Errors and Review tabs
+  held, which are gone: each problem has *Show*, each mark *Show* and *Done*, and its click menu keeps the rest.
+  Project ▸ Review Changes and the plugins window's *Show what to review* open it. A compile with errors no longer
+  raises a tab; the badge counts them. The file tree flags a file holding marks (*Goals.java ⚑ 1*). A window saved
+  on either tab opens on Run.
 - **One Run tab** (2026-11-13): the Trace tab is the Run tab's *Trace* chip now, beside *Output* (what the bot
   prints) and *Only warnings* (the trace's warnings and errors). A trace line still shows its block when clicked,
   and the hidden writers are kept. Clear empties what is shown. A window saved on the Trace tab opens on Run.

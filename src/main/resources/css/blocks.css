@@ -264,13 +264,38 @@
     -fx-font-size: 0.85em;
 }
 
-/* The status line — the window's last row, under the split panes (UIManager). */
+/* The status bar — the window's last row, under the split panes (ProjectStatusBar): name, status line, badge. */
 .status-bar {
     -fx-background-color: -bm-band;
     -fx-border-color: -bm-divider;
     -fx-border-width: 1 0 0 0;
     -fx-padding: 2 5 2 5;
+}
+
+.status-bar > .label {
     -fx-text-fill: -fx-text-background-color;
+}
+
+/* The status bar's badge (ProjectStatusBar): flat until something counts, then the severity's colour. */
+.status-badge {
+    -fx-background-color: transparent;
+    -fx-padding: 0 6 0 6;
+}
+
+.status-badge:hover {
+    -fx-background-color: -bm-divider;
+}
+
+.status-badge:review {
+    -fx-text-fill: -bm-severity-warning-text;
+}
+
+.status-badge:problems {
+    -fx-text-fill: -bm-severity-error-text;
+}
+
+.status-identity {
+    -fx-opacity: 0.8;
 }
 
 /* The canvas's zoom control (EditorCanvas.zoomBadge): "− 100% +", always shown, the percentage resets.
@@ -762,6 +787,11 @@
 .file-tree .tree-active {
     -fx-font-weight: bold;
     -fx-underline: true;
+}
+
+/* A file holding review marks: "Goals.java ⚑ 1" (FileExplorerManager.toReview). */
+.file-tree .tree-cell.tree-review {
+    -fx-text-fill: -bm-severity-warning-text;
 }
 
 /* A selected row keeps the selection's own text colour, whatever it was tinted. */

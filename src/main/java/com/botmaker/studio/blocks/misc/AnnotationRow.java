@@ -88,7 +88,7 @@ public final class AnnotationRow {
             text.setText(mark.done() ? "✓ @Refactor · reviewed"
                     : "⚑ @Refactor · " + count + " to review");
             text.setTooltip(new Tooltip(String.join("\n\n", mark.entries())
-                    + (mark.done() ? "" : "\n\nOpen the Review tab to mark it reviewed.")));
+                    + (mark.done() ? "" : "\n\nMark it Done in the status bar's ⚑ to review list.")));
         } else {
             text.setText(written);
             text.setTooltip(new Tooltip(written));

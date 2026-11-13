@@ -249,11 +249,19 @@ class UIManagerSceneTest extends FxHeadlessTest {
                 .filter(t -> t != null && !t.isBlank())
                 .toList();
         assertFalse(tabNames.isEmpty(), "unnamed tabs cannot be navigated");
-        // The one tab whose absence is silent: the marks a refactor leaves are written into the source
-        // whether or not anything shows them, so a missing Review tab looks exactly like a bot with nothing
-        // to review.
-        assertTrue(tabNames.contains(BottomTab.REVIEW.title()),
-                "no Review tab among " + tabNames);
+        assertTrue(tabNames.contains(BottomTab.RUN.title()), "no Run tab among " + tabNames);
+    }
+
+    /**
+     * The one door whose absence is silent: the marks a refactor leaves are written into the source whether or
+     * not anything shows them, so a missing badge looks exactly like a bot with nothing to review.
+     */
+    @Test
+    void theStatusBarCountsProblemsAndWhatToReview() {
+        List<Button> badges = nodesOfType(Button.class).stream()
+                .filter(b -> ProjectStatusBar.BADGE_ID.equals(b.getId())).toList();
+        assertEquals(1, badges.size(), "one status badge");
+        assertTrue(badges.getFirst().getText().contains("to review"), badges.getFirst().getText());
     }
 
     /** A shell with no clickable control is a screenshot, not an application. */

@@ -30,10 +30,12 @@ import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -42,7 +44,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
- * The <b>Review</b> bottom tab: everything BotMaker changed for the user and could not finish on its own.
+ * The status bar's <b>To review</b> ({@link ProjectStatusBar}; the Review bottom tab until 2026-11-13): everything
+ * BotMaker changed for the user and could not finish on its own.
  *
  * <p>This is the half of the promise the marks exist for. A refactor that rewrites files the user is not
  * looking at and guesses — an SDK upgrade, a signature edit, a template repoint — leaves {@code @Refactor}
@@ -58,8 +61,8 @@ import java.util.function.Supplier;
  * First of all, when the last plugin change broke old elements the bot still uses, a row opens {@link MigrateWindow}
  * (2026-10-16).
  *
- * <p><b>Nothing is cached.</b> The list is re-scanned from the sources on every {@link #refresh}, and the tab
- * refreshes when it is opened. Four different code paths write marks, two of them without the editor
+ * <p><b>Nothing is cached.</b> The list is re-scanned from the sources on every {@link #refresh}: at open, when
+ * the status bar's list opens, and after a migration or a plugin change. Four different code paths write marks, two of them without the editor
  * involved, so a panel holding its own copy would be wrong more often than right — see
  * {@link ReviewService}.
  */
@@ -96,6 +99,20 @@ final class ReviewPanel {
 
         /** Where an undo of a refactor's change goes: the core, which reads the versions and writes the function. */
         EditPort edits();
+
+        /**
+         * What the last refresh found: the marks, and how many rows the list holds in all (marks and migration
+         * rows) — the status bar's count and the file tree's flags.
+         */
+        default void found(List<ReviewService.Item> marks, int rows) { }
+
+        /**
+         * What this list's dialogs are owned by: the project window, never the list's own — the status bar's popup,
+         * which hides as soon as a dialog takes the focus.
+         */
+        default Window owner() {
+            return null;
+        }
     }
 
     private final ProjectConfig config;
@@ -128,7 +145,7 @@ final class ReviewPanel {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         Button refresh = new Button("Refresh");
         refresh.setOnAction(e -> refresh());
-        // Same band as the Errors tab's filter bar, over the same tokens — see blocks.css.
+        // Same band as the Problems list's filter bar, over the same tokens — see blocks.css.
         HBox bar = new HBox(summary, spacer, refresh);
         bar.getStyleClass().add("diagnostics-filter-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
@@ -144,7 +161,7 @@ final class ReviewPanel {
         return node;
     }
 
-    /** Re-reads the marks from the project's sources. Cheap enough to call whenever the tab is opened. */
+    /** Re-reads the marks from the project's sources. Cheap enough to call whenever the list is opened. */
     void refresh() {
         List<ReviewService.Item> items = ReviewService.scan(config, state);
         list.getItems().setAll(items);
@@ -198,6 +215,11 @@ final class ReviewPanel {
         boolean isEmpty() {
             return pending.isEmpty() && unneeded.isEmpty() && broken.count() == 0;
         }
+
+        /** How many rows {@link #shown} draws for these: one per retired type, one for the broken, one for the unneeded. */
+        int rows() {
+            return pending.size() + (unneeded.isEmpty() ? 0 : 1) + (broken.count() > 0 ? 1 : 0);
+        }
     }
 
     /** What was found, as rows above the marks, and the summary over both. */
@@ -225,6 +247,7 @@ final class ReviewPanel {
         String broken = count == 0 ? "" : count + kind + (count == 1 ? " element to migrate." : " elements to migrate.");
         summary.setText(items.isEmpty() && found.isEmpty() ? "Nothing to review."
                 : String.join(" ", List.of(broken, retired, done, marks)).strip().replaceAll(" +", " "));
+        if (actions != null) actions.found(List.copyOf(items), items.size() + found.rows());
     }
 
     /** {@code 3 old elements the bot uses were broken by the last plugin change…}, and Migrate…. */
@@ -292,8 +315,7 @@ final class ReviewPanel {
         MenuItem goTo = new MenuItem("Go to it");
         goTo.setOnAction(e -> actions.reveal(item));
         MenuItem reviewed = new MenuItem("Mark reviewed");
-        reviewed.setOnAction(e -> rewrite(item, "Before marking " + item.function() + "() reviewed",
-                () -> ReviewService.markReviewed(config, state, item)));
+        reviewed.setOnAction(e -> done(item));
         MenuItem unmark = new MenuItem("Remove the mark");
         unmark.setOnAction(e -> rewrite(item, "Before removing the mark on " + item.function() + "()",
                 () -> ReviewService.removeMark(config, state, item)));
@@ -307,6 +329,19 @@ final class ReviewPanel {
         for (MenuItem writes : List.of(reviewed, unmark, undo, rename, delete)) writes.setDisable(!editable);
         return new ContextMenu(goTo, new SeparatorMenuItem(), reviewed, unmark, undo,
                 new SeparatorMenuItem(), rename, delete);
+    }
+
+    /** <i>Done</i>, or <i>Mark reviewed</i>: {@code done = true} on the mark, which keeps it in the code and drops the row. */
+    void done(ReviewService.Item item) {
+        // Asked at the click, not when the row was drawn: Reader mode may have come on since.
+        if (state.isReaderMode()) return;
+        rewrite(item, "Before marking " + item.function() + "() reviewed",
+                () -> ReviewService.markReviewed(config, state, item));
+    }
+
+    /** The marks as last read. */
+    List<ReviewService.Item> marks() {
+        return List.copyOf(list.getItems());
     }
 
     /**
@@ -324,6 +359,7 @@ final class ReviewPanel {
         Alert ask = ThemedWindows.alert(Alert.AlertType.CONFIRMATION, "Put " + item.function()
                 + "() back as it was before this change?\n\nOnly this function changes; a version of the project"
                 + " is saved first. If what it used is gone (a plugin removed), what comes back will not compile.");
+        if (actions.owner() != null) ask.initOwner(actions.owner());
         if (ask.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
         Checkpoints.take(config.projectPath(), state.snapshot(), VersionOrigin.SAFETY,
                 "Before undoing the change to " + item.function() + "()");
@@ -350,7 +386,7 @@ final class ReviewPanel {
     private void rename(ReviewService.Item item) {
         TextInputDialog dialog = new TextInputDialog(item.function());
         ThemedWindows.apply(dialog);
-        if (node.getScene() != null) dialog.initOwner(node.getScene().getWindow());
+        if (actions.owner() != null) dialog.initOwner(actions.owner());
         dialog.setTitle("Rename function");
         dialog.setHeaderText("Rename " + item.function() + "() and every call to it");
         dialog.setContentText("New name:");
@@ -373,25 +409,46 @@ final class ReviewPanel {
                 setText(null);
                 setGraphic(row(item));
                 setOnMouseClicked(e -> {
+                    // Show and Done are buttons of the row: their click is theirs, not the menu's.
+                    if (e.getTarget() instanceof Node target && isInButton(target)) return;
                     if (actions != null) menuFor(item).show(this, e.getScreenX(), e.getScreenY());
                 });
             }
         });
     }
 
+    private static boolean isInButton(Node node) {
+        for (Node n = node; n != null; n = n.getParent()) {
+            if (n instanceof Button) return true;
+        }
+        return false;
+    }
+
     /**
-     * Two lines: where it is, and what happened. The entry is the sentence the refactor wrote — it is meant to
-     * be read as prose, so it wraps rather than being clipped to the panel's width.
+     * Two lines: where it is, with <i>Show</i> and <i>Done</i> beside it, and what happened. The entry is the
+     * sentence the refactor wrote — it is meant to be read as prose, so it wraps rather than being clipped to the
+     * panel's width. The rest of what can be done is the row's click menu ({@link #menuFor}).
      */
-    private static VBox row(ReviewService.Item item) {
+    private VBox row(ReviewService.Item item) {
         Label where = new Label(item.where());
         where.getStyleClass().add("review-cell-where");
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        Button show = new Button("Show");
+        show.setDisable(actions == null);
+        show.setOnAction(e -> actions.reveal(item));
+        Button done = new Button("Done");
+        done.setTooltip(new Tooltip("Mark it reviewed: the mark stays in the code as done, and the row goes"));
+        done.setDisable(actions == null || state.isReaderMode());
+        done.setOnAction(e -> done(item));
+        HBox top = new HBox(6, where, spacer, show, done);
+        top.setAlignment(Pos.CENTER_LEFT);
 
         Label what = new Label(String.join("\n", item.entries()));
         what.getStyleClass().add("review-cell-what");
         what.setWrapText(true);
 
-        VBox box = new VBox(2, where, what);
+        VBox box = new VBox(2, top, what);
         box.getStyleClass().add("review-cell");
         return box;
     }

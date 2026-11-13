@@ -838,14 +838,14 @@ public class MenuBarManager {
         this.onPlugins = callback;
     }
 
-    /** Sets the callback for when "Review Changes" is clicked — raises the Review tab. */
+    /** Sets the callback for when "Review Changes" is clicked — opens the status bar's list. */
     public void setOnReviewChanges(Runnable callback) {
         this.onReviewChanges = callback;
     }
 
     /**
-     * Raises the Review tab as the menu entry would. The upgrade window's result summary offers the same
-     * door, and this is how it reaches it: the tab belongs to the shell, and a dialog that could open it
+     * Opens the status bar's review list as the menu entry would. The upgrade window's result summary offers the
+     * same door, and this is how it reaches it: the list belongs to the shell, and a dialog that could open it
      * itself would be a second implementation of the menu entry.
      */
     public void reviewChanges() {

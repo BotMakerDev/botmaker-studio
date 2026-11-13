@@ -113,6 +113,8 @@ public class FileExplorerManager {
     private Map<Path, VcsFileStatus> status = Map.of();
     /** Which window keeps each file of the last refresh, its reason; empty for the user's own. */
     private Map<Path, Optional<String>> keptBy = Map.of();
+    /** How many review marks each file holds, from the status bar's last scan; a file with none is absent. */
+    private Map<Path, Integer> toReview = Map.of();
     private int statusRun;
     private Consumer<CodeBlock> onReveal = block -> { };
     private Runnable onCanvas = () -> { };
@@ -236,7 +238,7 @@ public class FileExplorerManager {
             protected void updateItem(ExplorerNode item, boolean empty) {
                 super.updateItem(item, empty);
                 // Cells are recycled: reset every class this factory sets.
-                getStyleClass().removeAll("tree-dir", "tree-lib", "tree-active", "tree-group",
+                getStyleClass().removeAll("tree-dir", "tree-lib", "tree-active", "tree-group", "tree-review",
                         "vcs-new", "vcs-added", "vcs-modified");
                 setTooltip(null);
                 if (empty || item == null) {
@@ -271,6 +273,12 @@ public class FileExplorerManager {
                         + " since the last saved version"));
                 if (state.getActiveFile() != null && item.path().equals(state.getActiveFile().getPath())) {
                     getStyleClass().add("tree-active");
+                }
+                // Goals.java ⚑ 1: a file holding something BotMaker changed for the user to look at.
+                int marks = toReview.getOrDefault(item.path().toAbsolutePath().normalize(), 0);
+                if (marks > 0) {
+                    setText(item.label() + " ⚑ " + marks);
+                    getStyleClass().add("tree-review");
                 }
             }
         });
@@ -418,6 +426,20 @@ public class FileExplorerManager {
     // ------------------------------------------------------------------
     // what changed since the last saved version
     // ------------------------------------------------------------------
+
+    /** Flags each file of {@code files} with how many times it appears: one per review mark it holds. */
+    public void toReview(List<Path> files) {
+        Map<Path, Integer> counts = new HashMap<>();
+        for (Path file : files) counts.merge(file.toAbsolutePath().normalize(), 1, Integer::sum);
+        if (counts.equals(toReview)) return;
+        toReview = Map.copyOf(counts);
+        fileTree.refresh();
+    }
+
+    /** The marks of {@code file}, as its row counts them. */
+    int toReviewIn(Path file) {
+        return toReview.getOrDefault(file.toAbsolutePath().normalize(), 0);
+    }
 
     /** Reads git's status on a worker and repaints the tree with it; a newer read replaces an older one. */
     private void refreshStatus() {

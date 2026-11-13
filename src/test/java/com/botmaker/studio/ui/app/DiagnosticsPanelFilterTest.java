@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The Errors tab's severity filtering and its button counts.
+ * The Problems list's severity filtering and its button counts (the Errors tab until 2026-11-13).
  *
  * <p>Both are {@code static} and JavaFX-free precisely so this test can exist: the panel they live in needs a
  * toolkit, but the rule "which diagnostics does the user see, and does the button agree with the list" does

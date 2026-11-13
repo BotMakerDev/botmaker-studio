@@ -6,6 +6,7 @@ import com.botmaker.studio.validation.DiagnosticsManager;
 import com.botmaker.core.validation.ErrorTranslator;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
@@ -14,6 +15,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -25,10 +27,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 /**
- * The <b>Errors</b> bottom tab: the severity filter bar and the diagnostic list, with a click on a row
- * revealing the offending block on the canvas.
+ * The status bar's <b>Problems</b> ({@link ProjectStatusBar}; the Errors bottom tab until 2026-11-13): the severity
+ * filter bar and the diagnostic list, each row's <i>Show</i> (or a click on it) revealing the offending block.
  *
  * <p>The filtering and the counts are {@code static} and free of JavaFX ({@link #matches}, {@link #counts})
  * so the one piece of logic here that can be wrong is testable headlessly.
@@ -36,12 +39,18 @@ import java.util.function.Consumer;
 final class DiagnosticsPanel {
 
     /** What the filter bar reports, and the only arithmetic in this class. */
-    record Counts(long errors, long warnings, long infos) { }
+    record Counts(long errors, long warnings, long infos) {
+
+        /** What the status bar counts as a problem: an error or a warning; an info is a hint, not a problem. */
+        int problems() {
+            return (int) (errors + warnings);
+        }
+    }
 
     private final DiagnosticsManager diagnosticsManager;
     private final Consumer<CodeBlock> onRevealBlock;
-    /** Raises this tab. Called only when a compile produced at least one error. */
-    private final Runnable onErrorsFound;
+    /** Told the problem count after each update — the status bar's badge. */
+    private final IntConsumer onProblems;
 
     private static final String SEVERITY_FILTER = "severity-filter";
     private static final String DIAGNOSTIC_CELL = "diagnostic-cell";
@@ -57,10 +66,10 @@ final class DiagnosticsPanel {
 
     DiagnosticsPanel(DiagnosticsManager diagnosticsManager,
                      Consumer<CodeBlock> onRevealBlock,
-                     Runnable onErrorsFound) {
+                     IntConsumer onProblems) {
         this.diagnosticsManager = diagnosticsManager;
         this.onRevealBlock = onRevealBlock;
-        this.onErrorsFound = onErrorsFound;
+        this.onProblems = onProblems;
 
         configureList();
         VBox.setVgrow(list, Priority.ALWAYS);
@@ -78,7 +87,7 @@ final class DiagnosticsPanel {
         return node;
     }
 
-    /** Replaces the diagnostic set, re-filters, re-counts, and raises this tab if anything is an error. */
+    /** Replaces the diagnostic set, re-filters, re-counts, and tells the status bar how many problems are left. */
     void update(List<Diagnostic> diagnostics) {
         this.all = diagnostics != null ? new ArrayList<>(diagnostics) : new ArrayList<>();
         applyFilters();
@@ -88,7 +97,7 @@ final class DiagnosticsPanel {
         warningFilter.setText("Warnings (%d)".formatted(counts.warnings()));
         infoFilter.setText("Infos (%d)".formatted(counts.infos()));
 
-        if (counts.errors() > 0) onErrorsFound.run();
+        onProblems.accept(counts.problems());
     }
 
     /**
@@ -176,11 +185,29 @@ final class DiagnosticsPanel {
         Label iconLabel = new Label(level.glyph());
         severityClass(iconLabel, DIAGNOSTIC_ICON, level);
 
-        cell.setText("%sLine %d: %s".formatted(fileNamePrefix(diagnostic), line, message));
+        Label text = new Label("%sLine %d: %s".formatted(fileNamePrefix(diagnostic), line, message));
+        text.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        Button show = new Button("Show");
+        show.setOnAction(e -> show(diagnostic));
+        // The button's click is its own: the row's handler below would reveal the block a second time.
+        show.addEventHandler(MouseEvent.MOUSE_CLICKED, MouseEvent::consume);
+        HBox row = new HBox(6, iconLabel, text, show);
+        row.setAlignment(Pos.CENTER_LEFT);
+        cell.setText(null);
         severityClass(cell, DIAGNOSTIC_CELL, level);
-        cell.setGraphic(iconLabel);
-        cell.setOnMouseClicked(event ->
-                diagnosticsManager.findBlockForDiagnostic(diagnostic).ifPresent(onRevealBlock));
+        cell.setGraphic(row);
+        cell.setOnMouseClicked(event -> show(diagnostic));
+    }
+
+    /** <i>Show</i>: the block the diagnostic is on, on the canvas. */
+    private void show(Diagnostic diagnostic) {
+        diagnosticsManager.findBlockForDiagnostic(diagnostic).ifPresent(onRevealBlock);
+    }
+
+    /** The rows the filters leave, as shown. */
+    List<Diagnostic> shown() {
+        return List.copyOf(list.getItems());
     }
 
     /**

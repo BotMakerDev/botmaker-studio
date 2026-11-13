@@ -286,7 +286,7 @@ public final class CoreRuns implements AutoCloseable {
         // Always published: an empty list clears the slot errors shown before.
         bus.publish(new CoreApplicationEvents.DiagnosticsUpdatedEvent(shown));
         if (!emptySlots.isEmpty()) {
-            return Optional.of("Run aborted: choose a variable for the highlighted slot(s) — see the Errors tab.");
+            return Optional.of("Run aborted: choose a variable for the highlighted slot(s) — see the status bar's ⚠ problems.");
         }
         return diagnostics.hasErrors() ? Optional.of("Run aborted due to errors.") : Optional.empty();
     }
