@@ -12,6 +12,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **Tabs that come and go** (2026-11-13): the bottom window opens with Run, Reports and Versions. *Debug* is there
+  while a debug session lasts, *Usages* comes with Find Usages and has its ✕, and *Terminal* comes from the new
+  View ▸ Terminal (ticked while it is there; its ✕ unticks it) — always there, without its ✕, in dev mode. A window
+  saved on a tab that is not there at open opens on Run.
 - **A status bar** (2026-11-13): the window's last row shows the bot's name and SDK version, the status line, and
   a badge *⚠ n problems · ⚑ n to review ▴*. A click on it opens one list holding what the Errors and Review tabs
   held, which are gone: each problem has *Show*, each mark *Show* and *Done*, and its click menu keeps the rest.

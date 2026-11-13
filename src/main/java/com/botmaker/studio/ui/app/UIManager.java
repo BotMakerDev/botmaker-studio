@@ -20,6 +20,7 @@ import com.botmaker.studio.services.LibraryService;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectMode;
 import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.project.StudioProjectSettings;
 import com.botmaker.studio.project.StudioContext;
 import com.botmaker.core.project.vcs.Checkpoints;
 import com.botmaker.core.project.vcs.VersionOrigin;
@@ -165,8 +166,8 @@ public class UIManager implements ProjectWindow {
     private final AssistantPane assistantPane;
     /** The Assistant window, the toolbar's 🤖; it shows {@link #assistantPane} and every MCP call. */
     private final AssistantWindow assistantWindow;
-    /** The bottom tool window's tabs, keyed by the closed set so nothing selects one by index. */
-    private final EnumMap<BottomTab, Tab> bottomTabs = new EnumMap<>(BottomTab.class);
+    /** The bottom tool window's tabs, keyed by the closed set so nothing selects one by index. Built by {@link #createScene()}. */
+    private BottomTabs bottomTabs;
     /** Restores the dividers and the open tab at open, and writes them back from {@link #dispose()}. */
     private WorkspaceLayoutStore workspaceLayout;
     private CenterTabs centerTabs;
@@ -181,7 +182,6 @@ public class UIManager implements ProjectWindow {
      * {@code setupEventHandlers()}, later in this same constructor. So the report is carried, not sent.
      */
     private final List<String> openReport;
-    private TabPane bottomTabPane;
     private Consumer<Void> onSelectProject;
     /** View ▸ Preview as user — hands the project to the Runner window for this session only. */
     private Runnable onPreviewAsUser;
@@ -554,8 +554,10 @@ public class UIManager implements ProjectWindow {
         eventBus.subscribe(CoreApplicationEvents.GoToDefinitionRequestedEvent.class,
                 e -> navigation.goToDeclaration(), true);
         // A pause brings the Debug tab forward, as an IDE's debugger window does; resuming leaves it where it is.
-        eventBus.subscribe(CoreApplicationEvents.DebugSnapshotEvent.class,
-                e -> selectBottomTab(BottomTab.DEBUG), true);
+        // Only while the tab is there: a snapshot landing after the session ended must not bring it back.
+        eventBus.subscribe(CoreApplicationEvents.DebugSnapshotEvent.class, e -> {
+            if (bottomTabs != null && bottomTabs.isShown(BottomTab.DEBUG)) bottomTabs.select(BottomTab.DEBUG);
+        }, true);
 
         // --- 4. The status bar's list: Problems and To review ---
         // A compile with errors no longer raises anything: the blocks are marked and the badge counts them.
@@ -625,26 +627,38 @@ public class UIManager implements ProjectWindow {
                 e -> migrationActions().switchUses(e.from(), null, java.util.Set.of(e.name()), toldInADialog()),
                 true);
 
-        bottomTabs.clear();
-        bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
-        bottomTabs.put(BottomTab.REPORTS, bottomTab(BottomTab.REPORTS, reportsPanel.node()));
-        bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, terminalPane.node()));
-        bottomTabs.put(BottomTab.USAGES, bottomTab(BottomTab.USAGES, usagesPanel.node()));
-        bottomTabs.put(BottomTab.DEBUG, bottomTab(BottomTab.DEBUG, debugPanel.node()));
-        bottomTabs.put(BottomTab.VERSIONS, bottomTab(BottomTab.VERSIONS, versionsPane.node()));
-
-        bottomTabPane = new TabPane();
-        bottomTabPane.getTabs().addAll(bottomTabs.values());
+        Map<BottomTab, Node> tabContents = new EnumMap<>(BottomTab.class);
+        tabContents.put(BottomTab.RUN, runConsole.node());
+        tabContents.put(BottomTab.REPORTS, reportsPanel.node());
+        tabContents.put(BottomTab.TERMINAL, terminalPane.node());
+        tabContents.put(BottomTab.USAGES, usagesPanel.node());
+        tabContents.put(BottomTab.DEBUG, debugPanel.node());
+        tabContents.put(BottomTab.VERSIONS, versionsPane.node());
+        BottomTabs tabs = new BottomTabs(tabContents);
+        bottomTabs = tabs;
+        TabPane bottomTabPane = tabs.node();
         // Keep the versions fresh whenever the user opens their tab: they are read from the project rather than
         // held, which is why opening is the right moment to re-read. The review list does the same on the status
         // bar's open.
-        Tab versionsTab = bottomTabs.get(BottomTab.VERSIONS);
+        Tab versionsTab = tabs.tabs().get(BottomTab.VERSIONS);
         // The first shell starts when the Terminal tab is first shown, never at open.
-        Tab terminalTab = bottomTabs.get(BottomTab.TERMINAL);
+        Tab terminalTab = tabs.tabs().get(BottomTab.TERMINAL);
         bottomTabPane.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> {
             if (now == versionsTab) versionsPane.refresh();
             if (now == terminalTab) terminalPane.activate();
         });
+        // Terminal: View ▸ Terminal, and always in dev mode, which a settings change may turn on or off.
+        StudioProjectSettings openSettings = projectSettingsService.current();
+        tabs.keepTerminal(openSettings != null && openSettings.devMode());
+        menuBarManager.bindTerminal(tabs.terminalProperty(), tabs.terminalKeptProperty());
+        // Each scene's handlers act on its own tabs only: a rebuilt scene's old ones stay subscribed, doing nothing.
+        eventBus.subscribe(CoreApplicationEvents.SettingsChangedEvent.class,
+                e -> { if (bottomTabs == tabs) tabs.keepTerminal(e.settings().devMode()); }, true);
+        // Debug: there while a debug session lasts; a pause brings it forward (above).
+        eventBus.subscribe(CoreApplicationEvents.DebugSessionStartedEvent.class,
+                e -> { if (bottomTabs == tabs) tabs.show(BottomTab.DEBUG); }, true);
+        eventBus.subscribe(CoreApplicationEvents.DebugSessionFinishedEvent.class,
+                e -> { if (bottomTabs == tabs) tabs.hide(BottomTab.DEBUG); }, true);
 
         // --- 5. Layout Assembly ---
         SplitPane verticalSplit = new SplitPane();
@@ -666,7 +680,7 @@ public class UIManager implements ProjectWindow {
         // Both splits and every tab exist by now, so the remembered arrangement can go straight over the
         // defaults set above — before the scene is shown, so nothing is seen to jump into place.
         workspaceLayout = new WorkspaceLayoutStore(
-                projectSettingsService, mainSplit, verticalSplit, bottomTabPane, bottomTabs, centerTabs,
+                projectSettingsService, mainSplit, verticalSplit, tabs, centerTabs,
                 config.projectPath());
         workspaceLayout.restore();
         // The project opens on the file its tabs were left showing, so it is parsed once, not after the entry point.
@@ -774,13 +788,6 @@ public class UIManager implements ProjectWindow {
     /** Applies the current theme CSS class to the stored scene root. */
     private void applyThemeToScene() {
         ThemedWindows.applyThemeClass(root);
-    }
-
-    /** A closable-free bottom tab carrying its title from the closed set. */
-    private static Tab bottomTab(BottomTab which, Node content) {
-        Tab tab = new Tab(which.title(), content);
-        tab.setClosable(false);
-        return tab;
     }
 
     /**
@@ -1013,10 +1020,9 @@ public class UIManager implements ProjectWindow {
         return null;
     }
 
-    /** Raises a bottom tab. A no-op before {@code createScene()} has built them. */
+    /** Raises a bottom tab, adding it when it is not there. A no-op before {@code createScene()} has built them. */
     private void selectBottomTab(BottomTab which) {
-        Tab tab = bottomTabs.get(which);
-        if (bottomTabPane != null && tab != null) bottomTabPane.getSelectionModel().select(tab);
+        if (bottomTabs != null) bottomTabs.select(which);
     }
 
     /**

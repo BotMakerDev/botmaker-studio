@@ -3,12 +3,9 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.core.project.StudioProjectSettings.WorkspaceLayout;
 import com.botmaker.studio.services.ProjectSettingsService;
 import javafx.scene.control.SplitPane;
-import javafx.scene.control.Tab;
-import javafx.scene.control.TabPane;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -29,18 +26,16 @@ final class WorkspaceLayoutStore {
     private final ProjectSettingsService settings;
     private final SplitPane explorerSplit;
     private final SplitPane bottomSplit;
-    private final TabPane bottomTabPane;
-    private final Map<BottomTab, Tab> tabs;
+    private final BottomTabs bottomTabs;
     private final CenterTabs centerTabs;
     private final Path projectDir;
 
     WorkspaceLayoutStore(ProjectSettingsService settings, SplitPane explorerSplit, SplitPane bottomSplit,
-                         TabPane bottomTabPane, Map<BottomTab, Tab> tabs, CenterTabs centerTabs, Path projectDir) {
+                         BottomTabs bottomTabs, CenterTabs centerTabs, Path projectDir) {
         this.settings = settings;
         this.explorerSplit = explorerSplit;
         this.bottomSplit = bottomSplit;
-        this.bottomTabPane = bottomTabPane;
-        this.tabs = tabs;
+        this.bottomTabs = bottomTabs;
         this.centerTabs = centerTabs;
         this.projectDir = projectDir.toAbsolutePath().normalize();
     }
@@ -63,8 +58,7 @@ final class WorkspaceLayoutStore {
         explorerSplit.setDividerPositions(saved.explorerDividerOr(explorerSplit.getDividerPositions()[0]));
         bottomSplit.setDividerPositions(saved.bottomDividerOr(bottomSplit.getDividerPositions()[0]));
 
-        Tab tab = tabs.get(BottomTab.named(saved.bottomTab()));
-        if (tab != null) bottomTabPane.getSelectionModel().select(tab);
+        bottomTabs.restore(BottomTab.named(saved.bottomTab()));
     }
 
     /** Writes the layout as it stands. Called from {@code UIManager.dispose()}; idempotent and best-effort. */
@@ -74,11 +68,8 @@ final class WorkspaceLayoutStore {
 
     /** The current arrangement. Divider positions are sanitised by {@link WorkspaceLayout} itself. */
     private WorkspaceLayout snapshot() {
-        Tab selected = bottomTabPane.getSelectionModel().getSelectedItem();
-        String tabKey = tabs.entrySet().stream()
-                .filter(e -> e.getValue() == selected)
-                .map(e -> e.getKey().key())
-                .findFirst().orElse(null);
+        BottomTab selected = bottomTabs.selected();
+        String tabKey = selected == null ? null : selected.key();
         // The Versions tab saves its own divider as it moves, and the toolbar its Run choice; keep what they wrote.
         WorkspaceLayout saved = settings.current().workspaceLayout();
         Path shown = centerTabs.shownJavaFile();

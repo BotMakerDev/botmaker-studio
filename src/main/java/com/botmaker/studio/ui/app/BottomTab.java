@@ -6,42 +6,59 @@ package com.botmaker.studio.ui.app;
  * <p>A closed set rather than an {@code int}: the shell used to say {@code selectBottomTab(0)} for Terminal,
  * {@code selectBottomTab(1)} for Errors and carry a computed {@code vcsTabIndex} field for the third — three
  * spellings of one fixed list, none of which the compiler could check. The title lives here too, so the tab
- * and the thing that raises it can't drift apart.
+ * and the thing that raises it can't drift apart. Which are there when is {@link BottomTabs}' (2026-11-13).
  */
 enum BottomTab {
     /**
      * What the running bot prints — see {@link RunConsole}. It was titled "Terminal" and keyed {@code TERMINAL}
      * until 2026-09-25, which it never was.
      */
-    RUN("Run"),
+    RUN("Run", true, false),
     // TRACE("Trace") stood here from 2026-09-29 until 2026-11-13 and is the Run tab's Trace chip now (RunConsole.View);
     // a layout saved on it opens on the default tab, Run.
     /** A bot's problems, from its runs here or its runners' issues, charted — see {@code ReportsPanel} (2026-11-03). */
-    REPORTS("Reports"),
-    /** Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}. */
-    TERMINAL("Terminal"),
+    REPORTS("Reports", true, false),
+    /**
+     * Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}.
+     * From View ▸ Terminal, and always in dev mode.
+     */
+    TERMINAL("Terminal", false, true),
     // ERRORS("Errors") and REVIEW("Review") stood here until 2026-11-13 and are the status bar's list now
     // (ProjectStatusBar); a layout saved on either opens on the default tab.
-    /** Where the selected block's name is used, across the bot — see {@link UsagesPanel} (2026-09-26). */
-    USAGES("Usages"),
-    /** The paused bot's call stack and variables — see {@link DebugPanel} (2026-09-26). */
-    DEBUG("Debug"),
+    /** Where the selected block's name is used, across the bot — see {@link UsagesPanel} (2026-09-26). From Find Usages. */
+    USAGES("Usages", false, true),
+    /** The paused bot's call stack and variables — see {@link DebugPanel} (2026-09-26). While a debug session lasts. */
+    DEBUG("Debug", false, false),
     /**
      * The project's versions, and sharing them — see {@link com.botmaker.studio.ui.app.versions.VersionsPane}.
      * Keyed {@code VCS} until 2026-09-25; a layout saved under that key opens on the default tab.
      */
-    VERSIONS("Versions");
+    VERSIONS("Versions", true, false);
     // ASSISTANT("Assistant") stood here until 2026-11-11 and is the Assistant window now (AssistantWindow); a layout
     // saved on it opens on the default tab.
 
     private final String title;
+    private final boolean always;
+    private final boolean closable;
 
-    BottomTab(String title) {
+    BottomTab(String title, boolean always, boolean closable) {
         this.title = title;
+        this.always = always;
+        this.closable = closable;
     }
 
     String title() {
         return title;
+    }
+
+    /** Whether the tab is there from the start and never goes; the others come with what they show. */
+    boolean always() {
+        return always;
+    }
+
+    /** Whether the tab has its ✕. */
+    boolean closable() {
+        return closable;
     }
 
     /** The stable key this tab is persisted under. The title is a label and may be reworded; this may not. */

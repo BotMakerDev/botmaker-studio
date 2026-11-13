@@ -16,6 +16,8 @@ import javafx.scene.control.CheckMenuItem;
 import com.botmaker.studio.ui.render.theme.CanvasZoom;
 import javafx.beans.InvalidationListener;
 import javafx.beans.WeakInvalidationListener;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.value.ObservableBooleanValue;
 import com.botmaker.studio.events.CoreApplicationEvents;
 import com.botmaker.core.events.EventBus;
 import com.botmaker.core.parser.guard.RefusalJournal;
@@ -64,6 +66,10 @@ public class MenuBarManager {
     private MenuItem redoItem;
     private MenuItem projectRepoItem;
     private Runnable onPreviewAsUser;
+    /** View ▸ Terminal: ticked while the bottom Terminal tab is there — see {@link #bindTerminal}. */
+    private final CheckMenuItem terminalItem = new CheckMenuItem("Terminal");
+    /** What {@link #terminalItem} is bound to now, unbound when a rebuilt scene binds its own. */
+    private BooleanProperty terminalShown;
     private String projectRepoUrl;
     /** The open project's directory, so the About dialog can report the SDK version it pins. May be null. */
     private java.nio.file.Path projectPath;
@@ -411,6 +417,7 @@ public class MenuBarManager {
                 resetZoomItem,
                 new SeparatorMenuItem(),
                 previewAsUserItem,
+                terminalItem,
                 new SeparatorMenuItem(),
                 themeMenu,
                 blockStyleMenu(),
@@ -523,6 +530,17 @@ public class MenuBarManager {
         menu.setOnShowing(e -> rebuild.run());
         rebuild.run();
         return menu;
+    }
+
+    /**
+     * View ▸ Terminal (2026-11-13): ticking it adds the bottom Terminal tab, unticking takes it away, and the tab's
+     * own ✕ unticks it. Greyed while {@code kept} — dev mode, where the tab is always there.
+     */
+    void bindTerminal(BooleanProperty shown, ObservableBooleanValue kept) {
+        if (terminalShown != null) terminalItem.selectedProperty().unbindBidirectional(terminalShown);
+        terminalShown = shown;
+        terminalItem.selectedProperty().bindBidirectional(shown);
+        terminalItem.disableProperty().bind(kept);
     }
 
     /** View ▸ Show Run Overlay — see {@link RunOverlayPreference}. */
