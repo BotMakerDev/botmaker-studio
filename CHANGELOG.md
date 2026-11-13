@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.12.2] — 2026-11-13
 
 - **A plugin's folder of this PC is not a project** (2026-11-13): *Open folder…* on a folder under BotMaker's
   `plugins` folder of this PC says "A plugin's folder" and opens nothing, and My bots never lists one; that
@@ -40,6 +40,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - The same guarded session runs without Studio: `botmaker ai <tool>` in the bot's folder.
 - Built against botmaker-cli 0.12.1 and botmaker-core 0.1.1: the catalog's check fills a bot's `params/` from
   `starting-params/` before it compiles the tag, so a published bot with its own `@Param` group is listed.
+
+### Changed
+
+- Built against botmaker-shared 0.8.1 (was 0.8.0).
+- Built against botmaker-session 0.7.1 (was 0.7.0).
+- Built against botmaker-studio-api 0.17.1 (was 0.17.0).
+- Built against botmaker-plugin-host 0.12.1 (was 0.12.0).
+- Built against botmaker-cli 0.12.1 (was 0.12.0).
+- Built against botmaker-java 0.2.1 (was 0.2.0).
+- Built against botmaker-core 0.1.1 (was 0.1.0).
 
 ## [1.12.1] — 2026-11-10
 
