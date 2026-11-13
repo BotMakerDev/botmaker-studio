@@ -144,7 +144,7 @@ public final class MyBots {
      * @param version     the nearest tag, empty for a bot never released
      * @param runnable    whether a class holds {@code main}; a project that is no bot is only edited
      * @param lastUsed    when Studio last opened it, else when its folder last changed
-     * @param title       the pom's {@code <name>}, set in Project Settings; the card shows the folder's without one
+     * @param title       the pom's {@code <name>}, set in Project ▸ Bot Info…; the card shows the folder's without one
      * @param unpacked    a bot opened from a {@code .bmk} ({@link UnpackedBots}): its author and tag come from its
      *                    {@code bot.json}, and it has no history to merge an update into
      */

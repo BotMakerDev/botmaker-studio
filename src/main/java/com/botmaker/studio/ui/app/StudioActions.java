@@ -20,7 +20,7 @@ import com.botmaker.studio.services.ScreenCaptureService;
 import com.botmaker.core.sharing.BmkExport;
 import com.botmaker.core.sharing.BotSource;
 import com.botmaker.core.sharing.PluginRegistry;
-import com.botmaker.java.types.ProjectAnalyzer;
+import com.botmaker.studio.ui.app.botinfo.BotInfoDialog;
 import com.botmaker.studio.ui.app.dev.PickerGalleryWindow;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.Choosers;
@@ -58,7 +58,6 @@ final class StudioActions {
     private final CodeEditorService codeEditorService;
     private final ProjectSettingsService projectSettingsService;
     private final ScreenCaptureService screenCaptureService;
-    private final ProjectAnalyzer projectAnalyzer;
     private final LibraryService libraryService;
     private final MenuBarManager menuBar;
     private final ToolbarManager toolbar;
@@ -94,7 +93,6 @@ final class StudioActions {
         this.codeEditorService = ctx.codeEditorService();
         this.projectSettingsService = ctx.projectSettingsService();
         this.screenCaptureService = screenCaptureService;
-        this.projectAnalyzer = ctx.projectAnalyzer();
         this.libraryService = ctx.libraryService();
         this.menuBar = menuBar;
         this.toolbar = toolbar;
@@ -124,8 +122,7 @@ final class StudioActions {
         // went to it on 2026-09-01 with the gallery, the archive and the tag rules it is built on. Leaving
         // the menu entry and the toolbar button unwired keeps them visible and dead, so both are gone; the
         // way in is the plugin's own toolbar item.
-        menuBar.setOnProjectSettings(this::openProjectSettings);
-        toolbar.setOnProjectSettings(this::openProjectSettings);
+        menuBar.setOnBotInfo(() -> new BotInfoDialog(primaryStage, config.projectPath()).show());
 
         // --- Capture / launch / input ---
         // Nothing to wire for the capture targets: that button is the SDK plugin's item, and its dialog is
@@ -235,10 +232,6 @@ final class StudioActions {
         new ParametersDialog(primaryStage, config, state, libraryService, onReveal).show();
     }
 
-    private void openProjectSettings() {
-        new ProjectSettingsDialog(primaryStage, config.projectPath(), projectSettingsService, projectAnalyzer).show();
-    }
-
     // openLaunchTarget stood here until 2026-09-01, showing the Launch Target dialog and — when the overlay
     // editor had nothing to draw over — running a callback once it closed. The dialog went with the launch
     // rows, so there was no recovery to offer and this class passed null for that callback for eleven days,
@@ -313,7 +306,6 @@ final class StudioActions {
                 // SDK plugin's toolbar items and the shell has no handle on them. The steps still read,
                 // without an Open button.
                 .on(StudioAction.PARAMETERS, this::openParameters)
-                .on(StudioAction.OVERLAY_EDITOR, this::openOverlayEditor)
                 .on(StudioAction.PUBLISH, this::openPublish)
                 .on(StudioAction.GALLERY, menuBar::getMoreBots)
                 .build();

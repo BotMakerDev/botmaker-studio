@@ -135,12 +135,8 @@ public final class Workflow {
                         + "interaction, capture, timing. Expression slots accept a drop from the palette or an "
                         + "existing expression, and refuse a drop whose type would not compile."),
 
-                WorkflowStep.of("Author over the running game — the Overlay Editor",
-                        "An always-on-top HUD that mirrors your program as one-line rows over the game itself.",
-                        StudioAction.OVERLAY_EDITOR,
-                        "The only way to write or record a bot without leaving the game. Add blocks where the "
-                        + "cursor is, or hit Record and let it write the clicks and drags you perform, then "
-                        + "insert the batch where a plugin's overlay offers a place for it."),
+                // "Author over the running game — the Overlay Editor" stood here until 2026-11-13, when the
+                // overlay was hidden outside dev mode (spec 2026-11-13-studio-window-cleanup).
 
                 WorkflowStep.of("Run and debug",
                         "Run executes the bot; Debug steps through it block by block with breakpoints.",

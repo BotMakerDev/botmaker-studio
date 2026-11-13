@@ -125,15 +125,7 @@ Blocks are the Java, not a picture of it — every edit rewrites the real source
 
 Blocks that call the SDK come from the palette on the left, grouped by facade: vision, interaction, capture, timing. Expression slots accept a drop from the palette or an existing expression, and refuse a drop whose type would not compile.
 
-## 10. Author over the running game — the Overlay Editor
-
-> An always-on-top HUD that mirrors your program as one-line rows over the game itself.
-
-The only way to write or record a bot without leaving the game. Add blocks where the cursor is, or hit Record and let it write the clicks and drags you perform, then insert the batch where a plugin's overlay offers a place for it.
-
-*In Studio:* ⧉ Overlay on the toolbar
-
-## 11. Run and debug
+## 10. Run and debug
 
 > Run executes the bot; Debug steps through it block by block with breakpoints.
 
@@ -141,7 +133,7 @@ The Terminal tab shows what the bot printed and the Errors tab what did not comp
 
 If a bot needs to run without taking over your screen, it can run on a private display — a nested X server it owns — so you keep using your machine while it works.
 
-## 12. Watch and drive it from your phone — Remote Pilot
+## 11. Watch and drive it from your phone — Remote Pilot
 
 > Streams what the bot sees to a phone or a browser, and lets you start, stop and touch it from anywhere.
 
@@ -149,7 +141,7 @@ Scan the QR code to pair; no VPN and no port forwarding. Turning on Interact mak
 
 *In Studio:* 🎮 Pilot on the toolbar (contributed by the BotMaker SDK)
 
-## 13. Publish and share
+## 12. Publish and share
 
 > Push the bot to your own GitHub repo, and optionally list it in the gallery.
 
@@ -159,7 +151,7 @@ The Gallery browses what everyone else has published; installing from it creates
 
 *In Studio:* Project ▸ Publish to Gallery…
 
-## 14. Browse the gallery
+## 13. Browse the gallery
 
 > Install someone else's bot, or see how one is put together.
 

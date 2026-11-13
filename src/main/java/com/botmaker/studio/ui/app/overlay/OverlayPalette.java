@@ -110,7 +110,8 @@ final class OverlayPalette {
     }
 
     /**
-     * The project's favourite methods for this facade (Project Settings) first, then the rest alphabetically. An
+     * The project's favourite methods for this facade first (kept in {@code settings.json}; their editor went with Project
+     * Settings on 2026-11-13), then the rest alphabetically. An
      * entry point ({@code @EntryPoint}) is left out: it belongs in {@code main}, which this editor never edits.
      */
     private List<String> orderedMethods(FacadeEntry facade, java.util.Set<String> available) {

@@ -48,7 +48,7 @@ public class MenuBarManager {
     /** Kept so the entry can be renamed once the project's settings model is known. */
     private Runnable onRecoverProjectFiles;
     private Runnable onReviewChanges;
-    private Runnable onProjectSettings;
+    private Runnable onBotInfo;
     private Runnable onGettingStarted;
     /** Help ▸ Picker Gallery — present only in a dev build. See {@link #createHelpMenu()}. */
     private Runnable onPickerGallery;
@@ -260,9 +260,10 @@ public class MenuBarManager {
         // strictly worse than its absence. The shell has no handle on another plugin's toolbar item, so
         // there is nothing to repoint it at.
 
-        MenuItem projectSettingsItem = new MenuItem("Project Settings...");
-        projectSettingsItem.setOnAction(e -> {
-            if (onProjectSettings != null) onProjectSettings.run();
+        // "Project Settings..." stood here until 2026-11-13; what it held that anyone used is this.
+        MenuItem botInfoItem = new MenuItem("Bot Info...");
+        botInfoItem.setOnAction(e -> {
+            if (onBotInfo != null) onBotInfo.run();
         });
 
         MenuItem recoverFilesItem = new MenuItem("Recover Project Files...");
@@ -315,7 +316,7 @@ public class MenuBarManager {
                 new SeparatorMenuItem(),
                 parametersItem,
                 new SeparatorMenuItem(),
-                projectSettingsItem, new SeparatorMenuItem(),
+                botInfoItem, new SeparatorMenuItem(),
                 recoverFilesItem, reviewItem, migrateItem, historyItem, new SeparatorMenuItem(),
                 browseGalleryItem, publishGalleryItem, exportBmkItem, new SeparatorMenuItem(),
                 projectRepoItem);
@@ -869,9 +870,9 @@ public class MenuBarManager {
         this.onPickerGallery = callback;
     }
 
-    /** Sets the callback for when "Project Settings..." is clicked. */
-    public void setOnProjectSettings(Runnable callback) {
-        this.onProjectSettings = callback;
+    /** Sets the callback for when Project ▸ "Bot Info..." is clicked. */
+    public void setOnBotInfo(Runnable callback) {
+        this.onBotInfo = callback;
     }
 
     /** Sets the callback for when Help ▸ "Getting Started" is clicked. */

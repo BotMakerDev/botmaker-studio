@@ -31,9 +31,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Project Settings' <i>Bot</i> section (2026-10-25, spec § 1a, plan phase 4): the bot's name and description,
- * the pom's {@code <name>} and {@code <description>}, and its icon, chosen from a file or cut from a window of the
- * game, then cropped square. Nothing is written until {@link #save}: the dialog's Apply.
+ * The bot's name and description (2026-10-25, spec § 1a, plan phase 4), the pom's {@code <name>} and
+ * {@code <description>}, and its icon, chosen from a file or cut from a window of the game, then cropped square.
+ * Nothing is written until {@link Pending#save}: {@link BotInfoDialog}'s Save. It was Project Settings' <i>Bot</i>
+ * section until that dialog went (2026-11-13).
  */
 public final class BotInfoSection {
 

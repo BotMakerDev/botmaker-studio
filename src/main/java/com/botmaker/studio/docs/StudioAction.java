@@ -28,9 +28,7 @@ public enum StudioAction {
     GOALS("Open Goals ▸", "🗺 Screens on the toolbar, then 🎯 Goals in its rail (contributed by the "
             + "BotMaker SDK)"),
     PARAMETERS("Open Parameters ▸", "Project ▸ Parameters… (or 🎚 Parameters on the toolbar)"),
-    // F9 was named here as a shortcut and never was one: it is the *recorder's* global hotkey, which left
-    // with the recorder on 2026-09-02 and was never bound to opening the overlay in the first place.
-    OVERLAY_EDITOR("Open Overlay Editor ▸", "⧉ Overlay on the toolbar"),
+    // OVERLAY_EDITOR went on 2026-11-13 with its step: the overlay shows only in a dev-mode project.
     REMOTE_PILOT("Enable Remote Pilot ▸", "🎮 Pilot on the toolbar (contributed by the BotMaker SDK)"),
     PUBLISH("Open Publish ▸", "Project ▸ Publish to Gallery…"),
     GALLERY("Get More Bots ▸", "Project ▸ Get More Bots… (the home's Get more bots)");

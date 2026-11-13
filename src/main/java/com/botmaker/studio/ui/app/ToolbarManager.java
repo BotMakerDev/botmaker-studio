@@ -45,8 +45,6 @@ public class ToolbarManager {
     /** The plugin tabs, most recent first, while no project is open to keep them. */
     private List<String> sessionTabs = List.of();
 
-    /** Opens the Project Settings dialog; the same action the Project menu fires. */
-    private Runnable onProjectSettings;
     /** Opens the Parameters dialog; the same action the Project menu fires. */
     private Runnable onParameters;
     /** Shows the Reports tab, read again; wired by {@link UIManager}. */
@@ -125,11 +123,6 @@ public class ToolbarManager {
         group.setAlignment(Pos.CENTER_LEFT);
         group.setPadding(new Insets(0, 10, 0, 0));
         return group;
-    }
-
-    /** Sets the callback invoked when the toolbar's Project Settings button is clicked. */
-    public void setOnProjectSettings(Runnable callback) {
-        this.onProjectSettings = callback;
     }
 
     /** Sets the callback invoked when the toolbar's Overlay Editor button is clicked. */
@@ -224,10 +217,9 @@ public class ToolbarManager {
         // now, placed by the same merge as the pilot's and the capture items'. Every row of that checklist
         // reads a file the plugin owns, so there is nothing left for the shell to wire.
 
-        own.add(ToolbarItem.id("settings").label("⚙ Settings")
-                .tooltip("Project settings: the standard resolution templates are authored at, and favourite methods")
-                .onBar(10)
-                .onPress(() -> c -> run(onProjectSettings)));
+        // ⚙ Settings stood here at 10 until 2026-11-13, opening Project Settings. The bot's name, description
+        // and icon are Project ▸ Bot Info… now; the favourites it listed serve only the overlay's palette, hidden
+        // with the overlay.
 
         // 🎯 Capture Targets stood here at PROJECT/30 until 2026-08-31 and is the SDK plugin's item now,
         // placed by the same merge as any other plugin's. The list it manages is capture.json, which is the
@@ -292,10 +284,13 @@ public class ToolbarManager {
         // the clearest case for it: the host owns the bar, the plugin owns the capture target it reads, the
         // pixels it grabs and the picture folder it writes.
 
-        own.add(ToolbarItem.id("overlay").label("⧉ Overlay")
-                .tooltip("Build the bot over the running game: a compact block tree on top of the target window")
-                .onBar(50)
-                .onPress(() -> c -> run(onOverlayEditor)));
+        // Hidden outside dev mode since 2026-11-13, the user's call: nobody used it. The code stays.
+        if (devMode()) {
+            own.add(ToolbarItem.id("overlay").label("⧉ Overlay")
+                    .tooltip("Build the bot over the running game: a compact block tree on top of the target window")
+                    .onBar(50)
+                    .onPress(() -> c -> run(onOverlayEditor)));
+        }
 
         // ⏺ Record stood here at order 40 and opened the overlay straight into recording. It is the SDK
         // plugin's ⏺ Record Macro since 2026-09-02 and arrives as a ToolbarItem like any other plugin's:
@@ -383,6 +378,11 @@ public class ToolbarManager {
         ToolbarItems.applyState(button, item, projectOpen(), botRunning());
         into.add(new Placed(item, button));
         return button;
+    }
+
+    /** Whether the open project is in dev mode, which alone shows the overlay editor's button. */
+    private boolean devMode() {
+        return settings != null && settings.current() != null && settings.current().devMode();
     }
 
     /** Whether a project is open, for an item's {@code EnabledWhen}. */
