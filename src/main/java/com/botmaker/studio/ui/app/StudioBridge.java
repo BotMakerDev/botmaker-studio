@@ -573,7 +573,7 @@ final class StudioBridge implements StudioDriver {
         try {
             String sha = Checkpoints.save(dir, editor, VersionOrigin.AI, name);
             if (sha == null) return "Nothing changed since the last version, so none was saved.";
-            // Named, so it is a milestone in the Versions tab like a version the user saved.
+            // Named, so it is a milestone in the Versions window like a version the user saved.
             new ProjectVcs(dir).name(sha, name);
             return "Saved the version " + sha + " “" + name + "”. versions revert " + sha + " puts the bot back to it.";
         } catch (IOException e) {
@@ -905,7 +905,7 @@ final class StudioBridge implements StudioDriver {
                     ? MigrationSteps.pending(index, PluginHost.grammar(), declared) : List.of();
             return MigrateWindow.listing(migration, broken, migration.done(broken), pending);
         } catch (RuntimeException | LinkageError e) {
-            // As the Review tab: a plugin type that cannot load leaves the migrations unread, not Studio broken.
+            // As the To review list: a plugin type that cannot load leaves the migrations unread, not Studio broken.
             throw unread("The bot's migrations could not be read: ", e);
         }
     }
@@ -1140,7 +1140,7 @@ final class StudioBridge implements StudioDriver {
     }
 
     /**
-     * The window's Remove originals and the Review tab's Remove unneeded methods, as one change: {@code from}'s
+     * The window's Remove originals and the To review list's Remove unneeded methods, as one change: {@code from}'s
      * originals copied into {@code to} that nothing uses, then each {@code @Migrate} method nothing needs. Without
      * {@code confirm}, what would go; with it, written as one version after a safety one.
      */

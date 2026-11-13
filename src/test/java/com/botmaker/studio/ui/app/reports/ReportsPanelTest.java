@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The Reports tab, smoke: a week of fake problems drawn, a bar listing its problems. With {@code BM_REPORTS_SHOTS}
+ * The Reports window, smoke: a week of fake problems drawn, a bar listing its problems. With {@code BM_REPORTS_SHOTS}
  * set to a folder, it also writes what it drew there as PNGs, light and dark.
  */
 class ReportsPanelTest extends FxHeadlessTest {

@@ -442,7 +442,7 @@ point of it.**
     asks exactly that of the plan. The editor's own ↶ already puts the active file back and dies with the
     session; a file the user never opened has no other way home, and a template repoint happens outside the
     editor entirely. Active-file-only edits take no snapshot — a commit per keystroke is not a history.
-  - **The Review tab is a scan, never a list something kept (`services/ReviewService`, `ui/app/ReviewPanel`).**
+  - **The Review tab (the status bar's To review list since 2026-11-13) is a scan, never a list something kept (`services/ReviewService`, `ui/app/ReviewPanel`).**
     Marks live in the source precisely so that nothing has to hold a copy of them: an edit that moves a
     function moves its mark, and a revert through Project History takes the marks out with the change. The
     price is that the list is *derived* — `ReviewService.scan` re-reads the bot's sources every time the tab

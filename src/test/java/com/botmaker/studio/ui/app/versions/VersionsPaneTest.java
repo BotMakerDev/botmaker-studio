@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The Versions tab reads what the editor holds, not only the disk: an edit never run shows as unsaved, and
+ * The Versions window reads what the editor holds, not only the disk: an edit never run shows as unsaved, and
  * Save version keeps it as a named milestone.
  */
 class VersionsPaneTest extends FxHeadlessTest {

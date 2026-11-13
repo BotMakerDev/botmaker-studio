@@ -1,5 +1,11 @@
 # Dated notes — read these before the other files here
 
+> **The project window was cleaned up on 2026-11-13** (umbrella plan `2026-11-13-studio-window-cleanup`). Run is a
+> split button, one Run tab holds the trace, a status bar lists the problems and review marks, Versions and Reports
+> are windows, and the file tree shows the open file's members. The Errors, Review, Trace, Versions and Reports
+> tabs, the Structure pane, the *Managed by Studio* group and `ProjectSettingsDialog` are gone. The note at the top
+> of `ui-structure.md` says where each one went.
+
 > **The MCP endpoint and its tools are `botmaker-core`'s since 2026-11-05** (phase 9b of the same plan): every class of
 > `assist/` moved to `com.botmaker.core.assist`, `AiTool` and `BotGuard` included, except these, which stay in Studio:
 > `UiTools`, `UiInput`, `UiEvents`, `UiFindings`, `UiProfile`, `OnScreen`, `FxWatch`, `PluginMove` and `StudioToolGroup`. `HomeEndpoint` serves for the `ToolGroup` Studio sets

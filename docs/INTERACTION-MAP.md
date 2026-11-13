@@ -120,7 +120,7 @@ injection seam — assert only on the static controls (as `ProjectSelectionScree
 the **"Create"** button; an editable **"BotMaker SDK version"** `ComboBox`. Good **network-free**
 validation test target.
 
-**GitHubAccountBar** (`ui/app/GitHubAccountBar.java`, shared with the Versions tab's `PublishSheet`): "Sign in with
+**GitHubAccountBar** (`ui/app/GitHubAccountBar.java`, shared with the Versions window's `PublishSheet`): "Sign in with
 GitHub" (OAuth device flow), "Sign out", "Switch account"; status label cycles auth states. **Network.**
 
 ## E. Main editor window: menus, toolbar, panels, shortcuts
@@ -139,27 +139,31 @@ GitHub" (OAuth device flow), "Sign out", "Switch account"; status label cycles a
 - **Help** — Studio/SDK on GitHub, "Check for Updates…" (`UpdateService`, modal progress `Stage`),
   "About BotMaker".
 
+> **2026-11-13** (plan `2026-11-13-studio-window-cleanup`): the toolbar, left panel and bottom tabs below are
+> as that plan left them; what stood here before described a window several redesigns older.
+
 **Toolbar** (`ToolbarManager`, `.main-toolbar`) — all publish on the `EventBus`:
-- Undo "↶", Redo "↷", **"⚙ Compile"** (`CompilationRequestedEvent`).
-- **"🎯 Capture Targets"** → `ManageCaptureTargetsDialog`.
-- **"▶ Run"** (`.btn-run` → `ExecutionRequestedEvent`), **"🐞 Debug"** (`.btn-debug` →
-  `DebugStartRequestedEvent`), **"⏹ Stop"** (`.btn-stop`, disabled idle → `Stop/DebugStopRequestedEvent`),
-  **"⤵ Step"**, **"⏩ Cont"** (both debug-paused only). Enable/disable is **IDLE/RUNNING/DEBUGGING
-  state-driven** via `ProgramStarted/Stopped`, `DebugSession*`, `HistoryStateChanged` events.
+- Undo "↶", Redo "↷".
+- **Run** is one `SplitMenuButton`: its menu holds Run, Debug, Follow and Compile, and its face repeats the
+  last choice (`WorkspaceLayout.runChoice`). **"⏹ Stop"**; **"⤵ Step"** and **"⏩ Cont"** show only while a debug
+  session goes.
+- **"🎚 Parameters"**, **"▤ Reports"** and **"⟲ Versions"** (each a window of its own, one per project),
+  **"👁 Preview"**, **"🤖 Assistant"**; **"⧉ Overlay"** only in a dev-mode project. Below the row, `PluginTabs`:
+  a tab per plugin's `onBar` items.
 
-**Left panel** (`FileExplorerManager`, `.file-explorer`): header "Project Files" (`.sidebar-header`);
+**Left panel** (`FileExplorerManager`, `.file-explorer`): header "Project Files", a filter field, and a
+`TreeView<ExplorerNode>` with **My code** (folders, package chains folded) and **Resources**. The open file's
+row unfolds to its members (`SourceNavigation.structure`, style class `tree-member`); a member's click brings
+the canvas forward and reveals its block. Files a plugin keeps (Parameters.java, `plugins/…`) are not listed.
+The explorer/canvas divider is clamped to 150–460px by `UIManager.clampExplorerWidth`.
 
-**"New Activity"** button → `TextInputDialog` → `ActivityService.update` (regenerates the registry + creates
-the `Activity` subclass stub, then opens it). `TreeView<ExplorerNode>` with two synthetic groups —
-**"Your files"** (`FileRole.EDITABLE`) and **"Generated (read-only)"** (`GENERATED` + `LIBRARY`); select a
-file → `switchToFile`; right-click → **"Delete File"** (confirms first for generated files, pointing at
-Project ▸ Recover Project Files). Refreshes on `ActivitiesChangedEvent`. The explorer/canvas divider is
-clamped to 150–460px by `UIManager.clampExplorerWidth`.
+**Bottom `TabPane`** (`BottomTab`): **"Run"** (the bot's output, with *Output*, *Trace* and *Only warnings*
+chips), **"Debug"** (while a debug session goes), **"Usages"** (opened by Find Usages, closable),
+**"Terminal"** (*View ▸ Terminal*, always in dev mode). A layout saved on a removed tab opens on Run.
 
-**Bottom `TabPane`** (3 non-closable tabs): **"Terminal"** (`.console-area`, read-only, right-click
-Copy/Clear), **"Errors"** (filter `ToggleButton`s "Errors/Warnings/Infos (n)"; click a `Diagnostic` row
-→ focuses its block), **"Event Log"** (`.event-log-list`, multi-select read-only). Auto-selects Terminal
-on `ProgramStartedEvent`/`DebugSessionStartedEvent`, Errors on any error diagnostic.
+**Status bar** (`ProjectStatusBar`): the bot's name and SDK version, the status line, and the badge
+**"⚠ n problems · ⚑ n to review ▴"**, whose popup lists the diagnostics and the review marks with *Show* and
+*Done* (the Errors and Review tabs until 2026-11-13).
 
 **Global shortcuts** (scene `KEY_PRESSED` filter, suppressed while focus is in a `TextInputControl`):
 `Ctrl/Cmd+C` → `CopyRequestedEvent`, `Ctrl/Cmd+V` → `PasteRequestedEvent`.

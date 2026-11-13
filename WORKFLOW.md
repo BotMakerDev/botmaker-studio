@@ -129,7 +129,7 @@ Blocks that call the SDK come from the palette on the left, grouped by facade: v
 
 > Run executes the bot; Debug steps through it block by block with breakpoints.
 
-The Terminal tab shows what the bot printed and the Errors tab what did not compile, with the failing block highlighted on the canvas. A breakpoint is set on the block's gutter, and stepping highlights the block currently executing.
+The Run tab shows what the bot printed and traced, and the status bar's ⚠ problems what did not compile, with the failing block highlighted on the canvas. A breakpoint is set on the block's gutter, and stepping highlights the block currently executing.
 
 If a bot needs to run without taking over your screen, it can run on a private display — a nested X server it owns — so you keep using your machine while it works.
 

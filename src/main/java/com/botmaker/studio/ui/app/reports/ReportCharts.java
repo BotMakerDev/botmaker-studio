@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * The Reports tab's charts as data, free of JavaFX (run reports spec §5): a report grouped by one of the dimensions
+ * The Reports window's charts as data, free of JavaFX (run reports spec §5): a report grouped by one of the dimensions
  * it names, counted through {@link Counts} as the CLI and Claude's tools count.
  */
 final class ReportCharts {

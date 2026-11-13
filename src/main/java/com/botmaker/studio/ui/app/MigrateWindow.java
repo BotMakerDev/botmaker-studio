@@ -71,7 +71,7 @@ import java.util.function.Supplier;
  * {@code from <plugin>} and is read-only: it is in the plugin's sources jar. <b>Write my own</b> seeds the bot's own
  * rule for the same element, which wins over the plugin's.
  *
- * <p>Opened from Project ▸ Migrate…, the Review tab, the canvas's banner after a change broke something, and the
+ * <p>Opened from Project ▸ Migrate…, the status bar's To review list, the canvas's banner after a change broke something, and the
  * upgrade's <i>Migrate first</i>. Each read compiles the bot twice, so it runs off the FX thread; the buffers are
  * read before and written after on it.
  */

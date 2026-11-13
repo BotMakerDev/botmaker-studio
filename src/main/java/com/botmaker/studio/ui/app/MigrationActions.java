@@ -36,7 +36,7 @@ import java.util.function.Supplier;
  * The steps after a migration, as Studio runs them (2026-10-12): uses switched to the copies, originals nothing
  * uses removed, migration methods nothing needs removed — {@link MigrationCleanup}'s plans, worked out on a worker
  * (each compiles the bot), a removal confirmed by the author, and written on the FX thread as one version after
- * a safety one. Shared by {@link MigrationWindow}, the Review tab and a managed value's right-click.
+ * a safety one. Shared by {@link MigrationWindow}, the To review list and a managed value's right-click.
  */
 final class MigrationActions {
 

@@ -19,7 +19,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The Reports tab's grouping into chart series, headless. */
+/** The Reports window's grouping into chart series, headless. */
 class ReportChartsTest {
 
     static final Instant DAY1 = Instant.parse("2026-10-28T09:00:00Z");

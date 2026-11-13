@@ -57,7 +57,7 @@ import java.util.function.Consumer;
 /**
  * The migration window (2026-10-12, {@code docs/refactor/25-compatibility.md} §12): a retired type's values copied
  * into another type in guided steps, the steps saved in the bot as {@code @Migrate} methods ({@link MigrationSteps})
- * and run by {@link ManagedMigrations}. Opened from the Review tab's row of a retired type, and from a managed
+ * and run by {@link ManagedMigrations}. Opened from the To review list's row of a retired type, and from a managed
  * value's <i>Migrate type…</i> ({@link MigrationMenu}).
  *
  * <p>One step per pair of types. A pair of calls lists the new type's parts, each made of an old part, built from

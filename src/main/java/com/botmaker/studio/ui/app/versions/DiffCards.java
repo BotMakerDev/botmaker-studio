@@ -28,7 +28,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * What one file's change looks like in the Versions tab ({@code docs/refactor/39-versions.md} §5): a card per
+ * What one file's change looks like in the Versions window ({@code docs/refactor/39-versions.md} §5): a card per
  * changed function, <b>Before | After</b> as blocks with the changed ones marked, the unchanged functions folded
  * into one line, each changed field its own Was | Now card drawn as blocks, pictures as thumbnails, and anything
  * that is not Java — or does not parse —

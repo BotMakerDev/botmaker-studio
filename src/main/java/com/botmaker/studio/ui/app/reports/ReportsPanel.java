@@ -65,7 +65,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * The Reports tab (run reports spec §5): a bot's problems, from its runs on this computer or from the issues its
+ * The Reports window (a tab until 2026-11-13; run reports spec §5): a bot's problems, from its runs on this computer or from the issues its
  * runners sent, grouped by one of the dimensions the reports name (Studio knows none) — a bar per value stacked by
  * level, a bar per day stacked by value, lines over the days, a value × day heatmap, a donut of shares or a sortable
  * table ({@link Kind}). A loaded plugin's {@link ReportView}, picked by title, sets all three over its own line
@@ -167,7 +167,7 @@ public final class ReportsPanel {
     /** True while pickers are set in code: their actions draw nothing, the one who set them draws once. */
     private boolean settling;
 
-    /** The Reports tab of the project in {@code project}; a problem's line opens through {@code onReveal}. */
+    /** The Reports panel of the project in {@code project}; a problem's line opens through {@code onReveal}. */
     public ReportsPanel(EventBus eventBus, Path project, Path sourceRoot, BiConsumer<Path, Integer> onReveal) {
         this(sourceRoot, onReveal, ReportTarget.of(project),
                 () -> RunReports.read(project.resolve(RunLog.FOLDER)),

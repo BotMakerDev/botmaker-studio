@@ -92,7 +92,7 @@ public class ReturnBlock extends AbstractStatementBlock {
      * The delete, unless this is the {@code return} the signature depends on — then it explains instead.
      *
      * <p>Removing the last {@code return} of a function that gives something back leaves a file that does not
-     * compile, from one click, with the reason visible only in the Errors tab afterwards. It is not really a
+     * compile, from one click, with the reason visible only in the Problems list afterwards. It is not really a
      * statement the user owns: it is the body's half of the signature, and the way to be rid of it is to say
      * the function gives nothing back — which removes it as part of that change, calls and all.
      *

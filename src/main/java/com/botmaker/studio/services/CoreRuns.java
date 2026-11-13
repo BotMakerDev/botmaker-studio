@@ -272,7 +272,7 @@ public final class CoreRuns implements AutoCloseable {
     }
 
     /**
-     * What Studio's diagnostics say before a run, shown in the Errors tab whether or not they stop it, and why they stop
+     * What Studio's diagnostics say before a run, shown in the Problems list whether or not they stop it, and why they stop
      * it if they do. A slot still waiting on one of the user's variables (a red "Choose a variable…" chip) would only
      * surface as a raw javac error, so it stops the run here; every value slot seeds a compiling default, so it fires
      * only for positions that need a name (see UnfilledSlot). Deprecated SDK calls ride along but never stop it: they

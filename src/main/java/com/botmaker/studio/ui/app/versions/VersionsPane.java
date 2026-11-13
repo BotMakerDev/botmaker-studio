@@ -92,7 +92,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * The Versions tab, Simple view ({@code docs/refactor/39-versions.md} §4): <i>Save version</i> over a timeline
+ * The Versions window (a tab until 2026-11-13), Simple view ({@code docs/refactor/39-versions.md} §4): <i>Save version</i> over a timeline
  * of the project's versions — the unsaved changes pinned first, milestones bold, the versions Studio took on
  * the user's behalf folded — and, for the selected row, the files it changed, each drawn as {@link DiffCards}:
  * its changed functions as blocks, Before | After, with <i>Restore this function</i> and <i>Restore this

@@ -54,7 +54,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Publishing, as the Versions tab's side sheet ({@code docs/refactor/39-versions.md} §8): what is published
+ * Publishing, as the Versions window's side sheet ({@code docs/refactor/39-versions.md} §8): what is published
  * — <i>Kind</i>, <i>Details</i>, <i>Release</i> — then how it will look and how it went: the
  * Browse Bots card built from the form as it stands, the publish's steps with a Retry for the one that failed,
  * and what the catalog says of the bot's entry (its pull request: open, waiting, listed or refused with the

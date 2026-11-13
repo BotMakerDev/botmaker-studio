@@ -70,7 +70,7 @@ final class WorkspaceLayoutStore {
     private WorkspaceLayout snapshot() {
         BottomTab selected = bottomTabs.selected();
         String tabKey = selected == null ? null : selected.key();
-        // The Versions tab saves its own divider as it moves, and the toolbar its Run choice; keep what they wrote.
+        // The Versions window saves its own divider as it moves, and the toolbar its Run choice; keep what they wrote.
         WorkspaceLayout saved = settings.current().workspaceLayout();
         Path shown = centerTabs.shownJavaFile();
         return new WorkspaceLayout(dividerOf(explorerSplit), dividerOf(bottomSplit), tabKey,

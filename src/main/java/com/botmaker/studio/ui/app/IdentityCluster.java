@@ -15,8 +15,8 @@ import java.util.function.Consumer;
 /**
  * The far-right toolbar cluster: the theme dropdown and the (still disabled) Google button.
  *
- * <p>The ⑂ VCS and GitHub buttons stood here until 2026-09-26. VCS only raised the Versions tab, which has its
- * own tab; the GitHub account is used by the Versions tab alone (sharing, publishing, the commit author), so
+ * <p>The ⑂ VCS and GitHub buttons stood here until 2026-09-26. VCS only raised the Versions tab (a window of
+ * its own since 2026-11-13); the GitHub account is used by Versions alone (sharing, publishing, the commit author), so
  * its button is there now ({@code VersionsPane}'s account button).
  *
  * <p>Extracted from {@code UIManager} with its {@link BlockTheme} listener, which is the point: that listener

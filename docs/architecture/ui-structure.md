@@ -1,5 +1,23 @@
 # UI Structure
 
+> **2026-11-13 — the project window cleaned up** (umbrella plan `2026-11-13-studio-window-cleanup`). Text below
+> naming these is history:
+> - **Run** is one `SplitMenuButton` (Run, Debug, Follow, Compile; its face the last choice, kept as
+>   `WorkspaceLayout.runChoice`). Step and Continue show only during a debug session. ⧉ Overlay shows only in a
+>   dev-mode project. *Project settings…* and `ProjectSettingsDialog` are gone for *Project ▸ Bot Info…*, and
+>   `PublishSheet` shows `BotInfoSection` too.
+> - **One Run tab**: `RunConsole` holds the trace too, behind *Output*, *Trace* and *Only warnings* chips.
+>   `TracePanel`'s tab is gone.
+> - **`ProjectStatusBar`** shows the bot's name, its SDK, the status line and *⚠ problems · ⚑ to review*. Its popup
+>   lists `DiagnosticsPanel`'s and `ReviewPanel`'s items, which were the Errors and Review tabs.
+> - **Tabs that come and go**: `BottomTab` keeps RUN, DEBUG (with its session), USAGES (from Find Usages) and
+>   TERMINAL (*View ▸ Terminal*, always in dev mode). A layout saved on a removed tab opens on Run.
+> - **Versions and Reports are windows** (`ToolWindow`), one per project, from ⟲ Versions and ▤ Reports, each read
+>   again on show. `VersionsPane` and `ReportsPanel` moved in unchanged.
+> - **The Structure pane is gone**: the open file's row in `FileExplorerManager` unfolds to its members, and a click
+>   reveals the block. The *Managed by Studio* group is gone too, by the user's call: files a plugin keeps are not
+>   listed.
+
 The `ui/` package is split by concern:
 
 - **`ui/app/`** — the application shell. `UIManager` is the *coordinator*: it assembles the main window out

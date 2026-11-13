@@ -3,7 +3,7 @@ package com.botmaker.studio.ui.app.versions;
 import java.util.prefs.Preferences;
 
 /**
- * Whether the Versions tab's function cards show only what changed. Remembered per user, beside
+ * Whether the Versions window's function cards show only what changed. Remembered per user, beside
  * {@link VersionsView}, for the same reason: it is about who is looking, not the project being looked at.
  */
 final class OnlyDifferences {

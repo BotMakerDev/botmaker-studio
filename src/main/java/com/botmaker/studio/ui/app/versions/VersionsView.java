@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.prefs.Preferences;
 
 /**
- * The Versions tab's two views ({@code docs/refactor/39-versions.md} §9): <i>Simple</i> for someone who saves
+ * The Versions window's two views ({@code docs/refactor/39-versions.md} §9): <i>Simple</i> for someone who saves
  * and shares, <i>Dev</i> for someone who reads git. Remembered per user, in Studio's preferences — not per
  * project, since it is about who is looking, not what they look at.
  */
