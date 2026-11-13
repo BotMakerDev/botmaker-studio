@@ -5,6 +5,7 @@ import com.botmaker.shared.github.GitHubAuth;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.tools.UserDirs;
 import com.botmaker.core.config.AppVersion;
+import com.botmaker.core.plugin.HostFolders;
 import com.botmaker.core.project.ProjectManager;
 import com.botmaker.core.project.ProjectPreferences;
 import com.botmaker.core.services.MavenService;
@@ -664,6 +665,11 @@ public final class RunHome implements ProjectWindow {
         Optional<Path> picked = Choosers.folder(stage, "Open a project folder", Path.of(System.getProperty("user.home")));
         if (picked.isEmpty()) return;
         Path dir = picked.get().toAbsolutePath().normalize();
+        Optional<String> owned = HostFolders.ownedByAPlugin(dir);
+        if (owned.isPresent()) {
+            error("A plugin's folder", owned.get());
+            return;
+        }
         if (projectManager.projectAt(dir).isEmpty()) {
             error("Not a project", dir + " has no " + ProjectManager.PROJECT_SHAPE
                     + ", so there is no project here to open.");
