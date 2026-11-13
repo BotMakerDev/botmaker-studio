@@ -16,7 +16,7 @@ import java.util.function.Consumer;
  * What a run's end does with its problems (run reports spec §3), by the bot's {@link ReportConsent}: first what
  * earlier runs kept from a failed send goes; then {@link ReportConsent#NEVER} does nothing, {@link
  * ReportConsent#ALWAYS} sends, and {@link ReportConsent#ASK} shows {@link ReportsDialog}. A bot with no GitHub
- * repository ({@code upstream}, else {@code origin}) reports nothing; its Trace tab still exports its logs.
+ * repository ({@code upstream}, else {@code origin}) reports nothing; the Run tab's Trace still exports its logs.
  */
 public final class RunEndReports implements AutoCloseable {
 
@@ -77,7 +77,7 @@ public final class RunEndReports implements AutoCloseable {
             case SEND -> status(RunProblems.summary(RunProblems.send(run, target,
                     unsent.stream().map(RunProblems.Draft::report).toList())));
             case SIGN_IN -> status("This run's problems were not reported: sign in to GitHub to send them, or "
-                    + "Submit logs… on the Trace tab.");
+                    + "Submit logs… in the Run tab's Trace.");
             case ASK -> Platform.runLater(() -> ask(run, target, drafts, consent, signedIn));
         }
     }

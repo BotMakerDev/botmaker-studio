@@ -12,19 +12,24 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.ToggleButton;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
- * The Run tab: what the running (or debugged) bot prints, and the two things one does to it — stop it, clear
- * the text.
+ * The Run tab: what the running (or debugged) bot prints, or its trace by the chips ({@link View}), and the two
+ * things one does to it — stop it, clear the text.
  *
  * <p>It used to be the "Terminal" tab, a read-only {@code TextArea} built inline in {@link UIManager}. It was
  * never a terminal: the bot runs on pipes and asks its questions as dialogs
@@ -43,13 +48,46 @@ final class RunConsole {
 
     private enum Running { NONE, RUN, DEBUG }
 
+    /**
+     * The chips: what the tab lists. The Trace tab was a tab of its own until 2026-11-13; it is this console's
+     * second and third views now, so one tab holds everything a run says.
+     */
+    enum View {
+        /** Everything the bot prints, its own {@code System.out} included. */
+        OUTPUT("Output", "Everything the bot prints"),
+        /** Its trace lines, each linked to the block that wrote it — see {@link TracePanel}. */
+        TRACE("Trace", "The bot's trace: each line says what wrote it, and a click shows that block"),
+        /** The trace's warnings and errors only. */
+        ONLY_WARNINGS("Only warnings", "The trace's warnings and errors only");
+
+        private final String displayName;
+        private final String tooltip;
+
+        View(String displayName, String tooltip) {
+            this.displayName = displayName;
+            this.tooltip = tooltip;
+        }
+
+        String displayName() {
+            return displayName;
+        }
+
+        String tooltip() {
+            return tooltip;
+        }
+    }
+
     private final EventBus eventBus;
     private final TextArea output = new TextArea();
     private final Button stop = new Button("■ Stop");
     private final Label state = new Label("Not running");
     private final BorderPane view = new BorderPane();
+    private final Map<View, ToggleButton> chips = new EnumMap<>(View.class);
+    private final ToggleGroup group = new ToggleGroup();
     private final List<EventBus.Subscription> subscriptions = new ArrayList<>();
     private Running running = Running.NONE;
+    /** The project's trace, once {@link #trace} has been given it; {@code null} before. */
+    private TracePanel trace;
 
     RunConsole(EventBus eventBus, Runnable raise) {
         this.eventBus = eventBus;
@@ -61,11 +99,32 @@ final class RunConsole {
         stop.setDisable(true);
         stop.setOnAction(e -> requestStop());
         Button clear = new Button("Clear");
-        clear.setOnAction(e -> output.clear());
+        clear.setOnAction(e -> clear());
         state.getStyleClass().add("run-console-state");
         Region gap = new Region();
         HBox.setHgrow(gap, Priority.ALWAYS);
-        HBox bar = new HBox(6, state, gap, stop, clear);
+        HBox chipRow = new HBox(4);
+        for (View v : View.values()) {
+            ToggleButton chip = new ToggleButton(v.displayName());
+            chip.setTooltip(new Tooltip(v.tooltip()));
+            chip.setToggleGroup(group);
+            chip.getStyleClass().add("run-console-chip");
+            chip.setUserData(v);
+            // No trace until a project hands one in (trace(...)): a chip that cannot show its lines is off.
+            chip.setDisable(v != View.OUTPUT);
+            chips.put(v, chip);
+            chipRow.getChildren().add(chip);
+        }
+        // A chip group always has one chip on: pressing the one that is on keeps it on.
+        group.selectedToggleProperty().addListener((o, was, now) -> {
+            if (now == null) {
+                group.selectToggle(was);
+                return;
+            }
+            showView((View) now.getUserData());
+        });
+        chips.get(View.OUTPUT).setSelected(true);
+        HBox bar = new HBox(6, state, chipRow, gap, stop, clear);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(2, 6, 2, 6));
         bar.getStyleClass().add("run-console-bar");
@@ -89,6 +148,42 @@ final class RunConsole {
 
     Node node() {
         return view;
+    }
+
+    /**
+     * The project's trace, shown by the Trace and Only warnings chips. The console outlives a project's panels
+     * (it is built with the window), so each project hands its own in.
+     */
+    void trace(TracePanel panel) {
+        trace = panel;
+        chips.forEach((v, chip) -> chip.setDisable(v != View.OUTPUT && panel == null));
+        if (panel == null) show(View.OUTPUT);
+        showView(shown());
+    }
+
+    /** The chip that is on; the group always has one (see the constructor). */
+    View shown() {
+        return (View) group.getSelectedToggle().getUserData();
+    }
+
+    /** Turns {@code chip} on, as a click on it would. */
+    void show(View chip) {
+        chips.get(chip).setSelected(true);
+    }
+
+    private void showView(View chosen) {
+        if (chosen == View.OUTPUT || trace == null) {
+            view.setCenter(output);
+            return;
+        }
+        trace.onlyWarnings(chosen == View.ONLY_WARNINGS);
+        view.setCenter(trace.node());
+    }
+
+    /** <i>Clear</i>: what is shown — the output, or the trace's list as its own Clear did. */
+    private void clear() {
+        if (shown() == View.OUTPUT || trace == null) output.clear();
+        else trace.clear();
     }
 
     /** Drops this console's handlers from the project's bus: the next window builds its own. */
@@ -147,7 +242,7 @@ final class RunConsole {
         MenuItem copy = new MenuItem("Copy");
         copy.setOnAction(e -> output.copy());
         MenuItem clear = new MenuItem("Clear");
-        clear.setOnAction(e -> output.clear());
+        clear.setOnAction(e -> clear());
         return new ContextMenu(copy, new SeparatorMenuItem(), clear);
     }
 }

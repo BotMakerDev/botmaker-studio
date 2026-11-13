@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **One Run tab** (2026-11-13): the Trace tab is the Run tab's *Trace* chip now, beside *Output* (what the bot
+  prints) and *Only warnings* (the trace's warnings and errors). A trace line still shows its block when clicked,
+  and the hidden writers are kept. Clear empties what is shown. A window saved on the Trace tab opens on Run.
 - **Run is one split button** (2026-11-13): its ▾ menu holds ▶ Run, 🐞 Debug, 👁 Follow and ⚙ Compile, which were
   four buttons, and pressing the button repeats the last one chosen, kept per project. ⤵ Step and ⏩ Continue show
   only while debugging.

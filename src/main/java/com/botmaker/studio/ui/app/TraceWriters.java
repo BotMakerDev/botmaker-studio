@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * The Trace tab's writer filter (2026-09-29): every class and method that wrote a line, grouped by who ships the
+ * The Run tab's Trace writer filter (2026-09-29): every class and method that wrote a line, grouped by who ships the
  * class (this bot, a plugin by name, or a library), each with a checkbox. Unticking hides that writer's lines.
  *
  * <p>What is kept is what is <em>hidden</em>, as keys: a class's binary name hides the whole class, and {@code

@@ -14,8 +14,8 @@ enum BottomTab {
      * until 2026-09-25, which it never was.
      */
     RUN("Run"),
-    /** The running bot's debug lines, filtered and linked to their blocks — see {@link TracePanel} (2026-09-29). */
-    TRACE("Trace"),
+    // TRACE("Trace") stood here from 2026-09-29 until 2026-11-13 and is the Run tab's Trace chip now (RunConsole.View);
+    // a layout saved on it opens on the default tab, Run.
     /** A bot's problems, from its runs here or its runners' issues, charted — see {@code ReportsPanel} (2026-11-03). */
     REPORTS("Reports"),
     /** Shells in the project directory on a real PTY — see {@link com.botmaker.studio.ui.app.terminal.TerminalPane}. */

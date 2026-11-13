@@ -144,7 +144,7 @@ public class CoreApplicationEvents {
     public record TelemetryFrameEvent(byte[] frame) implements ApplicationEvent {}
 
     /**
-     * One line of the running bot's trace, read off its telemetry channel: the Trace tab shows it and
+     * One line of the running bot's trace, read off its telemetry channel: the Run tab's Trace shows it and
      * {@code Runs.onTrace} relays it. Published off the FX thread.
      */
     public record TraceLineEvent(com.botmaker.plugin.api.TraceLine line) implements ApplicationEvent {}

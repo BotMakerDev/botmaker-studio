@@ -54,11 +54,12 @@ import java.util.TreeSet;
 import java.util.function.BiConsumer;
 
 /**
- * The <b>Trace</b> bottom tab (2026-09-29, {@code docs/refactor/40-run-trace.md}): the running bot's debug lines
- * as the {@link TraceLine}s Studio read off its telemetry channel, filtered by level, by the source that wrote
- * them and by text, with a click on a line landing on the block that wrote it.
+ * The Run tab's <b>Trace</b> view (2026-09-29, {@code docs/refactor/40-run-trace.md}; its own bottom tab until
+ * 2026-11-13): the running bot's debug lines as the {@link TraceLine}s Studio read off its telemetry channel,
+ * filtered by level, by the source that wrote them and by text, with a click on a line landing on the block that
+ * wrote it. {@link RunConsole} shows it, or the bot's output, by its chips.
  *
- * <p>Beside the Run tab, not instead of it: the console is everything the bot prints, a bot's own {@code
+ * <p>Beside the output, not instead of it: the output is everything the bot prints, a bot's own {@code
  * System.out} included, and this is the part of it that says what wrote it and where. A run's trace starts
  * empty; the last {@value #MAX_LINES} lines are kept, since a bot left running all night would otherwise hold
  * every line it ever wrote.
@@ -74,6 +75,7 @@ final class TracePanel {
     static final String LIVE = "This run";
 
     private static final String TRACE_CELL = "trace-cell";
+    private static final Set<TraceLine.Level> WARNINGS = EnumSet.of(TraceLine.Level.WARN, TraceLine.Level.ERROR);
     private static final DateTimeFormatter TIME =
             DateTimeFormatter.ofPattern("HH:mm:ss.SSS", Locale.ROOT).withZone(ZoneId.systemDefault());
 
@@ -88,6 +90,8 @@ final class TracePanel {
     private final List<TraceLine> liveAside = new ArrayList<>();
     private boolean live = true;
     private boolean refreshing;
+    /** The Run tab's <i>Only warnings</i> chip: warnings and errors, the level toggles set aside while it is on. */
+    private boolean onlyWarnings;
 
     private final Deque<TraceLine> all = new ArrayDeque<>();
     private final ObservableList<TraceLine> shown = FXCollections.observableArrayList();
@@ -160,8 +164,6 @@ final class TracePanel {
         search.setPromptText("Search");
         search.textProperty().addListener((o, was, now) -> refilter());
         HBox.setHgrow(search, Priority.SOMETIMES);
-        Button clear = new Button("Clear");
-        clear.setOnAction(e -> clear());
         ToggleButton writersToggle = new ToggleButton("Writers");
         writersToggle.setTooltip(new Tooltip("Pick, class by class and method by method, whose lines are shown. "
                 + "A plugin's calls are traced without it writing anything; one unticked here is not traced at "
@@ -169,12 +171,12 @@ final class TracePanel {
         writers.offer(traceable());
         Region gap = new Region();
         HBox.setHgrow(gap, Priority.ALWAYS);
-        bar.getChildren().addAll(sourceFilter, search, writersToggle, gap, summary, clear, submit, export);
+        bar.getChildren().addAll(sourceFilter, search, writersToggle, gap, summary, submit, export);
         bar.getStyleClass().add("diagnostics-filter-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
 
-        list.setPlaceholder(new Label("Run the bot to see its trace. 🐞 Debug on the toolbar decides whether "
-                + "debug lines are written."));
+        list.setPlaceholder(new Label("Run the bot to see its trace. The toolbar's 🐞 Debug: on / off decides "
+                + "whether debug lines are written."));
         list.setCellFactory(v -> new TraceCell());
         list.setOnMouseClicked(e -> {
             if (e.getButton() == MouseButton.PRIMARY) reveal(list.getSelectionModel().getSelectedItem());
@@ -360,7 +362,17 @@ final class TracePanel {
         return List.copyOf(shown);
     }
 
+    /** Whether only warnings and errors are listed — the Run tab's chip — and the list refiltered to say so. */
+    void onlyWarnings(boolean on) {
+        if (onlyWarnings == on) return;
+        onlyWarnings = on;
+        // The chip decides the levels while it is on, so the toggles are out of play rather than half-obeyed.
+        levelFilters.values().forEach(toggle -> toggle.setDisable(on));
+        refilter();
+    }
+
     private Set<TraceLine.Level> shownLevels() {
+        if (onlyWarnings) return WARNINGS;
         Set<TraceLine.Level> levels = EnumSet.noneOf(TraceLine.Level.class);
         levelFilters.forEach((level, toggle) -> {
             if (toggle.isSelected()) levels.add(level);

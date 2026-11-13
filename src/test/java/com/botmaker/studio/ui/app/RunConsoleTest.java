@@ -51,6 +51,14 @@ class RunConsoleTest extends FxHeadlessTest {
         assertEquals("INFO started\nplain\n", console.text());
     }
 
+    /** Before a project hands its trace in, only Output can be chosen. */
+    @Test
+    void theTraceChipsWaitForATrace() {
+        assertEquals(RunConsole.View.OUTPUT, console.shown());
+        assertTrue(lookup(RunConsole.View.TRACE.displayName()).query().isDisabled());
+        assertTrue(lookup(RunConsole.View.ONLY_WARNINGS.displayName()).query().isDisabled());
+    }
+
     @Test
     void textWithoutAnEscapeIsLeftAlone() {
         String line = "BM-INPUT is a marker, [32m without ESC is text\n";

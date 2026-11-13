@@ -39,7 +39,7 @@ import java.util.function.Consumer;
  * A run's problems before they leave the machine (run reports spec §3, layout A picked 2026-11-03): the problems
  * ticked to send on the left, the exact text of the one picked on the right, editable, how this bot sends from now
  * on, and <i>Export logs…</i>, <i>Later</i> and <i>Send</i>. Shown at a run's end when the bot asks, and from the
- * Trace tab's <i>Submit logs…</i> for any run kept.
+ * Run tab's Trace <i>Submit logs…</i> for any run kept.
  */
 public final class ReportsDialog {
 

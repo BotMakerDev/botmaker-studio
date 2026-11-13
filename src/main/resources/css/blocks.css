@@ -431,6 +431,12 @@
     -fx-font-weight: bold;
 }
 
+/* The Run tab's Output / Trace / Only warnings chips: one is always on. */
+.run-console-chip {
+    -fx-background-radius: 10;
+    -fx-padding: 1 8 1 8;
+}
+
 .severity-filter--error   { -fx-text-fill: -bm-severity-error; }
 .severity-filter--warning { -fx-text-fill: -bm-severity-warning; }
 .severity-filter--info    { -fx-text-fill: -bm-severity-info; }

@@ -15,7 +15,7 @@ import com.botmaker.studio.events.CoreApplicationEvents.TrialRunRequestedEvent;
 
 /**
  * Tells a {@link RunLog} what Studio's bus says of runs: what was asked for, its start and stop, a debug session, the
- * output and trace the Run and Trace tabs show (plan phase 9). The log closes the subscriptions when it closes.
+ * output and trace the Run tab shows (plan phase 9). The log closes the subscriptions when it closes.
  */
 public final class RunLogOnBus {
 

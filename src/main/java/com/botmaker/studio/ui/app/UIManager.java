@@ -152,7 +152,7 @@ public class UIManager implements ProjectWindow {
     private ReviewPanel reviewPanel;
     private UsagesPanel usagesPanel;
     private DebugPanel debugPanel;
-    /** The Trace bottom tab: the running bot's debug lines. Built by {@link #createScene()}. */
+    /** The Run tab's Trace view: the running bot's debug lines. Built by {@link #createScene()}. */
     private TracePanel tracePanel;
     private ReportsPanel reportsPanel;
     /** The Assistant window's Chat pane. Built with the window, so its conversation lasts as long as the window does. */
@@ -533,6 +533,7 @@ public class UIManager implements ProjectWindow {
         // A trace line lands the way a debug frame does: by its class's file and its line.
         if (tracePanel != null) tracePanel.dispose();
         tracePanel = new TracePanel(eventBus, config.projectPath(), config.sourceRoot(), projectSettingsService, navigation::revealLine);
+        runConsole.trace(tracePanel);
         if (reportsPanel != null) reportsPanel.dispose();
         reportsPanel = new ReportsPanel(eventBus, config.projectPath(), config.sourceRoot(), navigation::revealLine);
         // The same pause, on the canvas: a value chip beside each live variable. It keeps itself subscribed.
@@ -607,7 +608,6 @@ public class UIManager implements ProjectWindow {
 
         bottomTabs.clear();
         bottomTabs.put(BottomTab.RUN, bottomTab(BottomTab.RUN, runConsole.node()));
-        bottomTabs.put(BottomTab.TRACE, bottomTab(BottomTab.TRACE, tracePanel.node()));
         bottomTabs.put(BottomTab.REPORTS, bottomTab(BottomTab.REPORTS, reportsPanel.node()));
         bottomTabs.put(BottomTab.TERMINAL, bottomTab(BottomTab.TERMINAL, terminalPane.node()));
         bottomTabs.put(BottomTab.ERRORS, bottomTab(BottomTab.ERRORS, diagnosticsPanel.node()));

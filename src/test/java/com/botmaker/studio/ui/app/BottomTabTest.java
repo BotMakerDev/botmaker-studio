@@ -22,4 +22,10 @@ class BottomTabTest {
         assertNull(BottomTab.named(""));
         assertNull(BottomTab.named(null));
     }
+
+    /** Trace is the Run tab's chip since 2026-11-13: a layout saved on it names no tab, so the default opens. */
+    @Test
+    void theTraceTabIsGone() {
+        assertNull(BottomTab.named("TRACE"));
+    }
 }
