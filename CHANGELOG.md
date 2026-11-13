@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **The assistant's `ui` tool never shows an email** (2026-11-13), so it can drive the Emulators and Accounts windows:
+  every email in its answers reads as `account-N@masked`, the same N for the same email; a find matches only what
+  a read shows, placeholders and all, and text typed with a placeholder types the real email. `look` refuses a
+  window that shows an email, and leaves every frame drawn at run time (an instance's screen) out of the picture.
+  `type` and `key` refuse a password field: a password is the user's to type.
 - The Assistant is a window now, opened by the toolbar's 🤖 Assistant, no longer a bottom tab. Beside the AI tool's
   terminal (Chat) it lists every MCP call the core serves this session (Calls) and shows the chosen one (Detail): its
   arguments, its reply, its device steps. The header's toggles hide any pane but the last one shown, choosing a call

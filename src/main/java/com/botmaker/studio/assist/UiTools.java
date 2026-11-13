@@ -40,6 +40,7 @@ import javafx.scene.control.TreeView;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.CheckBox;
+import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseButton;
@@ -75,6 +76,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -270,7 +272,19 @@ final class UiTools {
                 .describedAs("Studio's own windows: list, read, press, type, key, scroll, drag, expand, choose, look, wait; "
                         + "answers say what changed, new errors and stalls. Dev Studio only.")
                 .takesOneOf(Ui.class)
-                .handledBy((action, context) -> reported(handle(action)));
+                .handledBy((action, context) -> masked(reported(handle(action))));
+    }
+
+    /** {@code reply} with every email in its text masked ({@link EmailMask}); its images and refusal kept. */
+    private static AgentReply masked(AgentReply reply) {
+        AgentReply out = null;
+        for (AgentReply.Part part : reply.parts()) {
+            AgentReply one = part.kind() == AgentReply.Kind.IMAGE ? AgentReply.image(part.png())
+                    : reply.isRefused() ? AgentReply.refused(EmailMask.mask(part.text()))
+                    : AgentReply.text(EmailMask.mask(part.text()));
+            out = out == null ? one : out.and(one);
+        }
+        return out == null ? reply : out;
     }
 
     private AgentReply handle(Ui action) {
@@ -282,7 +296,8 @@ final class UiTools {
                 case Ui.Press press -> AgentReply.text(press(press.ref(), press.find(),
                         press.button() == Mouse.RIGHT ? MouseButton.SECONDARY : MouseButton.PRIMARY,
                         press.count() == null ? 1 : press.count()));
-                case Ui.Type type -> AgentReply.text(typed(type.ref(), type.find(), type.text()));
+                // Only the text typed is unmasked: a find matches what a read shows, placeholders and all.
+                case Ui.Type type -> AgentReply.text(typed(type.ref(), type.find(), EmailMask.unmask(type.text())));
                 case Ui.Expand expand -> AgentReply.text(expand(expand.ref()));
                 case Ui.Key key -> AgentReply.text(key(key.ref(), key.keys()));
                 case Ui.Scroll scroll -> AgentReply.text(scroll(scroll.ref(), scroll.pages()));
@@ -435,6 +450,8 @@ final class UiTools {
         refs.values().removeIf(target -> !numberedNow.contains(target)
                 && !(target instanceof Row row ? shown(row, counts) : shown(target)));
         numbers.keySet().removeIf(target -> !refs.containsKey(numbers.get(target)));
+        // Masked before find filters, so a find never tells a real email's letters by hitting or missing.
+        lines.replaceAll(EmailMask::mask);
         if (how.find() != null) {
             String lower = how.find().toLowerCase(Locale.ROOT);
             lines = new ArrayList<>(lines.stream().filter(l -> l.toLowerCase(Locale.ROOT).contains(lower)).toList());
@@ -799,8 +816,10 @@ final class UiTools {
     /** {@code text}'s first line in quotes, cut at {@link #LONGEST_NAME}; null for none. */
     private static String quoted(String text) {
         if (text == null || text.isBlank()) return null;
-        String line = text.strip().lines().findFirst().orElse("");
-        return "\"" + (line.length() > LONGEST_NAME ? line.substring(0, LONGEST_NAME) + "…" : line) + "\"";
+        // Masked before the cut, which never splits an email or its placeholder.
+        String line = EmailMask.mask(text.strip().lines().findFirst().orElse(""));
+        int cut = EmailMask.cutAt(line, LONGEST_NAME);
+        return "\"" + (line.length() > cut ? line.substring(0, cut) + "…" : line) + "\"";
     }
 
     private void labeled(Labeled labeled, String off, List<String> lines) {
@@ -817,7 +836,9 @@ final class UiTools {
         if (kind.startsWith("item") && (text.isBlank() || ((IndexedCell<?>) labeled).isEmpty())) return;
         boolean pressable = !kind.equals("label");
         String shown = shownText(labeled);
-        String cut = shown != null && !shown.equals(text) && !text.isBlank() ? " cut \"" + shown + "\"" : "";
+        // A cut that may split an email is not said: the masked text is.
+        String cut = shown != null && !shown.equals(text) && !text.isBlank() && !EmailMask.holds(text)
+                ? " cut \"" + shown + "\"" : "";
         // An icon button says its tooltip or accessible text instead.
         String said = text.isBlank() ? Objects.requireNonNullElse(name(labeled), "\"\"") : "\"" + text + "\"";
         lines.add((pressable ? "r" + ref(labeled) + " " : "") + kind + " " + said + cut + off);
@@ -953,6 +974,10 @@ final class UiTools {
         UiInput.Keys parsed = UiInput.Keys.of(keys);
         return drive(() -> {
             Node node = ref == null ? focusOwner() : node(ref, "takes no keys");
+            if (node instanceof PasswordField) {
+                throw new IllegalArgumentException("That is a password field: the user types a password, never an "
+                        + "assistant.");
+            }
             String what = ref == null ? named(node) : "r" + ref + " " + named(node);
             return new Act("key " + parsed + " at " + named(node), "Sent " + parsed + " to " + what, () -> {
                 if (ref != null) node.requestFocus();
@@ -1366,6 +1391,8 @@ final class UiTools {
         Object target = target(ref);
         String value = text == null ? "" : text;
         switch (target) {
+            case PasswordField ignored -> throw new IllegalArgumentException("r" + ref + " is a password field: the "
+                    + "user types a password, never an assistant.");
             case TextInputControl field -> {
                 field.requestFocus();
                 field.setText(value);
@@ -1406,10 +1433,25 @@ final class UiTools {
             Window window = window(which);
             Scene scene = window.getScene();
             if (scene == null || scene.getRoot() == null) throw new IllegalArgumentException("That window shows nothing.");
-            SnapshotParameters params = new SnapshotParameters();
-            params.setTransform(Transform.scale(s, s));
-            WritableImage image = scene.getRoot().snapshot(params, null);
-            return new Object[] {describe(showing().indexOf(window) + 1, window), image};
+            if (anyText(scene.getRoot(), EmailMask::holds)) {
+                throw new IllegalArgumentException("That window shows an email, which an assistant never sees: read "
+                        + "it instead, its emails masked.");
+            }
+            // A frame drawn at run time (an instance's screen, a capture) may show an email or a sign-in: it is
+            // left out of the picture, between two pulses, so nothing flickers. A game is seen by its plugin's tools.
+            List<ImageView> frames = frames(scene.getRoot());
+            frames.forEach(view -> view.setVisible(false));
+            WritableImage image;
+            try {
+                SnapshotParameters params = new SnapshotParameters();
+                params.setTransform(Transform.scale(s, s));
+                image = scene.getRoot().snapshot(params, null);
+            } finally {
+                frames.forEach(view -> view.setVisible(true));
+            }
+            String left = frames.isEmpty() ? "" : "\n" + frames.size() + " live screen" + (frames.size() == 1 ? " is"
+                    : "s are") + " left out of the picture.";
+            return new Object[] {describe(showing().indexOf(window) + 1, window) + left, image};
         });
         WritableImage image = (WritableImage) taken[1];
         int width = (int) image.getWidth();
@@ -1452,28 +1494,53 @@ final class UiTools {
         List<Window> all = showing();
         for (int i = 0; i < all.size(); i++) {
             Window window = all.get(i);
-            boolean shows = title(window).toLowerCase(Locale.ROOT).contains(lower)
+            boolean shows = EmailMask.mask(title(window)).toLowerCase(Locale.ROOT).contains(lower)
                     || window.getScene() != null && contains(window.getScene().getRoot(), lower);
             if (shows) return describe(i + 1, window);
         }
         return null;
     }
 
-    private static boolean contains(Node node, String lower) {
+    /**
+     * Whether a shown node under {@code node} says a text {@code test} accepts: a label's, a text's, a field's
+     * (never a password field's) or its accessible text. FX thread.
+     */
+    static boolean anyText(Node node, Predicate<String> test) {
         if (node == null || !node.isVisible()) return false;
         String said = switch (node) {
             case Labeled labeled -> labeled.getText();
             case Text text -> text.getText();
+            case PasswordField ignored -> null;
             case TextInputControl field -> field.getText();
             default -> null;
         };
-        if (said != null && said.toLowerCase(Locale.ROOT).contains(lower)) return true;
+        if (said != null && test.test(said) || node.getAccessibleText() != null && test.test(node.getAccessibleText())) {
+            return true;
+        }
         if (node instanceof Parent parent) {
             for (Node child : parent.getChildrenUnmodifiable()) {
-                if (contains(child, lower)) return true;
+                if (anyText(child, test)) return true;
             }
         }
         return false;
+    }
+
+    /** The shown image views under {@code node} holding an image drawn at run time, not one read from a file. */
+    static List<ImageView> frames(Node node) {
+        List<ImageView> found = new ArrayList<>();
+        frames(node, found);
+        return found;
+    }
+
+    private static void frames(Node node, List<ImageView> found) {
+        if (node == null || !node.isVisible()) return;
+        if (node instanceof ImageView view && view.getImage() instanceof WritableImage) found.add(view);
+        if (node instanceof Parent parent) parent.getChildrenUnmodifiable().forEach(child -> frames(child, found));
+    }
+
+    /** Whether a text under {@code node}, emails masked, holds {@code lower}: a wait never tells an email's letters. */
+    private static boolean contains(Node node, String lower) {
+        return anyText(node, said -> EmailMask.mask(said).toLowerCase(Locale.ROOT).contains(lower));
     }
 
     // ---- the FX thread ------------------------------------------------------------------------------------
