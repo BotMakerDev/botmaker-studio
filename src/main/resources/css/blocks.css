@@ -799,11 +799,8 @@
     -fx-text-fill: -fx-selection-bar-text;
 }
 
-.file-structure > .content {
-    -fx-padding: 0;
-}
-
-.file-structure-list {
+/* The open file's members, under its row (the Structure pane until 2026-11-13). */
+.file-tree .tree-cell.tree-member {
     -fx-font-family: "JetBrains Mono", monospace;
     -fx-font-size: 11px;
 }

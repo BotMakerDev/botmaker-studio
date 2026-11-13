@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **Structure in the file tree** (2026-11-13): the open file's row unfolds to its fields, methods, constructors and
+  nested types, and a click lands on that block; the rows follow every edit and move to the next file opened, and
+  a fold is kept. The Structure pane under the tree is gone, and the tree takes its height. The *Managed by
+  Studio* group is gone too: Parameters.java and the plugins' files are changed in their windows, and the tree no
+  longer lists them.
 - **Versions and Reports windows** (2026-11-13): each is a window of its own, one per project, from the toolbar's
   ⟲ Versions and ▤ Reports, titled "Versions — <bot>" and "Reports — <bot>". Project ▸ Versions and Publish… open
   the Versions window; each show reads the pane again, and both close with the project. A window saved on either

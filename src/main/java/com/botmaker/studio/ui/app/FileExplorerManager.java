@@ -7,8 +7,8 @@ import com.botmaker.core.nav.SourceNavigation;
 import com.botmaker.studio.nav.BlockAt;
 import com.botmaker.core.nav.SourceNavigation.Entry;
 import com.botmaker.java.index.nav.Refactor;
+import com.botmaker.java.index.nav.StructureKind;
 import com.botmaker.core.project.FileRole;
-import com.botmaker.core.project.LockResolver;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.core.project.ProjectState;
@@ -30,26 +30,23 @@ import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
-import javafx.scene.control.ListCell;
-import javafx.scene.control.ListView;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
-import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.SVGPath;
 import javafx.util.Duration;
-import org.eclipse.jdt.core.dom.CompilationUnit;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -68,18 +65,19 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
- * The Project Files explorer: a filter, the file tree, and a collapsible <b>Structure</b> section for the open
- * file. What it shows is {@link ExplorerModel}'s; this class draws it and handles the clicks.
+ * The Project Files explorer: a filter and the file tree, the open file's row unfolding to its members (a click
+ * lands on the block; a <b>Structure</b> pane under the tree until 2026-11-13). What it shows is
+ * {@link ExplorerModel}'s; this class draws it and handles the clicks.
  *
  * <p><b>The tree is a folder tree again (2026-09-26), with package chains folded.</b> It was a flat list from
  * 2026-08-29, on the grounds that {@code com → <bot> → …} is three rows of Java ceremony between the user and
  * the only thing they open. Folding keeps that point and gives back the folders a bot now really has — the
  * plugin files under {@code plugins/sdk}, the user's own sub-packages — so {@code com.mybot} is one row.
- * Groups: <b>My code</b> ({@link FileRole#EDITABLE} Java the user writes), <b>Managed by Studio</b> (closed:
- * Parameters.java and the plugins' files, which their windows change — apart since 2026-10-13, when a user
- * could not tell which files were theirs), <b>Resources</b> ({@code src/main/resources}, to see the pictures
+ * Groups: <b>My code</b> ({@link FileRole#EDITABLE} Java the user writes), <b>Resources</b> ({@code src/main/resources}, to see the pictures
  * and data files, which open nowhere here) and <b>Library</b> (read-only bundled source). The header's <i>+</i>
- * makes a class in the selected row's package.
+ * makes a class in the selected row's package. Parameters.java and the plugins' files, which their windows change,
+ * are not listed: a <b>Managed by Studio</b> group from 2026-10-13, when a user could not tell which files were
+ * theirs, until 2026-11-13, the user's call.
  *
  * <p>A row's icon says what the file is ({@link ExplorerModel.Kind}), its colour whether it differs from the
  * last saved version — git's answer plus the editor's unsaved buffers, read on a worker. A right-click offers
@@ -94,7 +92,6 @@ import java.util.stream.Stream;
 public class FileExplorerManager {
 
     private static final String GROUP_USER = "My code";
-    private static final String GROUP_MANAGED = "Managed by Studio";
     private static final String GROUP_RESOURCES = "Resources";
     private static final String GROUP_LIBRARY = "Library";
 
@@ -105,17 +102,17 @@ public class FileExplorerManager {
     private final ClassFiles classFiles;
     private final TreeView<ExplorerNode> fileTree = new TreeView<>();
     private final TextField filter = new TextField();
-    private final ListView<Entry> structure = new ListView<>();
-    private final TitledPane structurePane = new TitledPane("Structure", structure);
     private final PauseTransition statusDelay = new PauseTransition(Duration.millis(900));
     /** Whether each row was open, by {@link ExplorerNode#key()}, so a refresh keeps what the user folded. */
     private final Map<String, Boolean> expansion = new HashMap<>();
     private Map<Path, VcsFileStatus> status = Map.of();
-    /** Which window keeps each file of the last refresh, its reason; empty for the user's own. */
-    private Map<Path, Optional<String>> keptBy = Map.of();
     /** How many review marks each file holds, from the status bar's last scan; a file with none is absent. */
     private Map<Path, Integer> toReview = Map.of();
     private int statusRun;
+    /** The open file's row, which holds its members; null when no row of the tree is the open file. */
+    private TreeItem<ExplorerNode> membersOf;
+    /** Set while the members are rebuilt: the selection that moves off a removed row is nobody's click. */
+    private boolean rebuilding;
     private Consumer<CodeBlock> onReveal = block -> { };
     private Runnable onCanvas = () -> { };
     private Consumer<Path> onView = path -> { };
@@ -126,10 +123,24 @@ public class FileExplorerManager {
      * @param label shown text; a folded package chain for a folder
      * @param kind  what it is, for its icon; null for a group
      */
-    public record ExplorerNode(String label, Path path, FileRole role, ExplorerModel.Kind kind, boolean group) {
+    public record ExplorerNode(String label, Path path, FileRole role, ExplorerModel.Kind kind, boolean group,
+                               Entry member) {
+
+        ExplorerNode(String label, Path path, FileRole role, ExplorerModel.Kind kind, boolean group) {
+            this(label, path, role, kind, group, null);
+        }
 
         static ExplorerNode group(String label) {
             return new ExplorerNode(label, null, null, null, true);
+        }
+
+        /** A type, field, constructor, method or constant of the open file {@code file}, under its row. */
+        static ExplorerNode member(Path file, Entry entry) {
+            return new ExplorerNode(entry.kind().glyph() + "  " + entry.label(), file, null, null, false, entry);
+        }
+
+        boolean isMember() {
+            return member != null;
         }
 
         boolean isFolder() {
@@ -138,17 +149,19 @@ public class FileExplorerManager {
 
         /** A Java file the canvas can draw. */
         boolean opens() {
-            return !group && !isFolder() && path.getFileName().toString().endsWith(".java");
+            return !group && !isMember() && !isFolder() && path.getFileName().toString().endsWith(".java");
         }
 
         /** A file a viewer shows beside the canvas — a picture, JSON, properties, text. */
         boolean views() {
-            return !group && !isFolder() && ResourceViewers.canView(path);
+            return !group && !isMember() && !isFolder() && ResourceViewers.canView(path);
         }
 
-        /** Stable key for save/restore of expansion state. */
+        /** Stable key for save/restore of expansion state; a member's by its place, as its node is re-parsed. */
         String key() {
-            return group ? "group:" + label : path.toAbsolutePath().toString();
+            if (group) return "group:" + label;
+            String file = path.toAbsolutePath().toString();
+            return isMember() ? file + "#" + member.depth() + member.kind() + member.label() : file;
         }
     }
 
@@ -164,16 +177,17 @@ public class FileExplorerManager {
         eventBus.subscribe(CoreApplicationEvents.LibrariesChangedEvent.class, e -> refreshTree(), true);
         // A file created, renamed or deleted, here or by the assistant.
         eventBus.subscribe(CoreApplicationEvents.ProjectFilesChangedEvent.class, e -> refreshTree(), true);
-        // Every edit re-renders the open file: its outline is re-read, and its row may now differ from the
-        // last saved version — re-read after a pause, as a burst of typing is one change, not twenty.
+        // Every edit re-renders the open file (the core's MethodsChanged, or another file opened): its members
+        // are re-read under its row, and the row may now differ from the last saved version — re-read after a
+        // pause, as a burst of typing is one change, not twenty.
         eventBus.subscribe(CoreApplicationEvents.UIBlocksUpdatedEvent.class, e -> {
-            refreshStructure();
+            refreshMembers();
             statusDelay.playFromStart();
         }, true);
         statusDelay.setOnFinished(e -> refreshStatus());
     }
 
-    /** Where a Structure row lands: the canvas's own scroll-and-select. */
+    /** Where a member row lands: the canvas's own scroll-and-select. */
     public void setOnReveal(Consumer<CodeBlock> onReveal) {
         this.onReveal = onReveal == null ? block -> { } : onReveal;
     }
@@ -210,11 +224,10 @@ public class FileExplorerManager {
         filter.textProperty().addListener((o, was, now) -> refreshTree());
 
         configureTree();
-        configureStructure();
         refreshTree();
 
-        // The tree takes every row the structure leaves; the structure is capped so a long class cannot push
-        // the files off the panel, and folds to its heading.
+        // The tree takes the panel's height: the Structure pane under it went on 2026-11-13, its rows now the
+        // open file's own, under its row.
         fileTree.getStyleClass().add("file-tree");
         fileTree.setMaxWidth(Double.MAX_VALUE);
         fileTree.setMaxHeight(Double.MAX_VALUE);
@@ -222,7 +235,7 @@ public class FileExplorerManager {
         // Coming back to the panel is when a stale colour would be noticed, so it is re-read then too.
         fileTree.setOnMouseEntered(e -> statusDelay.playFromStart());
 
-        container.getChildren().addAll(header, filter, fileTree, structurePane);
+        container.getChildren().addAll(header, filter, fileTree);
         container.setFillWidth(true);
         return container;
     }
@@ -239,7 +252,7 @@ public class FileExplorerManager {
                 super.updateItem(item, empty);
                 // Cells are recycled: reset every class this factory sets.
                 getStyleClass().removeAll("tree-dir", "tree-lib", "tree-active", "tree-group", "tree-review",
-                        "vcs-new", "vcs-added", "vcs-modified");
+                        "tree-member", "vcs-new", "vcs-added", "vcs-modified");
                 setTooltip(null);
                 if (empty || item == null) {
                     setText(null);
@@ -248,19 +261,23 @@ public class FileExplorerManager {
                     return;
                 }
                 setText(item.label());
+                if (item.isMember()) {
+                    setGraphic(null);
+                    setContextMenu(null);
+                    getStyleClass().add("tree-member");
+                    return;
+                }
                 if (item.group()) {
                     setGraphic(null);
                     getStyleClass().add("tree-group");
                     setContextMenu(GROUP_USER.equals(item.label())
                             ? new ContextMenu(newMenu(config.mainPackageDir())) : null);
-                    if (GROUP_MANAGED.equals(item.label())) setTooltip(new Tooltip(
-                            "Files Studio and the plugins write. Change them in their windows, not here."));
                     return;
                 }
                 setGraphic(icon(item.kind()));
-                String what = keptBy.getOrDefault(item.path(), Optional.empty()).orElse(item.kind().displayName());
+                String what = item.kind().displayName();
                 setTooltip(new Tooltip(what));
-                setContextMenu(contextMenu(item, inGroup(getTreeItem(), GROUP_MANAGED)));
+                setContextMenu(contextMenu(item));
                 if (item.isFolder()) {
                     getStyleClass().add("tree-dir");
                     return;
@@ -284,6 +301,9 @@ public class FileExplorerManager {
         });
 
         fileTree.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            // A member row lands by its click only: the members are rebuilt after every edit, and a selection
+            // moved by that must not jump the canvas.
+            if (rebuilding || newVal != null && newVal.getValue() != null && newVal.getValue().isMember()) return;
             shownBySelection = newVal;
             show(newVal);
         });
@@ -294,7 +314,9 @@ public class FileExplorerManager {
             TreeItem<ExplorerNode> item = fileTree.getSelectionModel().getSelectedItem();
             boolean answered = item == shownBySelection;
             shownBySelection = null;
-            if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY && !answered) show(item);
+            if (e.getButton() != MouseButton.PRIMARY) return;
+            if (item != null && item.getValue() != null && item.getValue().isMember()) reveal(item.getValue());
+            else if (!answered) show(item);
         });
     }
 
@@ -342,23 +364,17 @@ public class FileExplorerManager {
         root.setExpanded(true);
         Predicate<Path> java = p -> p.getFileName().toString().endsWith(".java");
         Predicate<Path> editable = java.and(p -> FileRole.of(p) == FileRole.EDITABLE).and(matches);
-        // Asked once per file, though both trees walk every file: the cells read the answers too.
-        Map<Path, Optional<String>> keeper = new HashMap<>();
-        Predicate<Path> kept = p -> keeper.computeIfAbsent(p,
-                q -> classFiles.managed(q).map(LockResolver.Managed::reason)).isPresent();
+        // A file a window keeps (Parameters.java, a plugin's) is that window's to change, and not listed.
+        Predicate<Path> kept = p -> classFiles.managed(p).isPresent();
         TreeItem<ExplorerNode> user = group(GROUP_USER, true, filtering,
                 ExplorerModel.tree(javaRoot, editable.and(kept.negate())), entryPoint);
-        TreeItem<ExplorerNode> managed = group(GROUP_MANAGED, false, filtering,
-                ExplorerModel.tree(javaRoot, editable.and(kept)), entryPoint);
         TreeItem<ExplorerNode> resources = group(GROUP_RESOURCES, false, filtering,
                 ExplorerModel.tree(config.resourcesRoot(), matches), entryPoint);
         TreeItem<ExplorerNode> library = group(GROUP_LIBRARY, false, filtering, ExplorerModel.tree(javaRoot,
                 java.and(p -> FileRole.of(p) == FileRole.LIBRARY).and(matches)), entryPoint);
-        keptBy = keeper;
 
         // Each group only when it has anything: an ordinary project reads as one list plus its resources.
         if (!user.getChildren().isEmpty() || !filtering) root.getChildren().add(user);
-        if (!managed.getChildren().isEmpty()) root.getChildren().add(managed);
         if (!resources.getChildren().isEmpty()) root.getChildren().add(resources);
         if (!library.getChildren().isEmpty()) root.getChildren().add(library);
         // Markdown at the bot's root sits beside no source (its README): first, by name.
@@ -376,6 +392,8 @@ public class FileExplorerManager {
                     ExplorerModel.kindOf(page, null, entryPoint), false)));
         }
         fileTree.setRoot(root);
+        membersOf = null;
+        refreshMembers();
         refreshStatus();
     }
 
@@ -400,8 +418,11 @@ public class FileExplorerManager {
         for (Path file : folder.files()) {
             String source = file.getFileName().toString().endsWith(".java")
                     ? BotSources.sourceOf(config, state, file).orElse(null) : null;
-            item.getChildren().add(new TreeItem<>(new ExplorerNode(file.getFileName().toString(), file,
-                    FileRole.of(file), ExplorerModel.kindOf(file, source, entryPoint), false)));
+            TreeItem<ExplorerNode> row = new TreeItem<>(new ExplorerNode(file.getFileName().toString(), file,
+                    FileRole.of(file), ExplorerModel.kindOf(file, source, entryPoint), false));
+            // A Java file's row unfolds to its members while it is the open file: its fold is kept from here.
+            if (row.getValue().opens()) open(row, true, filtering);
+            item.getChildren().add(row);
         }
     }
 
@@ -466,41 +487,82 @@ public class FileExplorerManager {
     }
 
     // ------------------------------------------------------------------
-    // the Structure section
+    // the open file's members, under its row (the Structure pane until 2026-11-13)
     // ------------------------------------------------------------------
 
-    private void configureStructure() {
-        structurePane.getStyleClass().add("file-structure");
-        structurePane.setExpanded(true);
-        structurePane.setAnimated(false);
-        structure.getStyleClass().add("file-structure-list");
-        structure.setPrefHeight(200);
-        structure.setPlaceholder(new Label("Nothing declared in this file."));
-        structure.setCellFactory(v -> new ListCell<>() {
-            @Override
-            protected void updateItem(Entry entry, boolean empty) {
-                super.updateItem(entry, empty);
-                setText(empty || entry == null ? null
-                        : "  ".repeat(entry.depth()) + entry.kind().glyph() + "  " + entry.label());
+    /**
+     * Puts the open file's members under its row, and takes them off the row that had them. The file's own
+     * class is its row, so its members sit right under it; any other type of the file is a row of its own.
+     */
+    private void refreshMembers() {
+        TreeItem<ExplorerNode> file = state.getActiveFile() == null ? null
+                : find(fileTree.getRoot(), state.getActiveFile().getPath());
+        rebuilding = true;
+        try {
+            if (membersOf != null && membersOf != file) membersOf.getChildren().clear();
+            if (file == null) {
+                membersOf = null;
+                return;
             }
-        });
-        // A click, not a selection change: the list is rebuilt after every edit and must not jump the canvas.
-        structure.setOnMouseClicked(e -> {
-            Entry entry = structure.getSelectionModel().getSelectedItem();
-            if (entry != null) BlockAt.blockFor(entry.node(), state.getNodeToBlockMap()).ifPresent(onReveal);
-        });
+            Path path = file.getValue().path();
+            String primary = path.getFileName().toString().replaceFirst("\\.java$", "");
+            boolean filtering = !filter.getText().isBlank();
+            List<TreeItem<ExplorerNode>> members = new ArrayList<>();
+            // The row each depth's entries go under: the depth above's last type.
+            Map<Integer, TreeItem<ExplorerNode>> parents = new HashMap<>();
+            for (Entry entry : SourceNavigation.structure(state.getCompilationUnit().orElse(null))) {
+                if (entry.depth() == 0 && entry.kind() == StructureKind.TYPE && entry.name().equals(primary)) {
+                    parents.put(1, null);
+                    continue;
+                }
+                TreeItem<ExplorerNode> row = new TreeItem<>(ExplorerNode.member(path, entry));
+                TreeItem<ExplorerNode> parent = parents.get(entry.depth());
+                if (parent == null) members.add(row);
+                else parent.getChildren().add(row);
+                if (entry.kind() == StructureKind.TYPE) {
+                    parents.put(entry.depth() + 1, row);
+                    open(row, true, filtering);
+                }
+            }
+            file.getChildren().setAll(members);
+            membersOf = file;
+        } finally {
+            rebuilding = false;
+        }
     }
 
-    private void refreshStructure() {
-        CompilationUnit cu = state.getCompilationUnit().orElse(null);
-        structure.getItems().setAll(SourceNavigation.structure(cu));
-        String file = state.getActiveFile() == null ? null : state.getActiveFile().getPath().getFileName().toString();
-        structurePane.setText(file == null ? "Structure" : "Structure — " + file);
+    /** The file row of {@code path} under {@code item}, or null. */
+    private static TreeItem<ExplorerNode> find(TreeItem<ExplorerNode> item, Path path) {
+        if (item == null) return null;
+        for (TreeItem<ExplorerNode> child : item.getChildren()) {
+            ExplorerNode node = child.getValue();
+            if (node.group() || node.isFolder()) {
+                TreeItem<ExplorerNode> found = find(child, path);
+                if (found != null) return found;
+            } else if (!node.isMember() && path.equals(node.path())) {
+                return child;
+            }
+        }
+        return null;
     }
 
-    /** What the Structure section lists, for a test. */
-    List<String> structureNames() {
-        return structure.getItems().stream().map(Entry::name).toList();
+    /** Lands on a member's block, the canvas in front. */
+    private void reveal(ExplorerNode member) {
+        onCanvas.run();
+        BlockAt.blockFor(member.member().node(), state.getNodeToBlockMap()).ifPresent(onReveal);
+    }
+
+    /** Clicks the member row named {@code name}, as the user would; for a test. */
+    void clickMember(String name) {
+        List<TreeItem<ExplorerNode>> rows = new ArrayList<>(membersOf == null ? List.of() : membersOf.getChildren());
+        for (int i = 0; i < rows.size(); i++) {
+            ExplorerNode node = rows.get(i).getValue();
+            if (node.member().name().equals(name)) {
+                reveal(node);
+                return;
+            }
+            rows.addAll(rows.get(i).getChildren());
+        }
     }
 
     /** The tree's rows, depth-first, as their labels; for a test. */
@@ -527,16 +589,8 @@ public class FileExplorerManager {
     // the context menu
     // ------------------------------------------------------------------
 
-    /** Whether {@code item} sits under the group row labelled {@code label}. */
-    private static boolean inGroup(TreeItem<ExplorerNode> item, String label) {
-        for (TreeItem<ExplorerNode> at = item; at != null; at = at.getParent()) {
-            if (at.getValue() != null && at.getValue().group() && label.equals(at.getValue().label())) return true;
-        }
-        return false;
-    }
-
-    /** A row's menu; {@code managed} for a row of <i>Managed by Studio</i>, where nothing new is made. */
-    private ContextMenu contextMenu(ExplorerNode node, boolean managed) {
+    /** A row's menu. */
+    private ContextMenu contextMenu(ExplorerNode node) {
         MenuItem show = new MenuItem("Show in file manager");
         show.setOnAction(e -> BrowserLauncher.open((node.isFolder() ? node.path() : node.path().getParent())
                 .toUri().toString()));
@@ -548,7 +602,7 @@ public class FileExplorerManager {
         });
         ContextMenu menu = new ContextMenu(show, copy);
         Path folder = node.isFolder() ? node.path() : node.path().getParent();
-        boolean userCode = !managed && (node.isFolder() || node.opens() && node.role() == FileRole.EDITABLE);
+        boolean userCode = node.isFolder() || node.opens() && node.role() == FileRole.EDITABLE;
         if (userCode && classFiles.folderProblem(folder).isEmpty()) {
             menu.getItems().addAll(new SeparatorMenuItem(), newMenu(folder));
         }
