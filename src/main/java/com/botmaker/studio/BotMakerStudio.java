@@ -24,6 +24,7 @@ import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectManager;
 import com.botmaker.core.project.ProjectPreferences;
 import com.botmaker.core.run.SideRunner;
+import com.botmaker.core.run.claims.RegistryHolds;
 import com.botmaker.shared.platform.Os;
 import com.botmaker.core.services.OpenStep;
 import com.botmaker.core.services.ProgressReporter;
@@ -128,6 +129,8 @@ public class BotMakerStudio extends Application {
         HostServices.attach(FxUi.FOCUSED);
         // A plugin's run of a bot that is not the open one (the SDK's Google sign-in) starts here, as in the core.
         HostServices.serveSideRuns(new SideRunner());
+        // Setup work a plugin does on what a run could be dealt (the SDK's Apply on an instance) holds it here.
+        HostServices.serveLiveRuns(RegistryHolds.ofThisPc());
         // The saved theme before the first window too (2026-10-25): it loaded with the editor or the Runner, so the
         // home and the loading page were always light, and a dark user's window flashed light on every open.
         BlockTheme.initialize();

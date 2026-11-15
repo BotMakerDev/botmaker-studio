@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **A plugin's setup work holds what a run could be dealt** (2026-11-15): Studio installs the core's `RegistryHolds`
+  at start, so the contract's `liveRuns()` answers in Studio's copy of a plugin as in the core's.
+
 - **A plugin may run a bot beside the open one** (2026-11-15): Studio installs the core's `SideRunner` at start, so
   the contract's `sideRuns()` answers in Studio's copy of a plugin as in the core's.
 
