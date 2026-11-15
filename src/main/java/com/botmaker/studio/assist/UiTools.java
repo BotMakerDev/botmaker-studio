@@ -36,6 +36,8 @@ import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeTableRow;
+import javafx.scene.control.TreeTableView;
 import javafx.scene.control.TreeView;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.ChoiceBox;
@@ -111,6 +113,8 @@ final class UiTools {
     /** At most this many rows of one list, table or tree, unless a read finds; and a name's longest. */
     private static final int MOST_ROWS = 100;
     private static final int LONGEST_NAME = 60;
+    /** A row's longest: a row says what its columns or its accessible text say, longer than a name. */
+    private static final int LONGEST_ROW = 160;
     /** Where {@link Tooltip#install} keeps a node's tooltip, which only a {@code Control} has a getter for. */
     private static final String TOOLTIP_KEY = "javafx.scene.control.Tooltip";
     private static final long SETTLE_MS = 400;
@@ -503,14 +507,14 @@ final class UiTools {
      */
     private static boolean shown(Row row, Map<Control, Map<Object, Integer>> counts) {
         if (!shown(row.view())) return false;
-        if (row.view() instanceof TreeView<?> tree) {
+        if (tree(row.view())) {
             // Up its parents, not getRow, which counts the rows above it.
             if (!(row.item() instanceof TreeItem<?> item)) return false;
             for (TreeItem<?> up = item.getParent(); up != null; up = up.getParent()) {
                 if (!up.isExpanded()) return false;
                 item = up;
             }
-            return item == tree.getRoot();
+            return item == rootOf(row.view());
         }
         Map<Object, Integer> count = counts.computeIfAbsent(row.view(), view -> {
             Map<Object, Integer> made = new HashMap<>();
@@ -561,11 +565,12 @@ final class UiTools {
                 return;
             }
             case TreeView<?> tree -> {
-                lines.add("tree" + off);
-                Map<Integer, String> shown = cellTexts(tree);
-                int[] left = {how.find() == null ? MOST_ROWS : Integer.MAX_VALUE};
-                if (tree.getRoot() != null) branch(tree, tree.getRoot(), tree.isShowRoot() ? 0 : -1, shown, left, lines);
-                if (left[0] < 0) lines.add("… more rows; read with find picks one");
+                treeRows(tree, "tree" + off, tree.getRoot(), tree.isShowRoot(), how, lines);
+                return;
+            }
+            case TreeTableView<?> tree -> {
+                treeRows(tree, "tree table " + tree.getVisibleLeafColumns().stream().map(TableColumnBase::getText)
+                        .toList() + off, tree.getRoot(), tree.isShowRoot(), how, lines);
                 return;
             }
             case TextInputControl field -> {
@@ -692,13 +697,23 @@ final class UiTools {
         return box.getConverter() == null ? String.valueOf(value) : box.getConverter().toString(value);
     }
 
+    /** A tree's or tree table's {@code heading} line, then its rows from {@code root}, at most {@link #MOST_ROWS}. */
+    private void treeRows(Control tree, String heading, TreeItem<?> root, boolean showRoot, Reading how,
+                          List<String> lines) {
+        lines.add(heading);
+        Map<Integer, String> shown = cellTexts(tree);
+        int[] left = {how.find() == null ? MOST_ROWS : Integer.MAX_VALUE};
+        if (root != null) branch(tree, root, showRoot ? 0 : -1, shown, left, lines);
+        if (left[0] < 0) lines.add("… more rows; read with find picks one");
+    }
+
     /** {@code item} and, while it is open, its children, each a row indented by its depth; -1 is a hidden root. */
-    private void branch(TreeView<?> tree, TreeItem<?> item, int depth, Map<Integer, String> shown, int[] left,
+    private void branch(Control tree, TreeItem<?> item, int depth, Map<Integer, String> shown, int[] left,
                         List<String> lines) {
         if (depth >= 0) {
             if (left[0]-- <= 0) return;
             int row = rowOf(tree, item);
-            String text = shown.containsKey(row) ? quoted(shown.get(row)) : quoted(said(item.getValue()));
+            String text = quoted(shown.containsKey(row) ? shown.get(row) : said(item.getValue()), LONGEST_ROW);
             String mark = item.isLeaf() ? "" : item.isExpanded() ? "[-] " : "[+] ";
             lines.add("r" + ref(new Row(tree, item, 0)) + " row " + "  ".repeat(depth) + mark
                     + (text == null ? "(not shown)" : text) + (selected(tree, row) ? " (selected)" : ""));
@@ -707,10 +722,27 @@ final class UiTools {
         for (TreeItem<?> child : item.getChildren()) branch(tree, child, depth + 1, shown, left, lines);
     }
 
-    /** {@code item}'s row in {@code tree}, -1 when it is not in it or inside a closed row. */
+    /** {@code item}'s row in {@code tree}, a tree or a tree table; -1 when it is not in it or inside a closed row. */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static int rowOf(TreeView<?> tree, TreeItem<?> item) {
-        return ((TreeView) tree).getRow(item);
+    private static int rowOf(Control tree, TreeItem<?> item) {
+        return switch (tree) {
+            case TreeView view -> view.getRow(item);
+            case TreeTableView view -> view.getRow(item);
+            default -> -1;
+        };
+    }
+
+    /** Whether {@code view}'s rows are {@link TreeItem}s: a tree or a tree table. */
+    private static boolean tree(Control view) {
+        return view instanceof TreeView<?> || view instanceof TreeTableView<?>;
+    }
+
+    private static TreeItem<?> rootOf(Control view) {
+        return switch (view) {
+            case TreeView<?> tree -> tree.getRoot();
+            case TreeTableView<?> tree -> tree.getRoot();
+            default -> null;
+        };
     }
 
     private static String columns(TableView<?> table, int index) {
@@ -729,7 +761,8 @@ final class UiTools {
         Map<Integer, String> texts = new HashMap<>();
         for (Node node : view.lookupAll(".indexed-cell")) {
             if (node instanceof IndexedCell<?> cell && owns(view, cell) && !cell.isEmpty() && cell.isVisible()) {
-                String text = texts(cell);
+                // A row named for screen readers says that, not its columns' parts.
+                String text = quoted(cell.getAccessibleText()) != null ? cell.getAccessibleText() : texts(cell);
                 if (!text.isBlank()) texts.putIfAbsent(cell.getIndex(), text);
             }
         }
@@ -741,6 +774,7 @@ final class UiTools {
             case ListCell<?> c -> c.getListView() == view;
             case TreeCell<?> c -> c.getTreeView() == view;
             case TableRow<?> c -> c.getTableView() == view;
+            case TreeTableRow<?> c -> c.getTreeTableView() == view;
             default -> false;
         };
     }
@@ -750,13 +784,14 @@ final class UiTools {
             case ListView<?> list -> list.getSelectionModel().isSelected(index);
             case TableView<?> table -> table.getSelectionModel().isSelected(index);
             case TreeView<?> tree -> tree.getSelectionModel().isSelected(index);
+            case TreeTableView<?> tree -> tree.getSelectionModel().isSelected(index);
             default -> false;
         };
     }
 
     /** {@code row}'s index in its view now; -1 when it is gone, or inside a closed tree row. */
     private static int index(Row row) {
-        if (row.view() instanceof TreeView<?> tree) return row.item() instanceof TreeItem<?> item ? rowOf(tree, item) : -1;
+        if (tree(row.view())) return row.item() instanceof TreeItem<?> item ? rowOf(row.view(), item) : -1;
         List<?> items = switch (row.view()) {
             case ListView<?> list -> list.getItems();
             case TableView<?> table -> table.getItems();
@@ -815,10 +850,15 @@ final class UiTools {
 
     /** {@code text}'s first line in quotes, cut at {@link #LONGEST_NAME}; null for none. */
     private static String quoted(String text) {
+        return quoted(text, LONGEST_NAME);
+    }
+
+    /** {@code text}'s first line in quotes, cut at {@code longest}; null for none. */
+    private static String quoted(String text, int longest) {
         if (text == null || text.isBlank()) return null;
         // Masked before the cut, which never splits an email or its placeholder.
         String line = EmailMask.mask(text.strip().lines().findFirst().orElse(""));
-        int cut = EmailMask.cutAt(line, LONGEST_NAME);
+        int cut = EmailMask.cutAt(line, longest);
         return "\"" + (line.length() > cut ? line.substring(0, cut) + "…" : line) + "\"";
     }
 
@@ -959,7 +999,7 @@ final class UiTools {
     /** A tree row {@code ref} opened, or closed when open. */
     String expand(int ref) {
         return drive(() -> {
-            if (!(target(ref) instanceof Row(TreeView<?> _, TreeItem<?> item, int _))) {
+            if (!(target(ref) instanceof Row(Control view, TreeItem<?> item, int _)) || !tree(view)) {
                 throw new IllegalArgumentException("r" + ref + " " + named(target(ref)) + " is no tree row.");
             }
             if (item.isLeaf()) throw new IllegalArgumentException("r" + ref + " " + named(item) + " has no rows in it.");
@@ -1363,6 +1403,7 @@ final class UiTools {
             case ListView<?> list -> list.scrollTo(index);
             case TableView<?> table -> table.scrollTo(index);
             case TreeView<?> tree -> tree.scrollTo(index);
+            case TreeTableView<?> tree -> tree.scrollTo(index);
             default -> {
             }
         }
@@ -1382,6 +1423,7 @@ final class UiTools {
             case ListView<?> list -> list.getSelectionModel().clearAndSelect(index);
             case TableView<?> table -> table.getSelectionModel().clearAndSelect(index);
             case TreeView<?> tree -> tree.getSelectionModel().clearAndSelect(index);
+            case TreeTableView<?> tree -> tree.getSelectionModel().clearAndSelect(index);
             default -> {
             }
         }

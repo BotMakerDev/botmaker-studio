@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **The `ui` tool reads tree tables** (2026-11-15): a tree table (the Emulators window's Instances tab) lists as
+  `tree table [columns]` and its rows from the model, open or closed, each by its accessible text when it has one;
+  `press` picks a row and `expand` opens or closes one, as in a tree.
 - **Structure in the file tree** (2026-11-13): the open file's row unfolds to its fields, methods, constructors and
   nested types, and a click lands on that block; the rows follow every edit and move to the next file opened, and
   a fold is kept. The Structure pane under the tree is gone, and the tree takes its height. The *Managed by

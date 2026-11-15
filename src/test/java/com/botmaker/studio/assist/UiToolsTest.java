@@ -25,6 +25,9 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeTableColumn;
+import javafx.scene.control.TreeTableRow;
+import javafx.scene.control.TreeTableView;
 import javafx.scene.control.TreeView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCombination;
@@ -421,6 +424,41 @@ class UiToolsTest extends FxHeadlessTest {
         assertTrue(UiTools.onFx(firestone::isExpanded));
         assertThrows(IllegalArgumentException.class, () -> ui.expand(refOf(read, "row   \"Idle\"")));
         assertThrows(IllegalArgumentException.class, () -> ui.expand(refOf(read, "button \"Archive\"")));
+    }
+
+    @Test
+    void aTreeTableSaysItsRowsByTheirAccessibleTextAndAPressPicksOne() {
+        TreeItem<String> ld = new TreeItem<>("LDPlayer · 2");
+        ld.getChildren().addAll(List.of(new TreeItem<>("LDPlayer-1"), new TreeItem<>("LDPlayer-2")));
+        ld.setExpanded(true);
+        TreeItem<String> root = new TreeItem<>("all");
+        root.getChildren().add(ld);
+        TreeTableView<String> table = new TreeTableView<>(root);
+        table.setShowRoot(false);
+        TreeTableColumn<String, String> name = new TreeTableColumn<>("Name");
+        name.setCellValueFactory(row -> new SimpleStringProperty(row.getValue().getValue()));
+        table.getColumns().add(name);
+        table.setRowFactory(t -> new TreeTableRow<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                setAccessibleText(empty || item == null ? null
+                        : "Instance " + item + " (LDPlayer): stopped · no account · 3 changes to apply");
+            }
+        });
+        add(table);
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read(null));
+        assertTrue(read.contains("tree table [Name]"), read);
+        assertTrue(read.contains("row [-] \"Instance LDPlayer · 2"), read);
+        assertTrue(read.contains("row   \"Instance LDPlayer-2 (LDPlayer): stopped · no account · 3 changes to apply\""),
+                "a row is read whole, past a name's length: " + read);
+
+        String pressed = ui.press(refOf(read, "row   \"Instance LDPlayer-2"));
+        assertTrue(pressed.contains("LDPlayer-2"), pressed);
+        assertEquals("LDPlayer-2", UiTools.onFx(() -> table.getSelectionModel().getSelectedItem().getValue()));
+        String closed = ui.expand(refOf(read, "row [-] \"Instance LDPlayer · 2"));
+        assertTrue(closed.startsWith("Closed r"), closed);
     }
 
     @Test
