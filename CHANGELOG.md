@@ -12,6 +12,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **A plugin may run a bot beside the open one** (2026-11-15): Studio installs the core's `SideRunner` at start, so
+  the contract's `sideRuns()` answers in Studio's copy of a plugin as in the core's.
+
 - **The `ui` tool reads tree tables** (2026-11-15): a tree table (the Emulators window's Instances tab) lists as
   `tree table [columns]` and its rows from the model, open or closed, each by its accessible text when it has one;
   `press` picks a row and `expand` opens or closes one, as in a tree.
