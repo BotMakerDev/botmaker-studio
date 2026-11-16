@@ -1,0 +1,25 @@
+# Every file carries a license and a copyright (REUSE), and every Java source its SPDX header.
+# The source of this file is the BotMaker umbrella's tools/license/reuse.yml; tools/license/add-headers.sh adds
+# a missing header.
+name: reuse
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  reuse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v5
+      - name: SPDX header in every Java source
+        # The archetype's Java is copied into a new plugin, its author's: it carries no header.
+        if: github.event.repository.name != 'botmaker-plugin-archetype'
+        run: |
+          missing=$(git ls-files '*.java' ':!:**/src/test/resources/**' ':!:src/test/resources/**' \
+            ':!:src/template/**' | xargs -r grep -L 'SPDX-License-Identifier' || true)
+          if [ -n "$missing" ]; then
+            echo "::error::Java sources without an SPDX header:"; echo "$missing"; exit 1
+          fi

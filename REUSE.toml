@@ -1,0 +1,17 @@
+version = 1
+
+# Every file of this repository is LiQiyeDev's under PolyForm Noncommercial 1.0.0 (LICENSE), unless a header in
+# the file or a later table here says otherwise: the last table that matches a file wins.
+# The source of this file is the BotMaker umbrella's tools/license/REUSE.toml.
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 LiQiyeDev"
+SPDX-License-Identifier = "PolyForm-Noncommercial-1.0.0"
+
+[[annotations]]
+path = ["src/main/resources/terminal/xterm.js", "src/main/resources/terminal/xterm.css", "src/main/resources/terminal/LICENSE-xterm.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = ["2017-2019 The xterm.js authors", "2014-2016 SourceLair Private Company", "2012-2013 Christopher Jeffrey"]
+SPDX-License-Identifier = "MIT"
