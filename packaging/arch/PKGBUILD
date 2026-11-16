@@ -18,7 +18,7 @@ pkgrel=1
 pkgdesc='Visual block-based bot builder'
 arch=('x86_64')
 url='https://github.com/BotMakerDev/botmaker-studio'
-license=('CC0-1.0')
+license=('PolyForm-Noncommercial-1.0.0')
 depends=('gtk3' 'libx11' 'libxtst' 'libxi' 'libxxf86vm' 'libglvnd' 'fontconfig' 'botmaker')
 optdepends=('gamescope: private display sessions'
             'xorg-server-xephyr: private display sessions')

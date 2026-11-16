@@ -9,6 +9,12 @@
     <!-- Real: -SNAPSHOT on main, the release version on a tag; only the release moves it (umbrella
          docs/refactor/43-real-versions.md). -->
     <version>1.13.2-SNAPSHOT</version>
+    <licenses>
+        <license>
+            <name>PolyForm-Noncommercial-1.0.0</name>
+            <url>https://polyformproject.org/licenses/noncommercial/1.0.0</url>
+        </license>
+    </licenses>
 
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
@@ -951,7 +957,7 @@
                                     <linuxShortcut>true</linuxShortcut>
                                     <linuxMenuGroup>Development</linuxMenuGroup>
                                     <linuxAppCategory>Development</linuxAppCategory>
-                                    <linuxRpmLicenseType>MIT</linuxRpmLicenseType>
+                                    <linuxRpmLicenseType>PolyForm-Noncommercial-1.0.0</linuxRpmLicenseType>
                                 </configuration>
                             </execution>
                             <execution>

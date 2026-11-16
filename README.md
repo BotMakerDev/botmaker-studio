@@ -258,7 +258,8 @@ changed, marks and lists what it could not, and leaves everything else you wrote
 
 ## License
 
-Licensed under the MIT License — see [`LICENSE`](LICENSE).
+[PolyForm Noncommercial 1.0.0](LICENSE): free for any noncommercial use; any commercial use needs a license from
+LiQiyeDev. Versions up to 1.13.1 were released under CC0 1.0.
 
 ## Acknowledgments
 

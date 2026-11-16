@@ -27,7 +27,7 @@ project:
     vocabulary come from the SDK version it pins rather than from the Studio that opened it.
   authors:
     - LiQiyeDev
-  license: CC0-1.0
+  license: PolyForm-Noncommercial-1.0.0
   copyright: LiQiyeDev
   inceptionYear: '2026'
   links:
