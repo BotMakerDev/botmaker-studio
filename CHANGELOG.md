@@ -10,7 +10,7 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.13.0] — 2026-11-16
 
 - **The Runs window** (2026-11-16, spec `2026-11-15-run-claims-design.md` §7, the user's picks H-A and P-A):
   - Home's bar gets *Runs N*, which lists every live run on this PC by bot, with *Start more*, *Stop all*, ■ per run
@@ -67,6 +67,16 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - **The overlay editor is hidden** (2026-11-13): ⧉ Overlay shows only in a dev-mode project, and Getting Started no
   longer has its step.
 - Studio's JavaFX tests start again on JDK 26: surefire exports the two JavaFX packages TestFX's Monocle reads.
+
+### Changed
+
+- Built against botmaker-shared 0.9.0 (was 0.8.1).
+- Built against botmaker-session 0.8.0 (was 0.7.1).
+- Built against botmaker-studio-api 0.18.0 (was 0.17.1).
+- Built against botmaker-plugin-host 0.13.0 (was 0.12.1).
+- Built against botmaker-cli 0.13.0 (was 0.12.1).
+- Built against botmaker-java 0.3.0 (was 0.2.1).
+- Built against botmaker-core 0.2.0 (was 0.1.1).
 
 ## [1.12.2] — 2026-11-13
 
