@@ -3,6 +3,7 @@ package com.botmaker.studio.ui.app;
 import com.botmaker.core.edit.CanvasEdit;
 import com.botmaker.core.project.ClassKind;
 import com.botmaker.core.edit.EditResult;
+import com.botmaker.core.event.CoreEvent;
 import com.botmaker.plugin.api.StudioServices;
 import com.botmaker.plugin.api.assist.AgentContext;
 import com.botmaker.plugin.api.overlay.Area;
@@ -26,6 +27,8 @@ import com.botmaker.core.migrate.Rule;
 import com.botmaker.java.index.nav.Refactor;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.core.parser.refactor.ReviewMarker;
+import com.botmaker.studio.services.CoreEdits;
+import com.botmaker.studio.services.EditPort;
 import com.botmaker.studio.services.ReviewService;
 import org.eclipse.jdt.core.dom.NodeFinder;
 import com.botmaker.studio.core.CodeBlock;
@@ -225,6 +228,16 @@ final class StudioBridge implements StudioDriver {
             ctx.eventBus().publish(new CoreApplicationEvents.ExecutionRequestedEvent());
             return "Starting the bot. run_state says when it runs; read_trace what it does.";
         });
+    }
+
+    @Override
+    public CoreEvent.RunsStarted runSeveral(int runs) {
+        // Asked off the FX thread: the core compiles first, and its answer is read on the channel's own thread.
+        EditPort edits = onFx(() -> ctx.codeEditorService().edits());
+        if (!(edits instanceof CoreEdits core)) {
+            throw new IllegalArgumentException("Several runs at once need BotMaker's core, which this window has not.");
+        }
+        return core.runSeveral(runs);
     }
 
     @Override

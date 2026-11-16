@@ -289,6 +289,20 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         return result;
     }
 
+    /**
+     * Starts {@code runs} runs of the bot in the core, each dealt a row of its pools; what started, on the caller's
+     * thread, which waits while the core compiles.
+     *
+     * @throws IllegalArgumentException with why none started
+     */
+    public CoreEvent.RunsStarted runSeveral(int runs) {
+        try {
+            return link.client().runSeveral(runs);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("BotMaker's core did not answer: " + e.getMessage());
+        }
+    }
+
     /** One ask of the core. */
     public interface Ask {
         EditResult of(CoreClient client) throws IOException;
