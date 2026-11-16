@@ -10,6 +10,13 @@ date it.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [1.13.1] — 2026-11-16
+
+### Changed
+
+- Built against botmaker-cli 0.13.1 (was 0.13.0).
+- Built against botmaker-core 0.2.1 (was 0.2.0).
+
 ## [1.13.0] — 2026-11-16
 
 - **The Runs window** (2026-11-16, spec `2026-11-15-run-claims-design.md` §7, the user's picks H-A and P-A):
