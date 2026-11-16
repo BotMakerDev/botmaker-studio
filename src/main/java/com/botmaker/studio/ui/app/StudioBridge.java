@@ -48,6 +48,7 @@ import com.botmaker.core.services.BotSources;
 import com.botmaker.studio.services.ClassFiles;
 import com.botmaker.studio.services.overlay.OverlayTargets;
 import com.botmaker.core.run.RunEntries;
+import com.botmaker.core.run.claims.SeveralAsk;
 import com.botmaker.studio.services.overlay.WatchedScreen;
 import com.botmaker.studio.ui.app.overlay.OverlayEditor;
 import com.botmaker.studio.ui.app.trial.TrialMenu;
@@ -231,13 +232,13 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
-    public CoreEvent.RunsStarted runSeveral(int runs) {
+    public CoreEvent.RunsStarted runSeveral(SeveralAsk ask) {
         // Asked off the FX thread: the core compiles first, and its answer is read on the channel's own thread.
         EditPort edits = onFx(() -> ctx.codeEditorService().edits());
         if (!(edits instanceof CoreEdits core)) {
             throw new IllegalArgumentException("Several runs at once need BotMaker's core, which this window has not.");
         }
-        return core.runSeveral(runs);
+        return core.runSeveral(ask);
     }
 
     @Override

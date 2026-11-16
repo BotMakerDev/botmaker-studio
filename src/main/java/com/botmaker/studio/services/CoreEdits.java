@@ -12,6 +12,7 @@ import com.botmaker.core.plugin.PluginWrite;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectFile;
 import com.botmaker.core.project.ProjectState;
+import com.botmaker.core.run.claims.SeveralAsk;
 import com.botmaker.core.server.CoreClient;
 import com.botmaker.core.server.CoreLauncher;
 import com.botmaker.core.server.CoreLink;
@@ -290,14 +291,14 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     }
 
     /**
-     * Starts {@code runs} runs of the bot in the core, each dealt a row of its pools; what started, on the caller's
-     * thread, which waits while the core compiles.
+     * Starts the runs {@code ask} asks for in the core, each dealt a row of its pools, or counts them; what started, on
+     * the caller's thread, which waits while the core compiles.
      *
      * @throws IllegalArgumentException with why none started
      */
-    public CoreEvent.RunsStarted runSeveral(int runs) {
+    public CoreEvent.RunsStarted runSeveral(SeveralAsk ask) {
         try {
-            return link.client().runSeveral(runs);
+            return link.client().runSeveral(ask);
         } catch (IOException e) {
             throw new IllegalArgumentException("BotMaker's core did not answer: " + e.getMessage());
         }
