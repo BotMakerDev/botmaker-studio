@@ -37,8 +37,11 @@ import java.util.function.DoubleConsumer;
  */
 public final class UpdateService {
 
-    /** A newer release plus the installer asset chosen for the current OS. */
-    public record AvailableUpdate(String tag, String assetName, String downloadUrl) {}
+    /**
+     * A newer release plus the installer asset chosen for the current OS; {@code checksumsUrl} is the release's
+     * {@link InstallerChecksum#FILE_NAME}, blank when it has none (the download is then refused).
+     */
+    public record AvailableUpdate(String tag, String assetName, String downloadUrl, String checksumsUrl) {}
 
     private final GitHubClient client;
     private final HttpClient downloader = HttpClient.newBuilder()
@@ -65,7 +68,8 @@ public final class UpdateService {
             if (node == null) return Optional.<AvailableUpdate>empty();
             String tag = node.path("tag_name").asText("");
             if (!SemVer.isGreater(tag, AppVersion.get())) return Optional.<AvailableUpdate>empty();
-            return pickAsset(node).map(a -> new AvailableUpdate(tag, a.name, a.url));
+            String checksums = assetUrl(node, InstallerChecksum.FILE_NAME).orElse("");
+            return pickAsset(node).map(a -> new AvailableUpdate(tag, a.name, a.url, checksums));
         }).exceptionally(e -> Optional.empty());
     }
 
@@ -74,28 +78,71 @@ public final class UpdateService {
      * {@code [0.0, 1.0]} to {@code progress} as bytes arrive (or {@code -1.0} when the server sends no
      * {@code Content-Length}, i.e. progress is indeterminate). {@code progress} is invoked on the
      * HTTP client's executor thread — the caller is responsible for marshalling to the UI thread.
-     * Fails the future on any download error.
+     * The file is then checked against the release's checksums ({@link InstallerChecksum}): one that differs, or
+     * that the release lists no checksum for, is deleted and fails the future. Fails it on any download error too.
      */
     public CompletableFuture<Path> downloadInstaller(AvailableUpdate update, DoubleConsumer progress) {
+        if (update.checksumsUrl() == null || update.checksumsUrl().isBlank()) {
+            // Refused before a byte is fetched: nothing could check it.
+            return CompletableFuture.failedFuture(new IOException("Release " + update.tag() + " has no "
+                    + InstallerChecksum.FILE_NAME + ", so its installer cannot be checked. Nothing was downloaded."));
+        }
         HttpRequest req = HttpRequest.newBuilder(URI.create(update.downloadUrl()))
                 .timeout(Duration.ofMinutes(5))
                 .header("Accept", "application/octet-stream")
                 .GET().build();
-        return downloader.sendAsync(req, HttpResponse.BodyHandlers.ofInputStream())
+        CompletableFuture<Path> downloaded = downloader.sendAsync(req, HttpResponse.BodyHandlers.ofInputStream())
                 .thenApply(resp -> {
                     if (resp.statusCode() != 200) {
                         throw new RuntimeException("Download failed (HTTP " + resp.statusCode() + ")");
                     }
                     long total = resp.headers().firstValueAsLong("content-length").orElse(-1L);
+                    Path dir = null;
                     try {
-                        Path dir = Files.createTempDirectory("botmaker-update");
+                        dir = Files.createTempDirectory("botmaker-update");
                         Path file = dir.resolve(update.assetName());
                         streamToFile(resp.body(), file, total, progress);
                         return file;
                     } catch (IOException e) {
+                        deleteDownload(dir, update.assetName());
                         throw new RuntimeException("Could not save installer: " + e.getMessage(), e);
                     }
                 });
+        return downloaded.thenCombine(fetchChecksums(update.checksumsUrl()), (file, checksums) -> {
+            try {
+                if (checksums.isEmpty()) {
+                    throw new IOException("Could not fetch the release's " + InstallerChecksum.FILE_NAME
+                            + " to check the installer; try again later.");
+                }
+                InstallerChecksum.verify(file, update.assetName(), checksums.get());
+                return file;
+            } catch (IOException e) {
+                deleteDownload(file.getParent(), update.assetName());
+                throw new RuntimeException(e.getMessage(), e);
+            }
+        });
+    }
+
+    /** Deletes a refused or partial download and its temp folder, best-effort. */
+    private static void deleteDownload(Path dir, String assetName) {
+        if (dir == null) return;
+        try {
+            Files.deleteIfExists(dir.resolve(assetName));
+            Files.deleteIfExists(dir);
+        } catch (IOException ignored) {
+            // left in the temp folder, never installed
+        }
+    }
+
+    /** The release's checksums text, empty when it could not be fetched (the download is then refused). */
+    private CompletableFuture<Optional<String>> fetchChecksums(String url) {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofMinutes(1))
+                .header("Accept", "application/octet-stream")
+                .GET().build();
+        return downloader.sendAsync(req, HttpResponse.BodyHandlers.ofString())
+                .thenApply(resp -> resp.statusCode() == 200 ? Optional.of(resp.body()) : Optional.<String>empty())
+                .exceptionally(e -> Optional.empty());
     }
 
     /** Copies {@code in} to {@code file}, reporting {@code read/total} (or {@code -1.0} when {@code total<=0}). */
@@ -192,6 +239,18 @@ public final class UpdateService {
     }
 
     private record Asset(String name, String url) {}
+
+    /** The download address of the asset named exactly {@code name}, if the release has one. */
+    private static Optional<String> assetUrl(JsonNode releaseNode, String name) {
+        JsonNode assets = releaseNode.get("assets");
+        if (assets == null || !assets.isArray()) return Optional.empty();
+        for (JsonNode a : assets) {
+            if (a.path("name").asText("").equals(name)) {
+                return Optional.of(a.path("browser_download_url").asText(""));
+            }
+        }
+        return Optional.empty();
+    }
 
     /** Picks the release asset whose extension matches this OS, preferring the native package manager on Linux. */
     private Optional<Asset> pickAsset(JsonNode releaseNode) {

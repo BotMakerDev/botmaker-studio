@@ -14,6 +14,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- An update's installer is checked against the release's `checksums_sha256.txt` before it runs. A download whose
+  sha256 differs, or that the release lists no checksum for, is deleted and the update says why; nothing is installed
+  unchecked.
+
 - Every file states its license and copyright by REUSE (`REUSE.toml`, `LICENSES/`), every Java source starts with
   its SPDX header, and the `reuse` workflow checks both on each push. xterm.js keeps MIT, and `THIRD-PARTY.txt`
   lists the licenses of the libraries Studio ships (JDT EPL-2.0, OpenCV Apache-2.0, JavaFX GPL-2.0 with the
