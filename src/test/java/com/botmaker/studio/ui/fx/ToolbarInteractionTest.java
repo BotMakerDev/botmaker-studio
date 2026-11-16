@@ -24,6 +24,7 @@ import org.testfx.util.WaitForAsyncUtils;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,7 +79,9 @@ class ToolbarInteractionTest extends FxHeadlessTest {
 
     @Test
     void theMenuHoldsTheFourChoicesAndCompileRequestsACompile() {
-        assertEquals(List.of("▶ Run", "🐞 Debug", "👁 Follow", "⚙ Compile"),
+        // Then, below a separator (its text null), the Runs window's two (run-claims phase 14).
+        assertEquals(Arrays.asList("▶ Run", "🐞 Debug", "👁 Follow", "⚙ Compile", null, "Run several…",
+                        "Show all runs on this PC"),
                 runButton.getItems().stream().map(MenuItem::getText).toList());
         interact(() -> item(RunChoice.COMPILE).fire());
         assertTrue(published.stream().anyMatch(e -> e instanceof CoreApplicationEvents.CompilationRequestedEvent),

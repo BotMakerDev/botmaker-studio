@@ -19,6 +19,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.SplitMenuButton;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
@@ -55,6 +56,9 @@ public class ToolbarManager {
     private Runnable onParameters;
     /** Shows the Reports window, read again; wired by {@link UIManager}. */
     private Runnable onReports;
+    /** ▶ Run's <i>Run several…</i> and <i>Show all runs on this PC</i>; wired by {@link UIManager}. */
+    private Runnable onRunSeveral;
+    private Runnable onAllRuns;
     /** Shows the Versions window, read again; wired by {@link UIManager}. */
     private Runnable onVersions;
     /** Shows the Assistant window; wired by {@link UIManager}. */
@@ -159,6 +163,16 @@ public class ToolbarManager {
     /** Sets the callback invoked when the toolbar's Reports button is clicked. */
     public void setOnReports(Runnable callback) {
         this.onReports = callback;
+    }
+
+    /** Sets what ▶ Run's <i>Run several…</i> opens: the Runs window of this bot. */
+    public void setOnRunSeveral(Runnable callback) {
+        this.onRunSeveral = callback;
+    }
+
+    /** Sets what ▶ Run's <i>Show all runs on this PC</i> opens. */
+    public void setOnAllRuns(Runnable callback) {
+        this.onAllRuns = callback;
     }
 
     /** Sets the callback invoked when the toolbar's Versions button is clicked. */
@@ -491,6 +505,12 @@ public class ToolbarManager {
             });
             runButton.getItems().add(item);
         }
+        // Several runs at once (run-claims phase 14): the Runs window, filtered to this bot or showing every bot's.
+        MenuItem several = new MenuItem("Run several…");
+        several.setOnAction(e -> run(onRunSeveral));
+        MenuItem allRuns = new MenuItem("Show all runs on this PC");
+        allRuns.setOnAction(e -> run(onAllRuns));
+        runButton.getItems().addAll(new SeparatorMenuItem(), several, allRuns);
         showRunChoice();
 
         unifiedStopButton = new Button("⏹ Stop");

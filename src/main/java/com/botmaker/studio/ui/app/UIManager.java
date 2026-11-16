@@ -6,7 +6,15 @@ import com.botmaker.studio.core.BlockWithChildren;
 import com.botmaker.studio.core.CodeBlock;
 import com.botmaker.studio.core.EditorState;
 import com.botmaker.studio.events.CoreApplicationEvents;
+import com.botmaker.core.event.CoreEvent;
 import com.botmaker.core.events.EventBus;
+import com.botmaker.core.run.claims.SeveralAsk;
+import com.botmaker.core.run.claims.SeveralRuns;
+import com.botmaker.core.sharing.UnpackedBots;
+import com.botmaker.studio.services.CoreEdits;
+import com.botmaker.studio.ui.app.home.MyBots;
+import com.botmaker.studio.ui.app.home.RunHome;
+import com.botmaker.studio.ui.app.runs.RunsWindow;
 import com.botmaker.core.migrate.ApiCache;
 import com.botmaker.core.migrate.PluginRules;
 import com.botmaker.java.index.nav.Refactor;
@@ -66,6 +74,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -132,6 +144,9 @@ public class UIManager implements ProjectWindow {
     private final ToolWindow versionsWindow;
     /** The Reports window, ▤ Reports; it shows each scene's {@link #reportsPanel}. */
     private final ToolWindow reportsWindow;
+    /** ▶ Run's Run several…, this bot's runs; and Show all runs on this PC, every bot's. */
+    private final RunsWindow runsWindow;
+    private final RunsWindow allRunsWindow;
 
     /**
      * The toolbar, kept so its centre group can be rebuilt when the project's plugins change.
@@ -190,6 +205,7 @@ public class UIManager implements ProjectWindow {
     /** View ▸ Preview as user — hands the project to the Runner window for this session only. */
     private Runnable onPreviewAsUser;
     private Runnable onGetMoreBots;
+    private Consumer<Path> onOpenBot;
 
     /**
      * Builds the window for {@code ctx}'s project on {@code primaryStage}.
@@ -253,6 +269,19 @@ public class UIManager implements ProjectWindow {
         reportsWindow.onShow(() -> {
             if (reportsPanel != null) reportsPanel.refresh();
         });
+        // ▶ Run's Run several… and Show all runs on this PC (run-claims phase 14, the user's picks P-A and H-A).
+        this.allRunsWindow = RunsWindow.home(dir -> {
+            if (SeveralRuns.bot(dir).equals(SeveralRuns.bot(config.projectPath()))) showRunsOfThisBot();
+            else if (UnpackedBots.isUnpacked(dir)) {
+                // A run copy never opens in the editor: its runs start from home's Runs window.
+                if (onSelectProject != null) onSelectProject.accept(null);
+            } else {
+                RunsWindow.showSeveralWhenOpened(dir);
+                if (onOpenBot != null) onOpenBot.accept(dir);
+            }
+        }, () -> RunHome.myBots().stream().map(MyBots.MyBot::dir).toList());
+        this.runsWindow = RunsWindow.of(new RunsWindow.Project(config, state, this::runSeveral,
+                actions::openParameters, () -> allRunsWindow.show(primaryStage)));
         menuBarManager.setOnShowHistory(() -> versionsWindow.show(primaryStage));
         // Dev's Open in terminal is the Terminal tab, whose first shell starts in the project directory.
         versionsPane.setOnOpenTerminal(() -> {
@@ -302,6 +331,8 @@ public class UIManager implements ProjectWindow {
         assistantPane.dispose();
         versionsWindow.dispose();
         reportsWindow.dispose();
+        runsWindow.dispose();
+        allRunsWindow.dispose();
         if (identityCluster != null) {
             identityCluster.dispose();
             identityCluster = null;
@@ -423,6 +454,9 @@ public class UIManager implements ProjectWindow {
         // The toolbar's 👁 is the same action, not a lookalike — see ToolbarManager for what it replaced.
         toolbarManager.setOnPreviewAsUser(() -> { if (onPreviewAsUser != null) onPreviewAsUser.run(); });
         toolbarManager.setOnReports(() -> reportsWindow.show(primaryStage));
+        toolbarManager.setOnRunSeveral(() -> runsWindow.show(primaryStage));
+        toolbarManager.setOnAllRuns(() -> allRunsWindow.show(primaryStage));
+        if (RunsWindow.takeSeveralAsked(config.projectPath())) Platform.runLater(() -> runsWindow.show(primaryStage));
         toolbarManager.setOnVersions(() -> versionsWindow.show(primaryStage));
         toolbarManager.setOnAssistant(() -> assistantWindow.show(primaryStage));
 
@@ -1053,6 +1087,36 @@ public class UIManager implements ProjectWindow {
     }
 
     public void setOnSelectProject(Consumer<Void> callback) { this.onSelectProject = callback; }
+
+    /** Sets what opens another bot in this window: the Runs window's <i>Start more</i> of another bot. */
+    public void setOnOpenBot(Consumer<Path> callback) { this.onOpenBot = callback; }
+
+    private void showRunsOfThisBot() {
+        runsWindow.show(primaryStage);
+    }
+
+    /**
+     * Asks the core what the runs asked for would be dealt, or starts them: the Runs window's ask, made off the FX
+     * thread. The window's edits are read on the FX thread, as the assistant's {@code runSeveral} reads them; a
+     * toolkit that no longer answers (the window closing) refuses the ask rather than holding it.
+     */
+    private CoreEvent.RunsStarted runSeveral(SeveralAsk ask) {
+        CompletableFuture<EditPort> edits = new CompletableFuture<>();
+        Platform.runLater(() -> edits.complete(codeEditorService.edits()));
+        EditPort port;
+        try {
+            port = edits.get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("The window closed before the runs were asked for.");
+        } catch (ExecutionException | TimeoutException e) {
+            throw new IllegalStateException("The window did not answer; the runs were not asked for.");
+        }
+        if (!(port instanceof CoreEdits core)) {
+            throw new IllegalStateException("Several runs at once need BotMaker's core, which this window has not.");
+        }
+        return core.runSeveral(ask);
+    }
 
     /** Sets what Project ▸ Get More Bots does: the shell's home, at its Get more bots section. */
     public void setOnGetMoreBots(Runnable callback) { this.onGetMoreBots = callback; }

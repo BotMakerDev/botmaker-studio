@@ -648,6 +648,45 @@
     -fx-font-size: 11px;
 }
 
+/* The Runs window (plan run-claims phase 14): a bot's group, its rows by what they are, a pinned pick. */
+.runs-group {
+    -fx-border-color: -bm-divider;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 6 10 6 10;
+}
+
+.runs-group-name {
+    -fx-font-weight: bold;
+}
+
+.runs-live {
+    -fx-text-fill: -bm-primary;
+}
+
+.runs-ready {
+    -fx-text-fill: -bm-vcs-new;
+}
+
+.runs-missing {
+    -fx-text-fill: -bm-vcs-modified;
+}
+
+.runs-other {
+    -fx-text-fill: -bm-muted;
+}
+
+.runs-pinned {
+    -fx-border-color: -bm-primary;
+    -fx-border-style: segments(3, 2);
+    -fx-border-radius: 4;
+    -fx-padding: 0 4 0 4;
+}
+
+.runs-cell {
+    -fx-cursor: hand;
+}
+
 /* The popover's pool section, on a faint band under the value it deals. */
 .param-pool-section {
     -fx-background-color: -bm-divider;

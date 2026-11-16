@@ -694,6 +694,7 @@ public class BotMakerStudio extends Application {
         UIManager uiManager = new UIManager(currentProject.context(), primaryStage);
         uiManager.setOnSelectProject(v -> switchToProjectSelector(primaryStage));
         uiManager.setOnGetMoreBots(() -> showProjectSelection(primaryStage).scrollToGetBots());
+        uiManager.setOnOpenBot(dir -> openProject(primaryStage, dir, false));
         uiManager.setOnPreviewAsUser(() -> {
             showAsUser = Boolean.TRUE;
             openProject(primaryStage, projectDir, false);

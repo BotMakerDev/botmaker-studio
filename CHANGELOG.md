@@ -12,6 +12,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **The Runs window** (2026-11-16, spec `2026-11-15-run-claims-design.md` §7, the user's picks H-A and P-A):
+  - Home's bar gets *Runs N*, which lists every live run on this PC by bot, with *Start more*, *Stop all*, ■ per run
+    and *▶ Start runs of…*.
+  - ▶ Run's menu gets *Run several…*, this bot's runs. They are its live rows, then what *Start N more* would be
+    dealt; a click on a ready cell pins that pick. Other bots' runs holding an instance are greyed. Below come the
+    capacity line with the plugins' offers, and the parameters every run shares.
+  - The menu also gets *Show all runs on this PC*.
 - **Pools in the Parameters window** (2026-11-16, spec `2026-11-15-run-claims-design.md` §7): a pool shows on the
   card of the parameter it fills (`⛁ Pool · 4 listed · one a run`). Once the bot deals anything, every other card
   says *Shared by every run*.

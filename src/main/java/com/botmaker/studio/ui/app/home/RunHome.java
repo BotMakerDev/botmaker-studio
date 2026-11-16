@@ -36,7 +36,10 @@ import com.botmaker.studio.ui.app.home.MyBots.MyBot;
 import com.botmaker.studio.ui.app.home.MyBots.Removal;
 import com.botmaker.studio.ui.app.home.MyBots.State;
 import com.botmaker.studio.ui.app.loading.LoadingPage;
+import com.botmaker.studio.ui.app.runs.RunsWindow;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -58,6 +61,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.TilePane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.File;
 import java.io.IOException;
@@ -73,6 +77,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -115,6 +120,15 @@ public final class RunHome implements ProjectWindow {
     private final TilePane myBots = new TilePane(GAP, GAP);
     private final Label myBotsLine = new Label("Looking for your bots…");
     private final Label getMoreHeading = heading("Get more bots");
+    /** The bar's <i>Runs N</i>, every live run on this PC, and the window it opens (the user's pick H-A). */
+    private final Button runsButton = new Button("Runs");
+    private final RunsWindow runsWindow = RunsWindow.home(this::startRunsOf,
+            () -> myBots().stream().map(MyBot::dir).toList());
+    private final AtomicBoolean countingRuns = new AtomicBoolean();
+    private final Timeline runsCounting = new Timeline(new KeyFrame(Duration.seconds(2), e -> countRuns()));
+    {
+        runsCounting.setCycleCount(Timeline.INDEFINITE);
+    }
     /** Package-private for {@code RunHomeFxTest}. */
     final GetBots getBots;
     private final Button select = new Button("Select");
@@ -289,9 +303,40 @@ public final class RunHome implements ProjectWindow {
         return confirm.showAndWait().filter(ButtonType.OK::equals).isPresent();
     }
 
-    /** Nothing to release: the screen holds no listener outside its own scene. */
+    /** Stops counting the live runs and closes the Runs window. */
     @Override
-    public void dispose() {}
+    public void dispose() {
+        runsCounting.stop();
+        runsWindow.dispose();
+    }
+
+    /**
+     * Opens a bot to start several runs of it (run-claims phase 14): a bot of mine opens in the editor, whose Runs
+     * window then shows; a run copy opens in its runner.
+     */
+    private void startRunsOf(Path dir) {
+        if (UnpackedBots.isUnpacked(dir)) {
+            actions.run(dir);
+            return;
+        }
+        RunsWindow.showSeveralWhenOpened(dir);
+        actions.edit(dir, false);
+    }
+
+    /** Counts the live runs off the FX thread, for the bar's <i>Runs N</i>. */
+    private void countRuns() {
+        if (!countingRuns.compareAndSet(false, true)) return;
+        Thread.ofVirtual().name("home-runs-count").start(() -> {
+            try {
+                int live = RunsWindow.liveCount();
+                Platform.runLater(() -> runsButton.setText("Runs " + live));
+            } catch (RuntimeException unreadable) {
+                // The registry unreadable for now; the next count says.
+            } finally {
+                countingRuns.set(false);
+            }
+        });
+    }
 
     @Override
     public Scene createScene() {
@@ -308,7 +353,10 @@ public final class RunHome implements ProjectWindow {
         archived.setOnAction(e -> new ArchivedProjectsDialog(stage, projectManager, this::reload).show());
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox bar = new HBox(10, title, version, spacer, newBot, openFolder, archived,
+        runsButton.setOnAction(e -> runsWindow.show(stage));
+        countRuns();
+        runsCounting.play();
+        HBox bar = new HBox(10, title, version, spacer, runsButton, newBot, openFolder, archived,
                 new GitHubAccountBar(stage, gitHubAuth, gitHubClient, () -> {}));
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("runner-header");
