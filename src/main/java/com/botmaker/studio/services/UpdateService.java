@@ -3,6 +3,7 @@
 
 package com.botmaker.studio.services;
 
+import com.botmaker.cli.update.ReleaseChecksums;
 import com.botmaker.shared.Executables;
 import com.botmaker.shared.github.GitHubClient;
 import com.botmaker.shared.github.GitHubConfig;
@@ -39,7 +40,7 @@ public final class UpdateService {
 
     /**
      * A newer release plus the installer asset chosen for the current OS; {@code checksumsUrl} is the release's
-     * {@link InstallerChecksum#FILE_NAME}, blank when it has none (the download is then refused).
+     * {@link ReleaseChecksums#FILE_NAME}, blank when it has none (the download is then refused).
      */
     public record AvailableUpdate(String tag, String assetName, String downloadUrl, String checksumsUrl) {}
 
@@ -68,7 +69,7 @@ public final class UpdateService {
             if (node == null) return Optional.<AvailableUpdate>empty();
             String tag = node.path("tag_name").asText("");
             if (!SemVer.isGreater(tag, AppVersion.get())) return Optional.<AvailableUpdate>empty();
-            String checksums = assetUrl(node, InstallerChecksum.FILE_NAME).orElse("");
+            String checksums = assetUrl(node, ReleaseChecksums.FILE_NAME).orElse("");
             return pickAsset(node).map(a -> new AvailableUpdate(tag, a.name, a.url, checksums));
         }).exceptionally(e -> Optional.empty());
     }
@@ -78,14 +79,14 @@ public final class UpdateService {
      * {@code [0.0, 1.0]} to {@code progress} as bytes arrive (or {@code -1.0} when the server sends no
      * {@code Content-Length}, i.e. progress is indeterminate). {@code progress} is invoked on the
      * HTTP client's executor thread — the caller is responsible for marshalling to the UI thread.
-     * The file is then checked against the release's checksums ({@link InstallerChecksum}): one that differs, or
+     * The file is then checked against the release's checksums ({@link ReleaseChecksums}): one that differs, or
      * that the release lists no checksum for, is deleted and fails the future. Fails it on any download error too.
      */
     public CompletableFuture<Path> downloadInstaller(AvailableUpdate update, DoubleConsumer progress) {
         if (update.checksumsUrl() == null || update.checksumsUrl().isBlank()) {
             // Refused before a byte is fetched: nothing could check it.
             return CompletableFuture.failedFuture(new IOException("Release " + update.tag() + " has no "
-                    + InstallerChecksum.FILE_NAME + ", so its installer cannot be checked. Nothing was downloaded."));
+                    + ReleaseChecksums.FILE_NAME + ", so its installer cannot be checked. Nothing was downloaded."));
         }
         HttpRequest req = HttpRequest.newBuilder(URI.create(update.downloadUrl()))
                 .timeout(Duration.ofMinutes(5))
@@ -111,10 +112,10 @@ public final class UpdateService {
         return downloaded.thenCombine(fetchChecksums(update.checksumsUrl()), (file, checksums) -> {
             try {
                 if (checksums.isEmpty()) {
-                    throw new IOException("Could not fetch the release's " + InstallerChecksum.FILE_NAME
+                    throw new IOException("Could not fetch the release's " + ReleaseChecksums.FILE_NAME
                             + " to check the installer; try again later.");
                 }
-                InstallerChecksum.verify(file, update.assetName(), checksums.get());
+                ReleaseChecksums.verify(file, update.assetName(), checksums.get());
                 return file;
             } catch (IOException e) {
                 deleteDownload(file.getParent(), update.assetName());
