@@ -12,6 +12,14 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+- **Pools in the Parameters window** (2026-11-16, spec `2026-11-15-run-claims-design.md` §7): a pool shows on the
+  card of the parameter it fills (`⛁ Pool · 4 listed · one a run`). Once the bot deals anything, every other card
+  says *Shared by every run*.
+  - The popover edits the pool: its elements, *All, new ones included*, and *Runs sharing one*, *Which one first*
+    and *Each run takes*, with its Java under them.
+  - *+ Add a pool for several runs* makes one, and *Remove the pool* takes it out. Cancel puts the pool back.
+  - A plugin's pool, the SDK's instances, shows read-only.
+
 - **A plugin's setup work holds what a run could be dealt** (2026-11-15): Studio installs the core's `RegistryHolds`
   at start, so the contract's `liveRuns()` answers in Studio's copy of a plugin as in the core's.
 

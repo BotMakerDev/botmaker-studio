@@ -18,6 +18,13 @@ import com.botmaker.core.project.params.JavaParameters;
 import com.botmaker.core.plugin.HostParamScope;
 import com.botmaker.core.plugin.HostPluginValues;
 import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.plugin.ValueWire;
+import com.botmaker.core.project.params.JavaPools;
+import com.botmaker.core.project.params.PoolEdits;
+import com.botmaker.java.index.PoolReader;
+import com.botmaker.plugin.api.run.PluginPool;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.Spinner;
 import com.botmaker.java.grammar.JavaValue;
 import com.botmaker.java.grammar.ValueTypes;
 import com.botmaker.java.grammar.ValueGrammar;
@@ -84,6 +91,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 /**
@@ -153,6 +161,18 @@ public final class ParametersDialog {
 
     /** The records the bot declares, for a value cell over one of them. Re-read with the rows. */
     private BotRecords records = BotRecords.none();
+
+    /** The bot's {@code @Pools} groups' pools, read; re-read with the rows (2026-11-16). */
+    private List<PoolReader.Reading> pools = List.of();
+
+    /** The name of the plugin whose pool fills each plugin parameter, by its {@code ManagedParam} id. */
+    private final Map<String, String> pluginPools = new HashMap<>();
+
+    /** Whether any pool fills one of the rows: then a card no pool fills says every run shares it. */
+    private boolean dealsAny;
+
+    /** The open popover's pool elements editor, read when the window records what was typed; null while none. */
+    private Runnable poolElements;
 
     private Filter filter = Filter.NONE;
 
@@ -253,6 +273,12 @@ public final class ParametersDialog {
         // Read once per reload, beside the rows they belong to: a value cell for a parameter typed with one of the
         // bot's own records needs that record's components, and a per-cell scan would read every file once per row.
         records = BotRecords.scan(config, state, PluginHost.grammar());
+        pools = JavaParameters.pools(config, state);
+        pluginPools.clear();
+        for (LoadedPlugin plugin : PluginHost.plugins()) {
+            for (PluginPool<?> pool : plugin.plugin().pools()) pluginPools.put(pool.parameter().id(), plugin.name());
+        }
+        dealsAny = !pools.isEmpty() || rows.stream().anyMatch(row -> pluginPools.containsKey(row.managedId()));
     }
 
     /**
@@ -390,6 +416,7 @@ public final class ParametersDialog {
         VBox card = new VBox(3, head, type, value);
         Instant at = keptAt.get(entry.qualified());
         if (at != null) card.getChildren().add(hintLabel("written by a run · " + when(at)));
+        poolStrip(entry).ifPresent(card.getChildren()::add);
         card.getStyleClass().add("param-card");
         card.setPrefWidth(CARD_WIDTH);
         card.setUserData(entry.qualified());
@@ -401,6 +428,31 @@ public final class ParametersDialog {
             if (e.getCode() == KeyCode.ENTER || e.getCode() == KeyCode.SPACE) openDetail(entry);
         });
         return card;
+    }
+
+    /**
+     * The card's word on several runs (mockup 6A): the pool that fills it, or that every run shares it once the bot
+     * deals anything; nothing for a bot with no pool, which looks as it always did.
+     */
+    private Optional<Node> poolStrip(JavaParameter entry) {
+        String plugin = entry.group() ? pluginPools.get(entry.managedId()) : null;
+        Optional<PoolReader.Reading> own = ownPool(entry);
+        String text;
+        if (plugin != null) {
+            text = PoolCards.pluginStrip(plugin);
+        } else if (own.isPresent()) {
+            text = PoolEdits.Shape.of(own.get()).map(PoolCards::strip)
+                    .orElseGet(() -> PoolCards.unread(own.get().problem()));
+        } else if (!dealsAny) {
+            return Optional.empty();
+        } else {
+            return Optional.of(hintLabel(PoolCards.SHARED));
+        }
+        Label strip = new Label(text);
+        strip.getStyleClass().add("param-pool-strip");
+        strip.setWrapText(true);
+        strip.setMaxWidth(Double.MAX_VALUE);
+        return Optional.of(strip);
     }
 
     private static String shortened(String text) {
@@ -422,6 +474,8 @@ public final class ParametersDialog {
     private void openDetail(JavaParameter entry) {
         commitPending("the value you typed");
         List<JavaParameter> before = List.copyOf(rows);
+        // The pool is not one of the rows, so Cancel puts it back on its own.
+        Optional<PoolEdits.Shape> poolBefore = poolOf(entry.className(), entry.name());
         detailClass = entry.className();
         detailName = entry.name();
         detailBox = new VBox(8);
@@ -445,11 +499,14 @@ public final class ParametersDialog {
         detailBox = null;
         if (answer == ButtonType.CANCEL) {
             valueEditors.clear();
+            poolElements = null;
+            restorePool(className, name, poolBefore);
             cancelTo(before, name);
         } else {
             commitPending("the value of " + name);
         }
         valueEditors.clear();
+        poolElements = null;
         redraw();
         if (answer == open) {
             JavaParameter now = find(className, name);
@@ -591,7 +648,197 @@ public final class ParametersDialog {
                     shared.isSelected() ? Visibility.PUBLIC : Visibility.EDITOR_ONLY).build()));
             grid.add(shared, 1, row);
         }
+        row++;
+        Optional<Node> pool = poolSection(entry);
+        if (pool.isPresent()) grid.add(pool.get(), 0, row, 2, 1);
         return grid;
+    }
+
+    // --- the popover's pool: several runs (2026-11-16, mockup 6A) ------------------------------------------------
+
+    /**
+     * The popover's part on several runs: a plugin's pool said read-only, the bot's own edited in plain words, an
+     * offer to add one on a parameter of the bot's own groups, and nothing on an old field.
+     */
+    private Optional<Node> poolSection(JavaParameter entry) {
+        String plugin = entry.group() ? pluginPools.get(entry.managedId()) : null;
+        if (plugin != null) {
+            return Optional.of(poolBand(hintLabel(PoolCards.pluginStrip(plugin)
+                    + ". How it deals is the plugin's; the value above is the one a single run uses.")));
+        }
+        if (entry.declaredByPlugin() || !entry.group()) return Optional.empty();
+        Optional<PoolReader.Reading> reading = ownPool(entry);
+        if (reading.isEmpty()) {
+            Button add = new Button("+ Add a pool for several runs");
+            add.setTooltip(new Tooltip("Several runs at once are each dealt one value from a pool. It starts with this"
+                    + " value; list the others there."));
+            add.setOnAction(e -> putPool(freshPool(entry)));
+            return Optional.of(poolBand(add));
+        }
+        Optional<PoolEdits.Shape> shape = PoolEdits.Shape.of(reading.get());
+        if (shape.isEmpty()) return Optional.of(poolBand(hintLabel(PoolCards.unread(reading.get().problem()))));
+        if (!JavaPools.editable(config, reading.get())) {
+            return Optional.of(poolBand(hintLabel(PoolCards.strip(shape.get()) + " — in "
+                    + reading.get().group() + ", changed in code only.")));
+        }
+        return Optional.of(poolEditor(entry, shape.get()));
+    }
+
+    /** The pool's settings, each written as it changes; the Java they write, small, under them. */
+    private Node poolEditor(JavaParameter entry, PoolEdits.Shape pool) {
+        Label title = new Label("Several runs: a pool");
+        title.getStyleClass().add("param-card-name");
+        Button remove = new Button("Remove the pool");
+        remove.getStyleClass().add("row-icon-button");
+        remove.setTooltip(new Tooltip("Every run uses the value above again."));
+        remove.setOnAction(e -> {
+            // Let go of the elements' reader first: the redraw would otherwise write what was typed back.
+            poolElements = null;
+            JavaPools.remove(config, state, pool.group(), pool.name());
+            reload();
+            redraw();
+        });
+        HBox spacer = new HBox();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox head = new HBox(8, title, spacer, remove);
+        head.setAlignment(Pos.CENTER_LEFT);
+        VBox band = new VBox(6, head, hintLabel((pool.take() > 0 ? "Each run is dealt " + pool.take()
+                : "Each run is dealt one") + " of these; the value above is used by a single run."));
+
+        Type listed = ValueTypes.listOf(pool.element());
+        List<JavaValue> held = pool.elements().stream().flatMap(source -> JavaValue.parse(source).stream()).toList();
+        ValueEditors.Editor elements = ParamValueWidgets.valueEditor(listed,
+                ValueWire.compose(listed, held).map(JavaValue::written), config, records);
+        elements.node().setDisable(pool.all());
+        // The pool with what is typed in its elements now: a setting changed builds on it, so nothing typed is lost.
+        Supplier<PoolEdits.Shape> typed = () -> {
+            Optional<JavaValue> value = pool.all() ? Optional.empty() : elements.read().get();
+            if (value.isEmpty()) return pool;
+            List<String> sources = new ArrayList<>();
+            Set<String> imports = new LinkedHashSet<>();
+            for (ValueGrammar.Part part : ValueWire.partsOrNone(listed, value.get().written())) {
+                JavaValue element = JavaValue.kept(part.written());
+                sources.add(element.source());
+                imports.addAll(element.imports());
+            }
+            return sources.equals(pool.elements()) ? pool : pool.withElements(sources, List.copyOf(imports));
+        };
+        // Read when the window records what was typed (flushValues), as the value cells are.
+        poolElements = () -> {
+            PoolEdits.Shape now = typed.get();
+            if (!now.equals(pool)) putPool(now);
+        };
+        if (PoolCards.offersAll(pool)) {
+            CheckBox all = new CheckBox("All, new ones included");
+            all.setSelected(pool.all());
+            all.setOnAction(e -> putPool(typed.get().withAll(all.isSelected())));
+            band.getChildren().add(all);
+        }
+        band.getChildren().add(elements.node());
+
+        GridPane settings = new GridPane();
+        settings.setHgap(8);
+        settings.setVgap(6);
+        int row = 0;
+        if (PoolCards.isList(pool.parameter()) && pool.take() > 0) {
+            int most = pool.all() || pool.elements().isEmpty() ? 99 : pool.elements().size();
+            settings.add(new Label("Each run takes"), 0, row);
+            settings.add(count(pool.take(), most, n -> putPool(typed.get().withTake(n)), ""), 1, row++);
+        }
+        settings.add(new Label("Runs sharing one"), 0, row);
+        settings.add(count(pool.each(), 99, n -> putPool(typed.get().withEach(n)), "at once"), 1, row++);
+        ToggleGroup first = new ToggleGroup();
+        RadioButton last = new RadioButton("The one it had last time");
+        RadioButton least = new RadioButton("The least recently used");
+        last.setToggleGroup(first);
+        least.setToggleGroup(first);
+        (pool.rotates() ? least : last).setSelected(true);
+        last.setOnAction(e -> putPool(typed.get().withRotates(false)));
+        least.setOnAction(e -> putPool(typed.get().withRotates(true)));
+        settings.add(new Label("Which one first"), 0, row);
+        settings.add(new VBox(4, last, least), 1, row);
+        band.getChildren().add(settings);
+
+        PoolEdits.shown(pool).ifPresent(java -> {
+            Label line = new Label(java);
+            line.getStyleClass().addAll("dialog-hint-text", "param-pool-java");
+            line.setWrapText(true);
+            band.getChildren().add(line);
+        });
+        band.getStyleClass().add("param-pool-section");
+        return band;
+    }
+
+    /** A whole number from one to {@code most}, written when it changes; {@code unit} beside it. */
+    private static Node count(int value, int most, Consumer<Integer> changed, String unit) {
+        Spinner<Integer> spinner = new Spinner<>(1, Math.max(1, most), Math.max(1, Math.min(value, most)));
+        spinner.setEditable(true);
+        spinner.setPrefWidth(70);
+        spinner.valueProperty().addListener((o, was, is) -> {
+            if (is != null && !is.equals(was)) changed.accept(is);
+        });
+        HBox box = new HBox(6, spinner);
+        if (!unit.isEmpty()) box.getChildren().add(hintLabel(unit));
+        box.setAlignment(Pos.CENTER_LEFT);
+        return box;
+    }
+
+    private static Node poolBand(Node content) {
+        VBox band = new VBox(6, content);
+        band.getStyleClass().add("param-pool-section");
+        return band;
+    }
+
+    /**
+     * A new pool for {@code entry}, holding its value: one element of its type, or, for a list, its list's elements,
+     * each run taking as many.
+     */
+    private PoolEdits.Shape freshPool(JavaParameter entry) {
+        Optional<Type> element = PoolCards.listElement(entry.form());
+        List<String> sources = new ArrayList<>();
+        Set<String> imports = new LinkedHashSet<>();
+        entry.row().value().ifPresent(value -> {
+            List<JavaValue> parts = element.isEmpty() ? List.of(value) : ValueWire.partsOrNone(entry.form(),
+                    value.written()).stream().map(part -> JavaValue.kept(part.written())).toList();
+            for (JavaValue part : parts) {
+                sources.add(part.source());
+                imports.addAll(part.imports());
+            }
+        });
+        return new PoolEdits.Shape(JavaPools.groupFor(entry.className()), entry.name(), entry.className(),
+                entry.name(), entry.form(), element.orElse(entry.form()), false, sources, List.copyOf(imports),
+                element.isPresent() ? Math.max(1, sources.size()) : 0, 1, false);
+    }
+
+    /** Writes {@code pool} into both copies and redraws over what the sources hold now. */
+    private void putPool(PoolEdits.Shape pool) {
+        poolElements = null;
+        JavaPools.put(config, state, pool);
+        reload();
+        redraw();
+    }
+
+    /** {@code entry}'s pool as the sources hold it now; empty for none, or one that does not read. */
+    private Optional<PoolEdits.Shape> poolOf(String className, String name) {
+        return JavaPools.filling(config, pools, className, name).flatMap(PoolEdits.Shape::of);
+    }
+
+    /** The bot's pool filling {@code entry}, a parameter of the bot's own groups; none for a plugin's. */
+    private Optional<PoolReader.Reading> ownPool(JavaParameter entry) {
+        return entry.group() && pluginPools.containsKey(entry.managedId()) ? Optional.empty()
+                : JavaPools.filling(config, pools, entry.className(), entry.name());
+    }
+
+    /** Puts {@code entry}'s pool back as it was when the popover opened: Cancel's half for the pool. */
+    private void restorePool(String className, String name, Optional<PoolEdits.Shape> was) {
+        Optional<PoolEdits.Shape> now = poolOf(className, name);
+        if (now.equals(was)) return;
+        if (was.isPresent()) {
+            JavaPools.put(config, state, was.get());
+        } else {
+            now.ifPresent(pool -> JavaPools.remove(config, state, pool.group(), pool.name()));
+        }
+        reload();
     }
 
     /**
@@ -1055,6 +1302,12 @@ public final class ParametersDialog {
 
     /** Hands the on-screen value widgets' values to the sources they were read from. */
     private void flushValues() {
+        flushParameterValues();
+        // After the value cells: a pool written redraws, which rebuilds them (and putPool lets go of this reader).
+        if (poolElements != null) poolElements.run();
+    }
+
+    private void flushParameterValues() {
         if (valueEditors.isEmpty()) return;
         for (ValueEditor editor : valueEditors) {
             for (int i = 0; i < rows.size(); i++) {

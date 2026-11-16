@@ -633,6 +633,28 @@
     -fx-padding: 4 0 6 0;
 }
 
+/* A pool on its parameter's card (2026-11-16, mockup 6A): a band in the accent, so a dealt value stands out. */
+.param-pool-strip {
+    /* -bm-primary at a fifth, so the text keeps its theme's colour on light and dark. */
+    -fx-background-color: rgba(52, 152, 219, 0.2);
+    -fx-background-radius: 4;
+    -fx-padding: 3 6 3 6;
+    -fx-font-size: 11px;
+}
+
+/* The pool's Java, small, under its settings: what the plain words write. */
+.param-pool-java {
+    -fx-font-family: monospace;
+    -fx-font-size: 11px;
+}
+
+/* The popover's pool section, on a faint band under the value it deals. */
+.param-pool-section {
+    -fx-background-color: -bm-divider;
+    -fx-background-radius: 6;
+    -fx-padding: 8;
+}
+
 /* A group's heading inside a section: its class name, small and quiet, as the mockup's sub-headings. */
 .param-group-heading {
     -fx-font-size: 11px;
