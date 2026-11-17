@@ -39,9 +39,10 @@ class McpBudgetTest {
      * Characters, Studio's tools and the instructions together; about four to a token. 30,913 on 2026-10-15, before
      * the tools were typed and merged; 31,650 once typed (each action's fields said, the method parameters
      * described); 23,847 once merged into tools of several actions and trimmed, 37 tools where there were 58. The ceiling leaves
-     * about a tenth over that.
+     * about a tenth over that. 26,370 on 2026-11-17, 38 tools, once run_bot started several runs (runs, dry_run,
+     * all_or_none, pins, and a run_id on stop, run_state and read_trace) and its words were trimmed.
      */
-    static final int CEILING = 26_000;
+    static final int CEILING = 26_500;
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
