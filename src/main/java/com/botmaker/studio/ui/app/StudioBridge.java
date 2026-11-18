@@ -245,9 +245,10 @@ final class StudioBridge implements StudioDriver {
     }
 
     @Override
-    public String runEntry(RunEntries.Declared entry) {
+    public String runEntry(RunEntries.Declared entry, String arguments) {
         return onFx(() -> {
-            ctx.eventBus().publish(new CoreApplicationEvents.EntryRunRequestedEvent(entry.title(), entry.mainClass()));
+            ctx.eventBus().publish(new CoreApplicationEvents.EntryRunRequestedEvent(entry.title(), entry.mainClass(),
+                    arguments));
             return "Starting " + entry.title() + ". run_state says when it runs; read_trace what it does.";
         });
     }

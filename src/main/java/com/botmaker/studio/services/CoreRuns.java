@@ -90,7 +90,7 @@ public final class CoreRuns implements AutoCloseable {
         bus.subscribe(CoreApplicationEvents.ExecutionRequestedEvent.class,
                 e -> run(CoreClient::run), false);
         bus.subscribe(CoreApplicationEvents.EntryRunRequestedEvent.class,
-                e -> run(client -> client.runEntry(e.title(), e.mainClass())), false);
+                e -> run(client -> client.runEntry(e.title(), e.mainClass(), e.arguments())), false);
         bus.subscribe(CoreApplicationEvents.TrialRunRequestedEvent.class,
                 e -> run(client -> client.tryOut(e.trial())), false);
         bus.subscribe(CoreApplicationEvents.StopRunRequestedEvent.class,

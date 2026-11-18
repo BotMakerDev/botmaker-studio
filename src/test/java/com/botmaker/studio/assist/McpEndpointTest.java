@@ -162,7 +162,7 @@ class McpEndpointTest {
         @Override public String moveCaret(String file, String blockId) { return "caret"; }
         @Override public String showArea(Area area, String label) { return "boxed"; }
         @Override public String runBot() { asked.add("run"); return "running"; }
-        @Override public String runEntry(RunEntries.Declared entry) { asked.add("entry " + entry.title()); return "running"; }
+        @Override public String runEntry(RunEntries.Declared entry, String arguments) { asked.add("entry " + entry.title()); return "running"; }
         @Override public String runActivity(String key) { asked.add("activity " + key); return "running"; }
         @Override public String tryStatement(String file, String blockId, Map<String, String> values) {
             asked.add("try " + blockId + " " + values);

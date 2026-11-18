@@ -12,6 +12,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- A plugin's run started by the assistant with arguments (`run_bot` `entry` and `args`) gets them: Studio hands them
+  to the core with the start.
+
 ### Changed
 
 - An update's installer is checked against the release's `checksums_sha256.txt` before it runs. A download whose

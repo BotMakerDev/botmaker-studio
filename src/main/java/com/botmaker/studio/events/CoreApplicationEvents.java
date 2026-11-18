@@ -170,9 +170,20 @@ public class CoreApplicationEvents {
     public record ExecutionRequestedEvent() implements ApplicationEvent {}
     /**
      * Run a plugin's declared run {@code title} instead of the bot's {@code main} (2026-11-03): {@code mainClass}
-     * is the JVM's main, the bot's value holders its arguments. A run like ▶ Run's in every other way.
+     * is the JVM's main, the bot's value holders its arguments, and {@code arguments} what {@code RunEntry.arguments}
+     * checked ({@code ""}: none, as a button starts it). A run like ▶ Run's in every other way.
      */
-    public record EntryRunRequestedEvent(String title, String mainClass) implements ApplicationEvent {}
+    public record EntryRunRequestedEvent(String title, String mainClass, String arguments) implements ApplicationEvent {
+
+        public EntryRunRequestedEvent {
+            arguments = arguments == null ? "" : arguments;
+        }
+
+        /** A start with no arguments: a toolbar button's, a plugin window's. */
+        public EntryRunRequestedEvent(String title, String mainClass) {
+            this(title, mainClass, "");
+        }
+    }
     public record StopRunRequestedEvent() implements ApplicationEvent {}
     public record ProgramStartedEvent() implements ApplicationEvent {}
     public record ProgramStoppedEvent() implements ApplicationEvent {}
