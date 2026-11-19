@@ -250,7 +250,7 @@ public class UIManager implements ProjectWindow {
         // ▶ Try a statement and ▶ Run a method on its own, from the canvas, the overlay editor and the assistant.
         // It keeps itself subscribed.
         this.assistantPane = new AssistantPane(ctx,
-                new com.botmaker.studio.ui.app.trial.Trials(eventBus, ctx.state(), config));
+                new com.botmaker.studio.ui.app.trial.Trials(eventBus, ctx.state(), config), primaryStage);
         this.assistantWindow = new AssistantWindow(assistantPane, config.projectName(), this::revealMethod);
 
         this.actions = new StudioActions(ctx, primaryStage, screenCaptureService,

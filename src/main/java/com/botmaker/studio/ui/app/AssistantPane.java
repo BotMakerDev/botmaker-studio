@@ -40,6 +40,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -99,10 +100,13 @@ final class AssistantPane {
     /** This window's private directory for the tools' config files (they hold the token); made on first use. */
     private Path configDir;
     private boolean disposed;
+    /** The project's main window, which asks and closes for the tools while this pane is not on screen. */
+    private final Window main;
 
-    AssistantPane(StudioContext ctx, Trials trials) {
+    AssistantPane(StudioContext ctx, Trials trials, Window main) {
         this.ctx = ctx;
         this.trials = trials;
+        this.main = main;
         this.projectDir = ctx.config().projectPath();
         build();
         serve.setSelected(mcpConfig.enabled());
@@ -311,8 +315,12 @@ final class AssistantPane {
         waiting = new ArrayList<>(List.of(then));
         mcpStatus.setText("Starting…");
         runLog = RunLogOnBus.listen(ctx.eventBus(), new RunLog(Clock.systemUTC(), ctx.runs()::isRunning));
-        driver = new StudioBridge(ctx, trials, runLog,
-                () -> root.getScene() == null ? null : root.getScene().getWindow());
+        // This pane's window while it shows; else the project's: quit_studio and a plugin's question need one on
+        // screen, and the pane sits in a tab or a window of its own that may be closed.
+        driver = new StudioBridge(ctx, trials, runLog, () -> {
+            Window own = root.getScene() == null ? null : root.getScene().getWindow();
+            return own != null && own.isShowing() ? own : main;
+        });
         registerTools().thenAccept(at -> Platform.runLater(() -> {
             List<Consumer<CoreLauncher.Address>> callers = waiting;
             waiting = null;

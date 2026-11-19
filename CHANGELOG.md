@@ -30,6 +30,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - Licensed under PolyForm Noncommercial 1.0.0, copyright LiQiyeDev: free for any noncommercial use, commercial use
   needs a license from LiQiyeDev. Releases up to v1.13.1 stay CC0 1.0 (the README and the rpm had said MIT).
 
+### Fixed
+
+- `quit_studio`, and a plugin move or removal the assistant asks for, work while the Assistant tab is not on screen:
+  they use the project's window then, where they used to answer "Studio's window is not shown".
+
 ## [1.13.1] — 2026-11-16
 
 ### Changed
