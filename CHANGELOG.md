@@ -32,6 +32,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- A run the core started before Studio opened the project (through the MCP) is going for the plugins too: the SDK's
+  🔭 Explore said *ended*, with no frame, no pinned stop and Stop greyed, while it ran.
 - `quit_studio`, and a plugin move or removal the assistant asks for, work while the Assistant tab is not on screen:
   they use the project's window then, where they used to answer "Studio's window is not shown".
 

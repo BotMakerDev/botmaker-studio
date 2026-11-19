@@ -305,7 +305,10 @@ public class BotProject {
 
         // The bot, as a plugin is allowed to see it. Cleared in close(), so a plugin between projects reaches
         // Runs.NONE rather than a channel into the project the user just left.
-        PluginsOnBus.runs(eventBus, runs::pid, projectSettingsService);
+        HostRuns pluginRuns = PluginsOnBus.runs(eventBus, runs::pid, projectSettingsService);
+        // A run the core had before Studio joined (started through the MCP) was told to CoreRuns above, before
+        // HostRuns listened: without this a plugin sees no run going until it ends.
+        if (pluginRuns != null && runs.isRunning()) pluginRuns.ran(true);
 
         // The plugin's own values, which live in the bot's Java beside everything else here. Same lifetime
         // for the same reason, and the services handed over are this project's: a value written or a
