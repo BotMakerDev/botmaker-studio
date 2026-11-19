@@ -389,6 +389,14 @@ public final class LibraryService {
         return CompletableFuture.runAsync(this::rebind, rebinds);
     }
 
+    /**
+     * The core resolved and bound its plugins again without this Studio asking, as a plugin's dev reload does
+     * (2026-11-20): this copy binds to what it resolved, so the plugin's windows and tools are the rebuilt jar's too.
+     */
+    public CompletableFuture<Void> coreRebound(MavenService.Resolution resolution) {
+        return CompletableFuture.runAsync(() -> boundPom = bind(resolution, readQuietly(pom())), rebinds);
+    }
+
     /** The classpath the editor is bound to: every jar the pom resolved to, transitive ones included. */
     public List<String> resolvedClasspath() {
         return List.copyOf(state.getResolvedClasspath());

@@ -21,6 +21,9 @@ import com.botmaker.core.server.CoreLauncher;
 import com.botmaker.core.server.CoreLink;
 import com.botmaker.core.services.MavenService;
 import com.botmaker.java.edit.palette.BlockType;
+import com.botmaker.plugin.api.run.DevReload;
+import com.botmaker.plugin.api.run.RunEntry;
+import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.events.CoreApplicationEvents;
 
@@ -62,6 +65,10 @@ public final class CoreEdits implements EditPort, AutoCloseable {
     private static final Duration PLUGIN_WRITE_TAKEN = Duration.ofSeconds(10);
     /** What the libraries resolved to, as the core last told; nothing until it told. */
     private volatile MavenService.Resolution resolution = new MavenService.Resolution(List.of(), List.of());
+    /** This client's own reloads in flight: what they resolve is bound by their asker. */
+    private final AtomicInteger ownReloads = new AtomicInteger();
+    /** Who binds this Studio's copy of the plugins when the core rebound its own unasked (a dev reload). */
+    private volatile Consumer<MavenService.Resolution> rebound;
 
     private final AtomicInteger framesWaiting = new AtomicInteger();
     private final Queue<CoreEvent> told = new ConcurrentLinkedQueue<>();
@@ -151,11 +158,34 @@ public final class CoreEdits implements EditPort, AutoCloseable {
      * @throws IllegalStateException with the core's reason when it kept its libraries (a pom it cannot read)
      */
     public MavenService.Resolution reload() {
-        if (request(CoreClient::reload) instanceof EditResult.Refused refused) {
-            throw new IllegalStateException(refused.reason());
+        ownReloads.incrementAndGet();
+        try {
+            if (request(CoreClient::reload) instanceof EditResult.Refused refused) {
+                throw new IllegalStateException(refused.reason());
+            }
+        } finally {
+            ownReloads.decrementAndGet();
         }
         // Told before the answer, on the reader thread, so it is in by now.
         return resolution;
+    }
+
+    /**
+     * {@code to} binds this Studio's copy of the plugins whenever the core resolved and bound its own without this
+     * client asking, as a plugin's dev reload does (2026-11-20); on the channel's reader thread, so it hands off.
+     */
+    public void onCoreRebound(Consumer<MavenService.Resolution> to) {
+        rebound = to;
+    }
+
+    /**
+     * A plugin of this Studio restarting its run {@code entry} on its rebuilt jar: the core's copy of the plugin does
+     * it, since the run, the project's thread and the bind that serves the run are the core's (2026-11-20).
+     */
+    public DevReload devReload(PluginCoordinate caller, RunEntry entry) {
+        EditResult result = request(client -> client.devReload(caller.groupId(), caller.artifactId(), entry.title()));
+        return result instanceof EditResult.Refused refused ? new DevReload.Refused(refused.reason())
+                : new DevReload.Started();
     }
 
     /**
@@ -329,6 +359,14 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         if (event instanceof CoreEvent.LibrariesResolved resolved) {
             // Not queued: the asker that waits for it reads it as soon as its answer is in, on no UI thread.
             resolution = new MavenService.Resolution(resolved.jars(), resolved.problems());
+            Consumer<MavenService.Resolution> to = rebound;
+            if (to != null && ownReloads.get() == 0 && !closing) {
+                try {
+                    to.accept(resolution);
+                } catch (RejectedExecutionException gone) {
+                    // The project is closing: nothing is bound any more.
+                }
+            }
             return;
         }
         if (event instanceof CoreEvent.Opened opened) {

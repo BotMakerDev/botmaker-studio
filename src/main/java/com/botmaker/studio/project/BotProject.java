@@ -13,6 +13,7 @@ import com.botmaker.core.events.EventBus;
 import com.botmaker.core.index.TypeSummaryManager;
 import com.botmaker.core.migrate.ApiCache;
 import com.botmaker.studio.parser.BlockConverter;
+import com.botmaker.core.plugin.DevReloads;
 import com.botmaker.core.plugin.HostHistory;
 import com.botmaker.core.plugin.HostPluginValues;
 import com.botmaker.core.plugin.HostRuns;
@@ -316,6 +317,9 @@ public class BotProject {
         // wrong file.
         // Since phase 10c a write is the core's: this copy of the plugins reads the bot and forwards each write.
         HostPluginValues.installForwarding(config, state, HostServices.forProject(config), coreEdits::pluginWrite);
+        // A plugin's dev reload is the core's too (2026-11-20): it restarts the run there, and this copy rebinds after.
+        DevReloads.installForwarding(coreEdits::devReload);
+        coreEdits.onCoreRebound(libraryService::coreRebound);
         // And the undo those writes join, the core's (HistoryOnBus): a plugin window's ↶ is the menu's.
         PluginsOnBus.history(eventBus, coreEdits);
 
@@ -399,6 +403,7 @@ public class BotProject {
         // The core closes the project, its plugins and its lock once no client is on it.
         if (coreEdits != null) coreEdits.close();
         HostRuns.clear();
+        DevReloads.installForwarding(null);
         HostPluginValues.clear();
         HostHistory.clear();
     }
