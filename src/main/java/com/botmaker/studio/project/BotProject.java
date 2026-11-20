@@ -294,15 +294,17 @@ public class BotProject {
                 apiDocsService, coreEdits::heardBy
         );
 
-        // The bot's runs, in the core: compile, run, debug and stop asked from the bus, what it tells told on the bus.
-        this.runs = CoreRuns.attach(coreEdits, diagnosticsManager, state, config, eventBus);
-
+        // These three listen before the runs attach: attaching tells the bus at once of a run the core had before
+        // Studio joined (started through the MCP), and a listener added after it would miss that run.
         // A key that stops the run from anywhere on the desktop, listening only while something runs.
         this.stopKey = StopKey.install(eventBus);
         // A small window over the desktop while the bot runs: its controls, its trace, and the plugins' parts.
         this.runOverlay = RunOverlay.install(eventBus, config);
         // A run's problems, reported to the bot's author as its consent says.
         this.runEndReports = RunEndReports.install(eventBus, config.projectPath(), projectSettingsService);
+
+        // The bot's runs, in the core: compile, run, debug and stop asked from the bus, what it tells told on the bus.
+        this.runs = CoreRuns.attach(coreEdits, diagnosticsManager, state, config, eventBus);
 
         // The bot, as a plugin is allowed to see it. Cleared in close(), so a plugin between projects reaches
         // Runs.NONE rather than a channel into the project the user just left.

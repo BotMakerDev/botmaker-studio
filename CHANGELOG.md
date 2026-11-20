@@ -32,6 +32,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Fixed
 
+- The stop key, the run overlay and the end-of-run report see a run the core started before Studio opened the
+  project (through the MCP): they listened only after the core had already told of it.
 - A plugin's dev reload works while Studio is open: Studio's copy of the plugin sends it to the core, which
   restarts the run on the rebuilt jar, and Studio's copy binds the rebuilt jar too once the core has.
 - A run the core started before Studio opened the project (through the MCP) is going for the plugins too: the SDK's
