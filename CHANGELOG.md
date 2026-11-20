@@ -1,12 +1,9 @@
 # Changelog
 
-What each released version of BotMaker Studio gives you, in a few bullets. `ROADMAP.md` stays the detailed
-engineering log — why a thing was built, what was rejected, what it cost; this is the short answer to
-*"should I update, and what changes for me?"*, and it is prepended to the GitHub Release notes for the tag.
+What each released version of BotMaker Studio gives you, in a few bullets: the short answer to *"should I
+update, and what changes for me?"*, prepended to the GitHub Release notes for the tag.
 
-**`release.sh` refuses to cut a version with no section here** (`check_changelog`, decide pass, before
-anything is tagged). If the top section still says `## [Unreleased]`, rename it to the version being cut and
-date it.
+A change is written under `## [Unreleased]`; the release (sluice) stamps it with the version and date.
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
@@ -19,6 +16,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Changed
 
+- Help ▸ Getting Started and `WORKFLOW.md` walk today's Studio: the plan, goals and screen map instead of the
+  Activity Flow, the game button, ⌖ Point bot at…, ✂ Cut picture and 🧩 Elements in the Screens rail, ▤ Reports,
+  Debug, and publishing to the catalog. Its *Open Plugins & Libraries* button opens that window. The README
+  says the same.
 - An update's installer is checked against the release's `checksums_sha256.txt` before it runs. A download whose
   sha256 differs, or that the release lists no checksum for, is deleted and the update says why; nothing is installed
   unchecked.

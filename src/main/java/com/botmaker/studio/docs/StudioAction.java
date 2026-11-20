@@ -20,17 +20,22 @@ package com.botmaker.studio.docs;
  */
 public enum StudioAction {
 
-    CAPTURE_TARGETS("Open Capture Targets ▸", "🎯 Capture Targets on the toolbar (contributed by the "
+    PLUGINS("Open Plugins & Libraries ▸", "Project ▸ Plugins & Libraries…"),
+    // CAPTURE_TARGETS was "🎯 Capture Targets" until 2026-11-20: the capture source is a parameter since
+    // 2026-11-09, which the SDK's ⌖ button sets.
+    CAPTURE_TARGETS("Point the Bot ▸", "⌖ Point bot at… on the toolbar (contributed by the BotMaker SDK)"),
+    // LAUNCH_TARGET was "🚀 on the toolbar" until 2026-11-20: the SDK's game button replaced it.
+    LAUNCH_TARGET("Pick the Game ▸", "the game button at the start of the toolbar, named after the game "
+            + "(contributed by the BotMaker SDK)"),
+    // CUT_PICTURE and ELEMENTS were CAPTURE_TEMPLATES and RESOURCES (the Resource Manager) until 2026-11-20.
+    CUT_PICTURE("Cut a Picture ▸", "✂ Cut picture on the toolbar (contributed by the BotMaker SDK)"),
+    ELEMENTS("Open Elements ▸", "🗺 Screens on the toolbar, then 🧩 Elements in its rail (contributed by the "
             + "BotMaker SDK)"),
-    LAUNCH_TARGET("Open Launch Target ▸", "🚀 on the toolbar — it shows the current target"),
-    CAPTURE_TEMPLATES("Open Capture Templates ▸", "✂ on a screen's panel in 🗺 Screens (contributed by the "
-            + "BotMaker SDK)"),
-    RESOURCES("Open Resource Manager ▸", "🗺 Screens on the toolbar, then 🖼 Pictures in its rail (contributed by "
-            + "the BotMaker SDK)"),
     SCREENS("Open Screens ▸", "🗺 Screens on the toolbar (contributed by the BotMaker SDK)"),
     GOALS("Open Goals ▸", "🗺 Screens on the toolbar, then 🎯 Goals in its rail (contributed by the "
             + "BotMaker SDK)"),
     PARAMETERS("Open Parameters ▸", "Project ▸ Parameters… (or 🎚 Parameters on the toolbar)"),
+    REPORTS("Open Reports ▸", "▤ Reports on the toolbar"),
     // OVERLAY_EDITOR went on 2026-11-13 with its step: the overlay shows only in a dev-mode project.
     REMOTE_PILOT("Enable Remote Pilot ▸", "🎮 Pilot on the toolbar (contributed by the BotMaker SDK)"),
     PUBLISH("Open Publish ▸", "Project ▸ Publish to Gallery…"),

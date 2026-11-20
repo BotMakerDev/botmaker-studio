@@ -296,18 +296,12 @@ final class StudioActions {
      */
     private void openGettingStarted() {
         GettingStartedDialog.Actions actions = GettingStartedDialog.Actions.builder()
-                // No CAPTURE_TARGETS entry, for the same reason as CAPTURE_TEMPLATES below: it was the SDK
-                // plugin's toolbar item from 2026-08-31, and the capture source is a parameter since 2026-11-09.
-                // No LAUNCH_TARGET entry either, since 2026-09-01: the 🚀 dialog is gone and the shell has
-                // nothing to open. The step still reads, without an Open button.
-                // No CAPTURE_TEMPLATES entry: the tool is the SDK plugin's toolbar item since 2026-08-31 and
-                // the shell has no handle on it. The step still reads, without an Open button — the action's
-                // own text already says where it lives, which is what that field is for.
-                // No RESOURCES entry, for the same reason as CAPTURE_TEMPLATES: the Resource Manager is the
-                // SDK plugin's since 2026-09-01 and the shell has no handle on it.
-                // No SCREENS or GOALS entry, for the same reason as CAPTURE_TEMPLATES: both windows are the
-                // SDK plugin's toolbar items and the shell has no handle on them. The steps still read,
-                // without an Open button.
+                // No LAUNCH_TARGET, CAPTURE_TARGETS, CUT_PICTURE, ELEMENTS, SCREENS, GOALS or REMOTE_PILOT
+                // entry: each is the SDK plugin's toolbar item (the game button, ⌖, ✂, 🗺 Screens and its rail,
+                // 🎮 Pilot) and the shell has no handle on them. Those steps still read, without an Open button —
+                // the action's own text says where it lives, which is what that field is for.
+                // No REPORTS entry: the Reports window is UIManager's, not this class's.
+                .on(StudioAction.PLUGINS, () -> openPlugins(PluginsWindow.Section.INSTALLED))
                 .on(StudioAction.PARAMETERS, this::openParameters)
                 .on(StudioAction.PUBLISH, this::openPublish)
                 .on(StudioAction.GALLERY, menuBar::getMoreBots)

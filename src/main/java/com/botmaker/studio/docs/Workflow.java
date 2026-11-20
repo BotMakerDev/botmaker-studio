@@ -19,6 +19,9 @@ import java.util.List;
  * pixels get from a capture to a phone, which is {@code docs/display-pipeline.md}'s job and is linked from
  * {@link #furtherReading()} rather than summarised badly here — and how a bot <em>runs</em>, which is a loop
  * rather than a step and so lives in {@link RuntimeDiagram}, rendered by the same two renderers.
+ *
+ * <p>Rewritten 2026-11-20 against the Studio of that day: no templates, no palette panel, no Resource Manager
+ * dialog, the game button and ⌖ for what were the launch and capture target dialogs.
  */
 public final class Workflow {
 
@@ -30,8 +33,9 @@ public final class Workflow {
     public static final String INTRO =
             "A BotMaker bot watches a game or app on your screen, decides what it sees, and clicks. You build "
             + "it out of visual blocks in Studio, and Studio writes the Java for you — a real Maven project you "
-            + "could open in any IDE. The steps below are the order things are normally done in; only the first "
-            + "three are mandatory before a bot can do anything useful.";
+            + "could open in any IDE. The steps below are the order things are normally done in. A plain program "
+            + "needs only the first and the blocks; a game bot needs the BotMaker SDK plugin and the steps "
+            + "between.";
 
     /** A pointer to a document that answers something this guide deliberately does not. */
     public record Reference(String title, String path, String why) {}
@@ -39,116 +43,126 @@ public final class Workflow {
     public static List<WorkflowStep> steps() {
         return List.of(
                 WorkflowStep.of("Create a project",
-                        "A project is a normal Maven project under ~/BotMakerProjects/.",
+                        "＋ New bot on the home screen: start from Blank, or from a bot someone published.",
                         null,
-                        "Studio writes the pom.xml and the project's first sources — an entry point, the "
-                        + "screen map, goals and plans, the parameters — and then never writes them again. There is no "
-                        + "generated half and nothing is locked: every file is yours from the moment it "
-                        + "lands, to rename, split up or delete. A plugin you add later puts its own file "
-                        + "under plugins/ the same way, once."),
+                        "A project is a normal Maven project under ~/BotMakerProjects/. Blank gives you a pom.xml "
+                        + "and a main class that prints a greeting, and names no plugin. Starting from a "
+                        + "published bot clones it at the release its listing names, and keeps a link to its "
+                        + "author, so their later releases reach you as updates.",
+                        "Every file is yours from the moment it lands, to rename, split up or delete: there is no "
+                        + "generated half and nothing is locked."),
 
-                WorkflowStep.of("Tell the bot what to launch — the launch target",
-                        "What gets started before the bot runs: a Steam, Epic, Heroic or Faugus game, an "
-                        + "executable, a command line, or an app inside an emulator.",
+                WorkflowStep.of("Add the plugins it needs",
+                        "A plugin brings blocks, value editors and windows; a game bot needs the BotMaker SDK.",
+                        StudioAction.PLUGINS,
+                        "Adding a plugin is a dependency in the pom, like any Maven library. The SDK brings the "
+                        + "Basics plugin with it, and its own files land under plugins/ in your package, once. "
+                        + "The rest of this guide, up to the blocks, is the SDK's."),
+
+                WorkflowStep.of("Pick the game",
+                        "Which game this bot plays on this computer: from Steam, Heroic, Faugus, Lutris, "
+                        + "Waydroid or the app menu.",
                         StudioAction.LAUNCH_TARGET,
-                        "This comes before the capture target for a practical reason: you cannot pick the "
-                        + "window the bot watches until the game is on screen. Launch it from here first, then "
-                        + "choose what to capture.",
-                        "Studio scans your installed libraries so you pick a game from a list instead of typing "
-                        + "an app id. Choosing an emulator app can also point the capture target at that "
-                        + "emulator in the same move — a tickbox in the dialog, since it is a convenience and "
-                        + "not a rule.",
-                        "The launch target is yours and is stripped when you publish. What does travel is what "
-                        + "you declare in the Publish dialog: the kinds of launch target your bot is known to "
-                        + "work with. That is advice for whoever installs it — they still get to try anything "
-                        + "on their machine — so declare what you actually tested, not what you hope works."),
+                        "This comes before what the bot reads for a practical reason: you cannot pick the "
+                        + "window the bot watches until the game is on screen. The game button starts it "
+                        + "without running the bot.",
+                        "The bot lists the launchers it supports (launchTargets), preferred first, and that list "
+                        + "is published with it. Which one a run starts (launchTarget) is a parameter of "
+                        + "whoever runs the bot, so it stays on their computer."),
 
-                WorkflowStep.of("Tell the bot what to watch — the capture target",
-                        "Where the bot looks: a monitor, a window, the whole desktop, or an Android emulator.",
+                WorkflowStep.of("Point the bot at what it reads",
+                        "A window, a monitor, the whole desktop, or an Android emulator.",
                         StudioAction.CAPTURE_TARGETS,
-                        "Everything visual is relative to this one choice. Image search, OCR, colour sampling "
-                        + "and every click coordinate are expressed inside the capture target, so a bot written "
-                        + "against a game window keeps working when that window moves.",
-                        "Like the launch target, this belongs to the machine that runs the bot, not to the bot. "
-                        + "It is not published: when you install someone else's bot you pick your own."),
+                        "Everything visual is relative to this one choice. Picture search, reading text, colour "
+                        + "checks and every click are measured inside it, so a bot written against a game "
+                        + "window keeps working when that window moves or is resized.",
+                        "It is a parameter (captureSource), so it belongs to the computer that runs the bot and "
+                        + "is never published: whoever installs your bot picks their own."),
 
-                WorkflowStep.of("Capture image templates",
-                        "Little pictures of buttons, icons and text that the bot matches against the screen.",
-                        StudioAction.CAPTURE_TEMPLATES,
-                        "An overlay opens over your game so you can draw a rectangle or an ellipse, or cut an "
-                        + "object out with a transparent background so the match ignores whatever is behind it. "
-                        + "\"Capture many\" takes a batch in one pass and names them together.",
-                        "Templates are organised by tag, not by folder — a template used by two screens "
-                        + "carries both tags instead of being copied. Tags render as folders in the pickers and "
-                        + "in the Resource Manager, where you can also rename, re-tag or delete a template, and "
-                        + "export a set as a .bmtemplates file to import into another project."),
+                WorkflowStep.of("Cut pictures",
+                        "Little pictures of buttons, icons and text that the bot finds on the screen.",
+                        StudioAction.CUT_PICTURE,
+                        "An overlay opens over what the bot reads, so you can draw a rectangle or an ellipse, or "
+                        + "cut an object out with a transparent background so the match ignores whatever is "
+                        + "behind it. Each picture becomes a constant of your Pictures class (Pictures.COLLECT).",
+                        "Pictures are filed by tag, not by folder: a picture two screens use carries both tags "
+                        + "rather than being copied."),
 
-                WorkflowStep.of("Manage your resources",
-                        "The Resource Manager is the one list of every template in the project.",
-                        StudioAction.RESOURCES,
-                        "Rename, preview, re-tag, delete, import and export all happen here, and they go through "
-                        + "the template library so the tag manifest can never drift from the files on disk."),
+                WorkflowStep.of("Manage your pictures",
+                        "Elements, in the Screens window's rail, is the one list of what the bot finds things by.",
+                        StudioAction.ELEMENTS,
+                        "Rename, retag, replace, delete, import and export pictures there, and see the tree "
+                        + "elements found in a page's or an app's tree."),
 
                 WorkflowStep.of("Map the game's screens",
                         "Each screen the bot can be on, how it knows it is there, and the buttons that lead on.",
                         StudioAction.SCREENS,
-                        "A screen is a constant of your Screens class: the pictures that say the game is on it, "
-                        + "and its inputs — the buttons that open another screen, and the actions you want the "
-                        + "bot to take there (a Do field). The run walks this map to wherever an action is, so "
-                        + "no method of yours ever clicks its way from one screen to the next.",
+                        "A screen is a class of your bot: the pictures that say the game is on it, and its "
+                        + "inputs — the buttons that open another screen, and the actions you want the bot to "
+                        + "take there (a Do field). The run walks this map to wherever an action is, so no "
+                        + "method of yours ever clicks its way from one screen to the next.",
                         "Work a press cannot say — a puzzle, a fight — is a Custom input: a plain method of "
-                        + "yours, run when the bot is on that screen. Rename or delete it and the compiler says "
-                        + "so, pointing at the screen."),
+                        + "yours, run when the bot is on that screen. 🔭 Explore, in the same rail, runs the "
+                        + "bot through the game to find screens you have not mapped yet."),
 
-                WorkflowStep.of("Say what the bot wants — goals and plans",
-                        "A goal is a check on what the bot knows of the game; a plan is tiers of goals.",
+                WorkflowStep.of("Say what the bot wants — facts, goals and plans",
+                        "A fact is what the bot knows of the game; a goal is a check on facts; a plan is tiers "
+                        + "of goals.",
                         StudioAction.GOALS,
-                        "Goals.java holds the checks — gold at least 100, today's reward claimed — and each "
-                        + "action says which goal it serves. Plans.java orders them in tiers: the run works "
-                        + "the first tier with a goal still unmet, then the next. \"" + RuntimeDiagram.TITLE
-                        + "\" above is what that looks like at run time; it is worth reading first, because "
-                        + "a bot's actions do not run top to bottom, once each.",
-                        "Which plan runs is a parameter, so whoever runs the bot can pick another. Both files "
-                        + "are ordinary Java under plugins/, readable without opening the window."),
+                        "A fact is a method of a @Facts group, and a screen's readout says where on the screen "
+                        + "it is read and how long a reading holds. Goals.java holds the checks — gold at least "
+                        + "100, today's reward claimed — and each action says which goal it serves. Plans.java "
+                        + "orders them in tiers: the run works the first tier with a goal still unmet, then the "
+                        + "next. \"" + RuntimeDiagram.TITLE + "\" above is what that looks like at run time; "
+                        + "read it first, because a bot's actions do not run top to bottom, once each.",
+                        "Which plan runs is a parameter, so whoever runs the bot can pick another. These are "
+                        + "ordinary Java files, readable without opening the window."),
 
-                WorkflowStep.of("Give the bot its variables",
+                WorkflowStep.of("Give the bot its parameters",
                         "The numbers, texts, durations and switches your logic reads — one list for the whole "
-                        + "project, organised by category.",
+                        + "project, in cards by group.",
                         StudioAction.PARAMETERS,
-                        "A variable belongs to the project, not to one method: the delay two methods both "
-                        + "wait for is one variable they both read, rather than a copy each. Its group class "
-                        + "says where it is filed in the window and nothing more — a variable of the Mining "
-                        + "group is still readable from anywhere.",
+                        "A parameter belongs to the project, not to one method: the delay two methods both "
+                        + "wait for is one parameter they both read, rather than a copy each. Its group class "
+                        + "says which card it is shown under, and nothing more.",
                         "Each one is a method of a @Param group in the package Studio keeps for it (params), "
                         + "its body the value — so your blocks say Mining.maxAttempts(), the compiler checks "
-                        + "the type, and deleting a variable something still reads is a compile error rather "
-                        + "than a surprise at run time. The values are yours and private: the committed "
-                        + "starting-params/ holds the starting values whoever runs the bot begins with.",
-                        "Mark a variable shown with @Param.Shown to offer it to whoever runs the bot: those "
-                        + "appear in the Runner under their group's heading, and the rest stay yours."),
+                        + "the type, and deleting a parameter something still reads is a compile error rather "
+                        + "than a surprise at run time. The values are yours and private, never committed or "
+                        + "published: the committed starting-params/ holds the values whoever runs the bot "
+                        + "starts with.",
+                        "Mark a parameter with @Param.Shown to offer it to whoever runs the bot: those appear "
+                        + "in the Runner under their group's heading, and the rest stay yours."),
 
-                WorkflowStep.of("Author the logic with blocks",
-                        "The centre canvas is your program: drag blocks to build loops, conditions, clicks and "
-                        + "image searches.",
+                WorkflowStep.of("Write the logic with blocks",
+                        "The centre of the window is your program: loops, conditions, clicks and picture "
+                        + "searches as blocks.",
                         null,
-                        "Blocks are the Java, not a picture of it — every edit rewrites the real source through "
-                        + "the AST, and every source edit comes back as blocks. Nothing is trapped in a format "
-                        + "only Studio can read.",
-                        "Blocks that call the SDK come from the palette on the left, grouped by facade: vision, "
-                        + "interaction, capture, timing. Expression slots accept a drop from the palette or an "
-                        + "existing expression, and refuse a drop whose type would not compile."),
+                        "Press + between two blocks, or + Add a block, and pick one from the Search blocks… "
+                        + "menu, which lists Studio's blocks and those of every plugin the project has. A slot "
+                        + "takes a value of its type and refuses one that would not compile.",
+                        "Blocks are the Java, not a picture of it: every edit rewrites the real source, and an "
+                        + "edit made in another editor comes back as blocks. Nothing is trapped in a format "
+                        + "only Studio can read."),
 
                 // "Author over the running game — the Overlay Editor" stood here until 2026-11-13, when the
                 // overlay was hidden outside dev mode (spec 2026-11-13-studio-window-cleanup).
 
                 WorkflowStep.of("Run and debug",
-                        "Run executes the bot; Debug steps through it block by block with breakpoints.",
+                        "▶ Run runs the bot; 🐞 Debug runs it and pauses at its breakpoints.",
                         null,
-                        "The Run tab shows what the bot printed and traced, and the status bar's ⚠ problems "
-                        + "what did not compile, with the failing block highlighted on the canvas. A breakpoint is set on the block's "
-                        + "gutter, and stepping highlights the block currently executing.",
+                        "The Run tab shows what the bot printed and its trace, and the status bar's ⚠ problems "
+                        + "what did not compile, with the failing block marked on the canvas. A breakpoint is "
+                        + "set in a block's gutter; while paused, the Debug tab shows the call stack and the "
+                        + "variables.",
                         "If a bot needs to run without taking over your screen, it can run on a private display "
                         + "— a nested X server it owns — so you keep using your machine while it works."),
+
+                WorkflowStep.of("Read the run's report",
+                        "Every run keeps a log: what it did, what it read, and why it stopped.",
+                        StudioAction.REPORTS,
+                        "The Reports window lists past runs. A report shows what the run did step by step, charts "
+                        + "of the values it read, and the problems it met."),
 
                 WorkflowStep.of("Watch and drive it from your phone — Remote Pilot",
                         "Streams what the bot sees to a phone or a browser, and lets you start, stop and touch "
@@ -159,24 +173,22 @@ public final class Workflow {
                         + "coordinate whatever the stream is scaled to."),
 
                 WorkflowStep.of("Publish and share",
-                        "Push the bot to your own GitHub repo, and optionally list it in the gallery.",
+                        "Release the bot from your own GitHub repository, and list it in the catalog.",
                         StudioAction.PUBLISH,
-                        "Publishing declares which launch targets the bot was tested on and strips the parts of "
-                        + "the project that describe your machine. Someone installing it picks their own "
-                        + "capture and launch targets; your declaration is shown to them as what is known to "
-                        + "work, and it recommends rather than restricts — they can still point the bot at a "
-                        + "launcher you never tried.",
-                        "The Gallery browses what everyone else has published; installing from it creates a "
-                        + "normal project you can run, read, and — if you choose to — start editing."),
+                        "Publish tags a release, attaches a .bmk — the bot packed to run, with its sources, "
+                        + "starting values and the jars it needs — and opens the catalog's pull request. A "
+                        + "machine checks the listing and merges it; nobody reviews it by hand.",
+                        "Your parameters are never in it: a parameter's value, the game you picked and what "
+                        + "the bot reads stay on your computer. Project ▸ Export .bmk… makes the same file "
+                        + "without publishing."),
 
-                WorkflowStep.of("Browse the gallery",
-                        "Install someone else's bot, or see how one is put together.",
+                WorkflowStep.of("Get more bots",
+                        "Run someone else's bot, or see how one is put together.",
                         StudioAction.GALLERY,
-                        "An installed bot opens in the Runner — someone else's bot is something you run — and "
-                        + "its code is shown full-colour with every edit refused rather than hidden, so you "
-                        + "can read how it works. \"Improve this bot\" turns it into an ordinary project of "
-                        + "yours, for good. A bot you published yourself is never treated as somebody "
-                        + "else's, on any machine you are signed in on."));
+                        "A bot you get opens in the Runner — someone else's bot is something you run — with its "
+                        + "own parameters to set, and a newer release offered when its author makes one. Its "
+                        + "code is shown with every edit refused rather than hidden, so you can read how it "
+                        + "works. \"Improve this bot\" turns it into an ordinary project of yours, for good."));
     }
 
     /**
@@ -190,7 +202,7 @@ public final class Workflow {
                         "capture → encode → transport → render, and the path a touch takes back — for both the "
                         + "pilot's stream and a bot's own read of the same pixels"),
                 new Reference("the umbrella CLAUDE.md", "../CLAUDE.md",
-                        "how the four modules fit together, the JitPack coordinate model, and how a release is cut"),
+                        "how the modules fit together, the JitPack coordinate model, and how a release is cut"),
                 new Reference("CHANGELOG.md", "CHANGELOG.md", "what landed in each release, and what is unreleased"));
     }
 }
