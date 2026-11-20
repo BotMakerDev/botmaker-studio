@@ -43,12 +43,6 @@ with the key CI actually signed with. Users import it with the snippet on that p
 accepts an armored key as long as the file is named `.asc`, which is why there is only one export and not a
 second dearmored copy).
 
-To publish it by hand anyway (e.g. for someone verifying a Release asset without adding the repo):
-
-```bash
-gpg --export --armor <KEY_ID> > KEYS
-```
-
 ## 4. What the same three secrets sign
 
 | Signed | By | Verified with |
