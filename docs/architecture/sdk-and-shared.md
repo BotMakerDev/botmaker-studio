@@ -629,13 +629,14 @@ point of it.**
     visit to Manage Plugins rather than a mis-repaired file. The guess is biased that way deliberately.
   - **New Project asks for no SDK version.** The combo, its JitPack fetch, the `(local build)` cell factory
     and the show/hide listener that toggled it against the template row are gone: blank has nothing to pin
-    and a template brings its author's own pom. `MavenService.localSdkVersions()` survives with one caller,
-    `ManageLibrariesDialog`, which is where a project's SDK version is chosen. `SDK_FALLBACK_VERSION` also
-    survives — `release.sh` seds it on every `--sdk` release, and `ProjectRepair` still writes it.
+    and a template brings its author's own pom. `MavenService.localSdkVersions()` survived with one caller,
+    `ManageLibrariesDialog`, which was where a project's SDK version was chosen (both gone since; local builds
+    are the core's `LocalBuilds`). `SDK_FALLBACK_VERSION` also
+    survives — the release moves it on every `--sdk` release (sluice's `text-pins`; `release.sh` until
+    2026-11-16), and `ProjectRepair` still writes it.
 
-This Studio repo is a submodule of the **`botmaker` umbrella repo**, whose aggregator `pom.xml` builds nine
-modules in dependency order — `studio-api → plugin-toolkit → plugin-host → plugin-archetype → cli → shared →
-session → sdk → studio` (see `../CLAUDE.md`). **All upstream changes go through their own umbrella
+This Studio repo is a submodule of the **`botmaker` umbrella repo**, whose aggregator `pom.xml` builds every
+module in dependency order, the core and Studio last (the reactor order is in `../CLAUDE.md`). **All upstream changes go through their own umbrella
 submodules** — edit there, commit inside that submodule, bump its pointer in the umbrella. Don't vendor any
 of them inside this repo.
 
@@ -646,6 +647,7 @@ deleted; the SDK's pom `groupId` is `com.github.BotMakerDev` now, so a plain ins
 resolves.) Studio lists locally installed SDK snapshots at the top of its version dropdown, labelled
 `(local build)` and preselected, gated on `AppVersion.isDevBuild()`.
 
-Releases are cut with the umbrella's `../release.sh`; **the maintainer owns the JitPack publish.**
+Releases are cut from the umbrella with `sluice` (or sluice-desktop's Release tab); **the maintainer owns the
+JitPack publish.**
 
 A bot asks its user a question with the SDK's `Ask` (since 2026-10-01; `BotMaker.readX()` and its `BM-INPUT` stdout marker are deleted). The question is a `TelemetryEvent.Ask` frame on the run's telemetry socket: `runtime/RunTelemetry.publish` turns it into `InputRequestedEvent` (never relayed to plugins), `UIManager.promptForInput` shows a list, Yes/No or a text field by kind, and `InputAnsweredEvent` then `RunTelemetry.answer` writes the `Answer` frame back through `TelemetryServer.reply` (`CodeExecutionService` for a run, `DebuggingService` for a debug session). The bot validates and re-asks; a closed dialog answers `null`, a cancel. Stdout and stderr are plain text to `ConsoleBatcher`.

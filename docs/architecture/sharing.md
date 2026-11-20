@@ -47,8 +47,8 @@ plugin index are, and that is the editor's vocabulary rather than the platform's
 something new is added: *a repository name, a token or a request belongs to shared; what the JSON means
 belongs here.*
 
-- **The reason it moved is a second operator, not tidiness.** `botmaker-dashboard` reads the same registry,
-  the same gallery and the same pull requests, and a hand-rolled OAuth **device flow** with a `0600` token
+- **The reason it moved is a second operator, not tidiness.** `botmaker-dashboard` read the same registry,
+  the same gallery and the same pull requests (it was deleted on 2026-11-13, replaced by sluice-desktop), and a hand-rolled OAuth **device flow** with a `0600` token
   file is precisely the code that must not exist in two repositories.
 - **`GoogleAuth` and `GoogleConfig` did not move** — nothing else wants them. They still share
   `credentials.json` with `GitHubAuth`, whose `store` merges the whole map rather than overwriting it; that

@@ -30,13 +30,13 @@ The `ui/` package is split by concern:
   (**Project ▸ Recover Project Files**) and `WorkspaceLayoutStore` (the persisted dividers + open bottom tab);
   none of them holds a reference back. `BottomTab` is the closed set of bottom tabs. Alongside those: the
   panel/screen managers `FileExplorerManager` (project file tree), `MenuBarManager` / `ToolbarManager` (menus
-  and toolbar; the **Project → Manage Libraries…** entry lives here; the toolbar is Studio's row above
+  and toolbar; the **Project → Plugins & Libraries…** entry lives here; the toolbar is Studio's row above
   `PluginTabs`, a tab per plugin, and **Navigate ▸ Find Action** is `ActionFinder`, since 2026-10-28), `RunConsole` (the Run tab: the
   bot's output, Stop, Clear — the bot runs on pipes, so it is lines, not a terminal; the Event Log that stood
   beside it was deleted on 2026-09-25), `terminal/TerminalPane` + `TerminalView` (the Terminal tab:
   xterm.js vendored under `resources/terminal/` in a `WebView`, over `services/terminal/PtySession` on
   pty4j; no JavaFX in the session, and the window's `dispose()` ends every shell), `AssistantPane` (the
-  Assistant tab: an AI CLI from `assist/AiTool` in a `TerminalView`, over the MCP endpoint, denied direct
+  Assistant, a window of its own since 2026-11-11, `AssistantWindow`; a tab before: an AI CLI from `assist/AiTool` in a `TerminalView`, over the MCP endpoint, denied direct
   edits — umbrella `docs/refactor/38-llm-edits.md` §5), `versions/VersionsPane` (the Versions tab: the
   timeline `versions/Timeline` folds, *Save version*, restore, naming by git note; a refresh first writes the
   editor's sources through `project/vcs/Checkpoints.flush`; a file's change is `versions/DiffCards` — the
@@ -63,9 +63,9 @@ The `ui/` package is split by concern:
   feature, in `botmaker-sdk`'s `internal/plugin/pilot/`, reached through a `ToolbarItem` like any other
   plugin's contribution. Nothing here calls it and nothing here closes it: the host says the project is
   closing and the plugin releases its own port and display. See *the Remote Pilot left Studio* below.
-- **`ui/app/capture/`** — what is *left* of the screen-capture feature: `OverlayTemplateCapture` (the
-  on-screen capture toolbar), `CaptureSourcePicker`, `TargetThumbnail`, `BatchTemplateNamingDialog`.
-  **The overlay is a feature of the SDK, not of Studio** — it exists to turn a `CaptureTargetModel` into an
+- **`ui/app/capture/` is gone** — it held what was left of the screen-capture feature (`OverlayTemplateCapture`,
+  `CaptureSourcePicker`, `TargetThumbnail`, `BatchTemplateNamingDialog`) until each followed into the SDK plugin
+  (`capture-and-moved-editors.md`). **The overlay is a feature of the SDK, not of Studio** — it exists to turn a `CaptureTargetModel` into an
   `ImageTemplate`, both of which are that plugin's — so `ColorSampler`, `ZoomPan` and `GameFrame` left on
   2026-08-30 and `CaptureSurface`, `ObjectCaptureSurface` and `MagicWand` followed the same day, into
   `com.botmaker.sdk.internal.plugin.capture`. `OverlayTemplateCapture` names them there and hands them a

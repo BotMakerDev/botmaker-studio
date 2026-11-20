@@ -14,8 +14,8 @@ which older text in the other files is history now.
 | the pom's dependencies, `PluginHost`, the catalogs, plugin upgrade, project creation | `sdk-and-shared.md` |
 | opening a project, `ProjectConfig`, `ProjectState` | `project-lifecycle.md` |
 | `CodeBlock`, statement/expression blocks | `block-system.md` |
-| `BlockFactory`, source ↔ blocks round trip | `ast-block-sync.md` |
-| `CodeEditor`, `CoreEditor`, `parser/handlers` (in `botmaker-core` since 2026-11-05), `AstRewriteHelper` | `rewriting-pipeline.md` |
+| `BlockConverter`, source ↔ blocks round trip | `ast-block-sync.md` |
+| `CodeEditor`, `CoreEditor`, `parser/handlers` (in `botmaker-core` since 2026-11-05), `edit/handlers`, `AstRewriteHelper` (`botmaker-java`) | `rewriting-pipeline.md` |
 | `ProjectAnalyzer`, type index, suggestions | `suggestions.md` |
 | `EventBus`, `CoreApplicationEvents` | `event-bus.md` |
 | `ui/` packages, `UIManager`, windows and dialogs | `ui-structure.md` |

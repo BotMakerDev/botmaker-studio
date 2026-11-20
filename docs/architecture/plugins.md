@@ -3,6 +3,10 @@
 > **2026-10-23:** the registry is `botmaker-catalog` and its `index.json` is `catalog.json`. The version installed
 > is the entry's `tag`, the release its check passed, no longer JitPack's newest; a community plugin asks before its
 > first load (`PluginGate`). See `dated-notes.md`. Installing through `LibraryService` still holds.
+>
+> **2026-10-27:** a plugin is declared in its own pom (`<botmaker.plugin>` names its `DeclaredPlugin` class; the
+> coordinate is its identity), with no `META-INF/services` file and no id; read `META-INF/services` below as that
+> pom property. The window is **Project ▸ Plugins & Libraries…** (`ui/app/PluginsWindow`), not Manage Plugins.
 
 **Project ▸ Manage Plugins…** (`ui/app/ManagePluginsDialog` over `sharing/PluginRegistry`) browses the
 generated `index.json` in `botmaker-plugin-registry` and installs through **`LibraryService`**, the same path
