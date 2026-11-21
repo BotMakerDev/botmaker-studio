@@ -11,6 +11,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- The Runner's Start asks about each security advisory naming the release, worst first (catalog trust, phase 6's
+  review): a *Run anyway* lets one through, not all.
 - A plugin's `History.together` reaches the core in one request (2026-11-21): its writes are queued in Studio and the
   core makes them as one ↶ step, or none of them when one is refused, so a plugin's run of many writes need no
   longer be one round trip each.

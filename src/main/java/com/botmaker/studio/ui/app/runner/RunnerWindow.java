@@ -10,6 +10,7 @@ import com.botmaker.core.project.vcs.SyncModel;
 import com.botmaker.studio.runtime.StopKeyPreference;
 import com.botmaker.core.sharing.Advisories;
 import com.botmaker.core.sharing.CatalogClient;
+import com.botmaker.core.sharing.CatalogIndex;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.home.MyBots;
 import com.botmaker.studio.util.BrowserLauncher;
@@ -62,6 +63,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -662,16 +664,23 @@ public final class RunnerWindow implements ProjectWindow {
      */
     private boolean clearedOfAdvisories() {
         Advisories here = Advisories.here();
-        Optional<Advisories.Refused> refused = here.refusingRun(config.projectPath(), CatalogClient.session().kept());
-        if (refused.isEmpty()) return true;
-        ButtonType anyway = new ButtonType("Run anyway", ButtonBar.ButtonData.OK_DONE);
-        ButtonType cancel = new ButtonType("Don't run", ButtonBar.ButtonData.CANCEL_CLOSE);
-        Alert alert = ThemedWindows.alert(Alert.AlertType.WARNING, refused.get().text()
-                + "\n\nRun it anyway on this computer? Only this release is let through; Studio asks again for any other.",
-                anyway, cancel);
-        alert.setHeaderText("This release has a " + refused.get().advisory().severity().id() + " security advisory");
-        if (alert.showAndWait().filter(anyway::equals).isEmpty()) return false;
-        here.override(refused.get());
+        CatalogIndex catalog = CatalogClient.session().kept();
+        // A release several advisories name asks about each, worst first: a Run anyway lets one through, not all.
+        Set<String> answered = new HashSet<>();
+        for (Optional<Advisories.Refused> refused = here.refusingRun(config.projectPath(), catalog);
+             refused.isPresent(); refused = here.refusingRun(config.projectPath(), catalog)) {
+            // One already answered that still refuses: its Run anyway was not kept, and the core refuses the run.
+            if (!answered.add(refused.get().advisory().id())) return false;
+            ButtonType anyway = new ButtonType("Run anyway", ButtonBar.ButtonData.OK_DONE);
+            ButtonType cancel = new ButtonType("Don't run", ButtonBar.ButtonData.CANCEL_CLOSE);
+            Alert alert = ThemedWindows.alert(Alert.AlertType.WARNING, refused.get().text()
+                    + "\n\nRun it anyway on this computer? Only this release is let through; Studio asks again for any"
+                    + " other.", anyway, cancel);
+            alert.setHeaderText("This release has a " + refused.get().advisory().severity().id()
+                    + " security advisory");
+            if (alert.showAndWait().filter(anyway::equals).isEmpty()) return false;
+            here.override(refused.get());
+        }
         return true;
     }
 
