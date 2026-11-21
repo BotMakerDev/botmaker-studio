@@ -7,7 +7,7 @@ A change is written under `## [Unreleased]`; the release (sluice) stamps it with
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.14.0] — 2026-11-21
 
 ### Added
 
@@ -30,6 +30,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
   Classpath Exception, …).
 - Licensed under PolyForm Noncommercial 1.0.0, copyright LiQiyeDev: free for any noncommercial use, commercial use
   needs a license from LiQiyeDev. Releases up to v1.13.1 stay CC0 1.0 (the README and the rpm had said MIT).
+- Built against botmaker-shared 0.10.0 (was 0.9.0).
+- Built against botmaker-session 0.9.0 (was 0.8.0).
+- Built against botmaker-studio-api 0.19.0 (was 0.18.0).
+- Built against botmaker-plugin-host 0.14.0 (was 0.13.0).
+- Built against botmaker-cli 0.14.0 (was 0.13.1).
+- Built against botmaker-java 0.4.0 (was 0.3.0).
+- Built against botmaker-core 0.3.0 (was 0.2.1).
 
 ### Fixed
 
