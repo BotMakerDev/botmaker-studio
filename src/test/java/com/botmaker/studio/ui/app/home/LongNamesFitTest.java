@@ -5,6 +5,7 @@ package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.cli.catalog.Catalog;
 import com.botmaker.core.sharing.BmkDownload;
+import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.core.sharing.HiddenBots;
 import com.botmaker.core.sharing.PublisherRank;
@@ -89,7 +90,7 @@ class LongNamesFitTest extends FxHeadlessTest {
             @Override
             public void edit(GalleryEntry entry) {}
         }, new ShowCommunity(true), new HiddenBots(Set.of()));
-        getBots.show(List.of(got), true);
+        getBots.show(List.of(got), CatalogClient.Trust.VERIFIED);
         Stage more = new Stage();
         windows.add(more);
         more.setScene(ThemedWindows.scene(new StackPane(getBots.node()), 1200, 600));

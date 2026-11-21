@@ -11,6 +11,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- New Project and Get more bots say *Catalog could not be verified* where they say *Offline* when GitHub answers a
+  catalog whose signature fails (catalog trust, phase 4): the kept catalog shows, as offline.
+
 - Versions says when a project's original moved on GitHub (catalog trust, phase 3): the catalog lists it under a
   new slug and `upstream` still names a former one. *Point Original at …* sets `upstream` to the new slug; the pom
   is never rewritten.

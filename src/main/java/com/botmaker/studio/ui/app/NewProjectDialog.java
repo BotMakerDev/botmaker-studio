@@ -155,14 +155,15 @@ public final class NewProjectDialog {
         Runnable refill = () -> starts[0].fill(startRows(bots.get(), fetch.get(), showCommunity.isSelected()),
                 bots.get(),
                 fetch.get() == StartingPoints.Fetch.PENDING
-                        || fetch.get() == StartingPoints.Fetch.FAILED && bots.get().isEmpty()
+                        || (fetch.get() == StartingPoints.Fetch.FAILED || fetch.get() == StartingPoints.Fetch.UNVERIFIED)
+                        && bots.get().isEmpty()
                         ? "" : NewProjectForm.emptyLine(showCommunity.isSelected()));
         Runnable describeCatalog = () -> say(catalogLine, NewProjectForm.catalogLine(fetch.get(),
                 CatalogClient.session().keptAt(), !bots.get().isEmpty(), ZoneId.systemDefault()));
         refill.run();
         describeCatalog.run();
         asking.thenAccept(reply -> Platform.runLater(() -> {
-            fetch.set(reply.fresh() ? StartingPoints.Fetch.ANSWERED : StartingPoints.Fetch.FAILED);
+            fetch.set(StartingPoints.Fetch.of(reply.trust()));
             bots.set(reply.index().bots());
             describeCatalog.run();
             refill.run();

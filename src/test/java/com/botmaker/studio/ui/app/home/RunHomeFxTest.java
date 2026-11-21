@@ -4,6 +4,7 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.core.sharing.BmkDownload;
+import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.core.sharing.BotLink;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.core.sharing.PublisherRank;
@@ -183,7 +184,7 @@ class RunHomeFxTest extends FxHeadlessTest {
     void editInStudioOnACatalogBotCopiesOnTheLoadingPage() {
         cards();
         interact(() -> home.getBots.show(List.of(GetBotsTest.bot("Miner", "vetted", PublisherRank.TRUSTED,
-                "Mines ore")), true));
+                "Mines ore")), CatalogClient.Trust.VERIFIED));
         clickOn(lookup(".getbots-card").lookup("Edit in Studio").queryButton());
         assertEquals(List.of("make Miner COPYING EDITOR"), asked);
         assertTrue(lookup(".getbots-card").lookup(".label").queryAll().stream()

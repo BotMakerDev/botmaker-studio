@@ -4,6 +4,7 @@
 package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.cli.catalog.Catalog;
+import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.core.sharing.HiddenBots;
 import com.botmaker.core.sharing.PublisherRank;
@@ -70,7 +71,7 @@ class GetBotsFxTest extends FxHeadlessTest {
             }
         }, new ShowCommunity(true), new HiddenBots(Set.of()));
         stage.setScene(new Scene(new StackPane(getBots.node()), 1200, 600));
-        getBots.show(List.of(TAVERN, FIRESTONE, MINER), true);
+        getBots.show(List.of(TAVERN, FIRESTONE, MINER), CatalogClient.Trust.VERIFIED);
         stage.show();
     }
 

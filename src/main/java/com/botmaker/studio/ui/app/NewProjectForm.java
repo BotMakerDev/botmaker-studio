@@ -66,6 +66,10 @@ final class NewProjectForm {
             case FAILED -> anyKept && keptAt.isPresent()
                     ? "Offline — showing the bots from " + KEPT_DAY.format(keptAt.get().atZone(zone))
                     : "The bots could not be loaded — Blank only.";
+            case UNVERIFIED -> anyKept && keptAt.isPresent()
+                    ? "Catalog could not be verified — showing the bots from "
+                    + KEPT_DAY.format(keptAt.get().atZone(zone))
+                    : "Catalog could not be verified — Blank only.";
         };
     }
 
@@ -82,7 +86,7 @@ final class NewProjectForm {
     static String startNote(StartChoice picked, Fetch fetch) {
         if (picked == null || picked.entry() == null) return "";
         if (picked.kind() == Kind.REMEMBERED) {
-            return fetch == Fetch.FAILED
+            return fetch == Fetch.FAILED || fetch == Fetch.UNVERIFIED
                     ? picked.displayName() + " can be started from once the catalog can be reached."
                     : "Checking that " + picked.displayName() + " is still listed…";
         }

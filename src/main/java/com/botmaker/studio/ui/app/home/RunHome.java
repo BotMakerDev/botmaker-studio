@@ -218,7 +218,7 @@ public final class RunHome implements ProjectWindow {
         }, MyBots::compile);
         // Asked again on every visit, as New Project does, so a bot published since Studio started is offered.
         CatalogClient.session().refresh().thenAccept(reply -> Platform.runLater(() -> {
-            home.getBots.show(reply.index().bots(), reply.fresh());
+            home.getBots.show(reply.index().bots(), reply.trust());
             if (reply.fresh()) home.reload();
         }));
         return home;

@@ -3,6 +3,7 @@
 
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.core.sharing.GalleryEntry;
 
 import java.util.List;
@@ -96,7 +97,18 @@ final class StartingPoints {
     enum Fetch {
         PENDING("pending", "Asking the gallery"),
         ANSWERED("answered", "The gallery listed bots"),
-        FAILED("failed", "The gallery could not be reached");
+        FAILED("failed", "The gallery could not be reached"),
+        /** GitHub answered a catalog whose signature does not verify (2026-11-21): treated as no answer. */
+        UNVERIFIED("unverified", "The catalog could not be verified");
+
+        /** What New Project shows for the catalog client's answer. */
+        static Fetch of(CatalogClient.Trust trust) {
+            return switch (trust) {
+                case VERIFIED -> ANSWERED;
+                case CACHED -> FAILED;
+                case UNVERIFIED -> UNVERIFIED;
+            };
+        }
 
         private final String id;
         private final String displayName;
@@ -127,7 +139,7 @@ final class StartingPoints {
         List<StartChoice> after = switch (fetch) {
             case PENDING -> bots.isEmpty() ? List.of(StartChoice.LOADING) : remembered(bots);
             case ANSWERED -> bots.stream().map(StartChoice::of).toList();
-            case FAILED -> remembered(bots);
+            case FAILED, UNVERIFIED -> remembered(bots);
         };
         return Stream.concat(Stream.of(StartChoice.BLANK), after.stream()).toList();
     }

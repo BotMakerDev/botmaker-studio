@@ -3,6 +3,7 @@
 
 package com.botmaker.studio.ui.app.home;
 
+import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.core.sharing.HiddenBots;
 import com.botmaker.core.sharing.PublisherRank;
@@ -55,5 +56,16 @@ class GetBotsTest {
         ShowCommunity all = new ShowCommunity(true);
         assertEquals(List.of("Firestone", "Tavern"), names(GetBots.shown(ALL, "", all, hidden, false)));
         assertEquals(List.of("Firestone", "Miner", "Tavern"), names(GetBots.shown(ALL, "", all, hidden, true)));
+    }
+
+    /** A catalog that did not verify says so where offline would (2026-11-21). */
+    @Test
+    void lineSaysWhereTheBotsCameFrom() {
+        assertEquals("", GetBots.line(false, CatalogClient.Trust.VERIFIED));
+        assertEquals("Offline: the catalog as it was at its last read.", GetBots.line(false, CatalogClient.Trust.CACHED));
+        assertEquals("Catalog could not be verified: the catalog as it was at its last read.",
+                GetBots.line(false, CatalogClient.Trust.UNVERIFIED));
+        assertEquals("Catalog could not be verified, so no bot is shown.",
+                GetBots.line(true, CatalogClient.Trust.UNVERIFIED));
     }
 }

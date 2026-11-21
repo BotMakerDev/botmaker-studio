@@ -7,6 +7,7 @@ import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubConfig;
 import com.botmaker.shared.platform.Os;
 import com.botmaker.core.sharing.BmkDownload;
+import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.core.sharing.HiddenBots;
 import com.botmaker.core.sharing.ShowCommunity;
@@ -139,13 +140,22 @@ public final class GetBots {
         return new VBox(10, controls, line, cards, repoLink);
     }
 
-    /** Shows the catalog's bots; {@code fresh} false when it is the copy kept from an earlier read. */
-    public void show(List<GalleryEntry> bots, boolean fresh) {
+    /** Shows the catalog's bots; {@code trust} says whether they are GitHub's now or the copy kept from a read. */
+    public void show(List<GalleryEntry> bots, CatalogClient.Trust trust) {
         all = List.copyOf(bots);
         loaded = true;
         refilter();
-        if (all.isEmpty()) say(fresh ? "The catalog lists no bot yet." : "The catalog could not be read.");
-        else if (!fresh) say("Offline: the catalog as it was at its last read.");
+        say(line(all.isEmpty(), trust));
+    }
+
+    /** The line above the cards: nothing when GitHub answered a verified catalog listing bots. */
+    static String line(boolean none, CatalogClient.Trust trust) {
+        return switch (trust) {
+            case VERIFIED -> none ? "The catalog lists no bot yet." : "";
+            case CACHED -> none ? "The catalog could not be read." : "Offline: the catalog as it was at its last read.";
+            case UNVERIFIED -> none ? "Catalog could not be verified, so no bot is shown."
+                    : "Catalog could not be verified: the catalog as it was at its last read.";
+        };
     }
 
     /** My bots as now read: {@code keys} their authors' repositories ({@link MyBots#key}). */

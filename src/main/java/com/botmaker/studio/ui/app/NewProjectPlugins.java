@@ -144,6 +144,8 @@ final class NewProjectPlugins {
     static String whyEmpty(StartingPoints.Fetch fetch, boolean communityShown) {
         return switch (fetch) {
             case PENDING -> "Checking for plugins…";
+            case UNVERIFIED -> "No plugins listed — the catalog could not be verified. Add them later from Project ▸ "
+                    + "Plugins & Libraries.";
             case FAILED -> "No plugins listed — the catalog could not be reached. Add them later from Project ▸ "
                     + "Plugins & Libraries.";
             case ANSWERED -> emptyLine(communityShown);

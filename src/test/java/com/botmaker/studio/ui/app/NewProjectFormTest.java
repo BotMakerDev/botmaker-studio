@@ -61,6 +61,10 @@ class NewProjectFormTest {
                 NewProjectForm.catalogLine(Fetch.FAILED, Optional.empty(), false, ZoneOffset.UTC));
         assertEquals("The bots could not be loaded — Blank only.",
                 NewProjectForm.catalogLine(Fetch.FAILED, kept, false, ZoneOffset.UTC));
+        assertEquals("Catalog could not be verified — showing the bots from 20 Oct",
+                NewProjectForm.catalogLine(Fetch.UNVERIFIED, kept, true, ZoneOffset.UTC));
+        assertEquals("Catalog could not be verified — Blank only.",
+                NewProjectForm.catalogLine(Fetch.UNVERIFIED, kept, false, ZoneOffset.UTC));
     }
 
     @Test
