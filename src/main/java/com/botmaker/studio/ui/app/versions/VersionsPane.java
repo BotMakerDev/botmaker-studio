@@ -136,6 +136,16 @@ public final class VersionsPane {
     private final Label original = new Label();
     /** "v1.2.0 was pulled: … Newest: v1.1.0" when the catalog yanked the original's release this copy is at. */
     private final Label pulled = new Label();
+    /**
+     * "The original moved to new/slug" and the button that points {@code upstream} there, when the catalog lists the
+     * original under a slug it had {@code formerly} (2026-11-21): GitHub redirects the old one, so nothing breaks
+     * until it is taken again. The pom is never rewritten.
+     */
+    private final Label movedLine = new Label();
+    private final Button followMove = new Button();
+    private final HBox moved = new HBox(8, movedLine, followMove);
+    /** The slug the original's catalog row names now, when {@code upstream} still names a former one; else null. */
+    private volatile String movedTo;
     private final HBox myCopySegment = segment("☁", "My copy", myCopy);
     private final HBox originalSegment = segment("★", "Original", original);
     private final Button mainAction = new Button();
@@ -366,7 +376,13 @@ public final class VersionsPane {
         pulled.getStyleClass().add("text-warning");
         pulled.managedProperty().bind(pulled.visibleProperty());
         pulled.setVisible(false);
-        root.setTop(new VBox(strip, pulled, bar, devBar));
+        moved.setAlignment(Pos.CENTER_LEFT);
+        moved.setPadding(new Insets(0, 6, 0, 6));
+        movedLine.setWrapText(true);
+        moved.managedProperty().bind(moved.visibleProperty());
+        moved.setVisible(false);
+        followMove.setOnAction(e -> followMove());
+        root.setTop(new VBox(strip, pulled, moved, bar, devBar));
         body.getItems().setAll(split);
         root.setCenter(body);
         showNothing();
@@ -503,6 +519,10 @@ public final class VersionsPane {
                 : listed.pulledLine(installedTag);
         pulled.setText(pulledLine.map(line -> "⚠ " + line).orElse(""));
         pulled.setVisible(pulledLine.isPresent());
+        String to = movedTo;
+        movedLine.setText(to == null ? "" : "The original moved to " + to + " on GitHub.");
+        followMove.setText(to == null ? "" : "Point Original at " + to);
+        moved.setVisible(to != null);
 
         SyncModel.Action main = model.main();
         mainAction.setText(model.label(main));
@@ -942,10 +962,13 @@ public final class VersionsPane {
         String installed = source.map(BotSource::tag).orElse(null);
         if (askOriginal && vcs.remoteUrl(Remote.ORIGINAL) != null) {
             askOriginal = false;
-            GalleryEntry listed = SyncModel.slug(vcs.remoteUrl(Remote.ORIGINAL))
-                    .flatMap(s -> GitHubGallery.find(catalogBots(), s.owner(), s.repo()))
+            Optional<SyncModel.Slug> at = SyncModel.slug(vcs.remoteUrl(Remote.ORIGINAL));
+            GalleryEntry listed = at.flatMap(s -> GitHubGallery.find(catalogBots(), s.owner(), s.repo()))
                     .orElse(null);
             listedOriginal = listed;
+            // Found by a former slug: the repository was renamed or transferred, and upstream is offered the new one.
+            movedTo = listed != null && at.isPresent() && !listed.slug().equalsIgnoreCase(at.get().toString())
+                    ? listed.slug() : null;
             try {
                 available = listed != null ? SyncModel.newest(listed.approvedTags(), installed)
                         : SyncModel.newest(vcs.remoteTags(Remote.ORIGINAL, token), installed);
@@ -1598,6 +1621,24 @@ public final class VersionsPane {
             nameField.clear();
             shown = null;
             status(message);
+        });
+    }
+
+    /** Points {@code upstream} at the slug the catalog lists the original under now; the pom stays as it is. */
+    private void followMove() {
+        String to = movedTo;
+        if (to == null) return;
+        run(() -> {
+            ProjectVcs vcs = vcs();
+            String was = vcs.remoteUrl(Remote.ORIGINAL);
+            // The form it had stays: a remote cloned over SSH keeps the key it fetches with.
+            boolean ssh = was != null && !was.strip().startsWith("https://");
+            vcs.setRemote(Remote.ORIGINAL, (ssh ? "git@github.com:" : "https://github.com/") + to + ".git");
+            return null;
+        }, done -> {
+            movedTo = null;
+            askOriginal = true;
+            status("Original now points at " + to + ".");
         });
     }
 

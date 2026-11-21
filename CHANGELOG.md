@@ -11,6 +11,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- Versions says when a project's original moved on GitHub (catalog trust, phase 3): the catalog lists it under a
+  new slug and `upstream` still names a former one. *Point Original at …* sets `upstream` to the new slug; the pom
+  is never rewritten.
 - A yanked release (catalog trust, phase 2) is offered nowhere: not in *Get more bots*, New Project, the
   Plugins versions or the update offer. A run copy, a cloned project (Versions) or a plugin row on a pulled release
   shows "⚠ <tag> was pulled: <reason>. Newest: <tag>". Nothing is refused. A bot whose every release was pulled
