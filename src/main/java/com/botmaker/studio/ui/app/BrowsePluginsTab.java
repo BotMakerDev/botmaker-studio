@@ -11,6 +11,7 @@ import com.botmaker.core.services.MavenService;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.plugin.host.PluginCoordinate;
 import com.botmaker.core.plugin.PluginHost;
+import com.botmaker.core.sharing.CatalogIndex;
 import com.botmaker.core.sharing.PluginCatalog;
 import com.botmaker.core.sharing.PluginRegistry;
 import com.botmaker.core.sharing.ShowCommunity;
@@ -35,6 +36,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -364,7 +366,8 @@ final class BrowsePluginsTab {
             name.setStyle("-fx-font-weight: bold;");
             boolean localBuild = localCoordinates.contains(plugin.coordinate());
             Label coordinate = new Label(plugin.coordinate()
-                    + (localBuild ? "  " + plugin.version() + " (local build)" : ""));
+                    + (localBuild ? "  " + plugin.version() + " (local build)"
+                    : plugin.updatedAt().map(when -> "  ·  " + CatalogIndex.updatedAgo(when, Instant.now())).orElse("")));
             coordinate.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
             Label description = new Label(plugin.description());
             description.setWrapText(true);

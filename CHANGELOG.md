@@ -7,6 +7,16 @@ A change is written under `## [Unreleased]`; the release (sluice) stamps it with
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Added
+
+- A *Get more bots* card now shows "N downloads · updated <when>" beside its stars. When the newest release does
+  not name this system, the card says "Not for this computer". The Plugins list shows when each plugin was last
+  updated.
+- The Publish sheet has *Runs on:* checkboxes for Linux, Windows and macOS. They start ticked from the pom.
+  Publish writes the ticked set to `botmaker.platforms` before the tag.
+
 ## [1.14.0] — 2026-11-21
 
 ### Added

@@ -5,6 +5,7 @@ package com.botmaker.studio.ui.app.home;
 
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.shared.github.GitHubConfig;
+import com.botmaker.shared.platform.Os;
 import com.botmaker.core.sharing.BmkDownload;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.core.sharing.HiddenBots;
@@ -28,6 +29,7 @@ import javafx.scene.layout.VBox;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -171,7 +173,8 @@ public final class GetBots {
 
     /** One bot: the card Publish previews, its ★ count, Hide, Edit in Studio and Get. */
     private Node card(GalleryEntry entry) {
-        Label stars = new Label("★ " + entry.stars());
+        String facts = entry.factsLine(Instant.now());
+        Label stars = new Label("★ " + entry.stars() + (facts.isEmpty() ? "" : "  ·  " + facts));
         stars.getStyleClass().add("gallery-card-note");
         boolean isHidden = hidden.hides(entry);
         Button hide = new Button(isHidden ? "Unhide" : "Hide");
@@ -186,8 +189,9 @@ public final class GetBots {
         String slug = entry.slug();
         boolean here = isMine(entry);
         boolean ready = BmkDownload.ready(entry);
-        String note = failures.getOrDefault(slug,
-                ready || here ? "" : "No ready-to-run file yet: Edit in Studio gets its code.");
+        String note = failures.getOrDefault(slug, here ? "" : !entry.runsHere(Os.current())
+                ? "Not for this computer: its author says it runs on " + entry.systemsLine() + "."
+                : ready || here ? "" : "No ready-to-run file yet: Edit in Studio gets its code.");
         Label status = new Label(note);
         status.getStyleClass().add("gallery-card-note");
         status.setWrapText(true);

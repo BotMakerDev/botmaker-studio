@@ -30,6 +30,7 @@ import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
@@ -48,9 +49,11 @@ import javafx.stage.Window;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -107,6 +110,9 @@ public final class PublishSheet {
     private final TextField repoField = new TextField();
     private final TextField descriptionField = new TextField();
     private final TextField tagsField = new TextField();
+    /** One box per system the bot may run on, ticked from its pom (2026-11-21); the catalog's {@code Platform}. */
+    private final Map<com.botmaker.cli.catalog.Platform, CheckBox> platformBoxes = new EnumMap<>(
+            com.botmaker.cli.catalog.Platform.class);
     private final FlowPane tagChips = new FlowPane(6, 4);
 
     private final ComboBox<String> versionCombo = new ComboBox<>();
@@ -269,6 +275,16 @@ public final class PublishSheet {
         release.setVgap(8);
         release.addRow(0, new Label("Version (tag):"), versionCombo);
         release.add(lastPublished, 1, 1);
+        List<com.botmaker.cli.catalog.Platform> named = PublishRequest.pomPlatforms(projectDir);
+        HBox systems = new HBox(12);
+        for (com.botmaker.cli.catalog.Platform platform : com.botmaker.cli.catalog.Platform.known()) {
+            CheckBox box = new CheckBox(platform.displayName());
+            box.setSelected(named.contains(platform));
+            box.selectedProperty().addListener((o, was, now) -> refreshAll());
+            platformBoxes.put(platform, box);
+            systems.getChildren().add(box);
+        }
+        release.addRow(2, new Label("Runs on:"), systems);
         GridPane.setHgrow(versionCombo, Priority.ALWAYS);
         // A publish pushes versions, not a snapshot: what was saved before is on GitHub with it.
         Label releaseHelp = note("Publishing saves the project as a version, tags it and pushes your versions to "
@@ -644,6 +660,7 @@ public final class PublishSheet {
         for (Node n : List.of(descriptionField, tagsField, versionCombo)) {
             n.setDisable(value);
         }
+        platformBoxes.values().forEach(box -> box.setDisable(value));
         lockToMyCopy();
         if (run != null) renderChecklist(run.plan());
         refreshAll();
@@ -655,7 +672,13 @@ public final class PublishSheet {
 
     private PublishRequest request(List<String> tags) {
         return new PublishRequest(projectDir, projectName, repoName(), descriptionField.getText(), currentVersion(),
-                tags, true);
+                tags, true, tickedPlatforms());
+    }
+
+    /** The systems ticked; none ticked leaves the pom as it is. */
+    private List<com.botmaker.cli.catalog.Platform> tickedPlatforms() {
+        return platformBoxes.entrySet().stream().filter(e -> e.getValue().isSelected()).map(Map.Entry::getKey)
+                .toList();
     }
 
     /** The typed tags. */
