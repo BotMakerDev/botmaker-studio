@@ -134,6 +134,8 @@ public final class VersionsPane {
     private final Label here = new Label();
     private final Label myCopy = new Label();
     private final Label original = new Label();
+    /** "v1.2.0 was pulled: … Newest: v1.1.0" when the catalog yanked the original's release this copy is at. */
+    private final Label pulled = new Label();
     private final HBox myCopySegment = segment("☁", "My copy", myCopy);
     private final HBox originalSegment = segment("★", "Original", original);
     private final Button mainAction = new Button();
@@ -359,7 +361,12 @@ public final class VersionsPane {
         SplitPane split = new SplitPane(timeline, detail);
         split.setDividerPositions(0.32);
 
-        root.setTop(new VBox(strip, bar, devBar));
+        pulled.setWrapText(true);
+        pulled.setPadding(new Insets(0, 6, 0, 6));
+        pulled.getStyleClass().add("text-warning");
+        pulled.managedProperty().bind(pulled.visibleProperty());
+        pulled.setVisible(false);
+        root.setTop(new VBox(strip, pulled, bar, devBar));
         body.getItems().setAll(split);
         root.setCenter(body);
         showNothing();
@@ -489,6 +496,13 @@ public final class VersionsPane {
         originalSegment.setVisible(orig != null);
         originalSegment.setManaged(orig != null);
         original.setText(orig == null ? "" : orig);
+        // A yank refuses nothing (2026-11-21): the copy is told why its release was pulled, and keeps working.
+        GalleryEntry listed = listedOriginal;
+        String installedTag = model.facts().installedTag();
+        Optional<String> pulledLine = listed == null || installedTag == null ? Optional.empty()
+                : listed.pulledLine(installedTag);
+        pulled.setText(pulledLine.map(line -> "⚠ " + line).orElse(""));
+        pulled.setVisible(pulledLine.isPresent());
 
         SyncModel.Action main = model.main();
         mainAction.setText(model.label(main));

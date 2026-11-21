@@ -299,8 +299,9 @@ public final class RunnerWindow implements ProjectWindow {
         // A bot opened from a .bmk has no history to merge into: its newer tag is a newer file, opened beside it.
         Optional<String> available = facts.unpacked() ? Optional.empty()
                 : listed.flatMap(e -> GalleryEntry.updateTarget(facts.version().orElse(""), e.tag()));
+        Optional<String> pulled = listed.flatMap(e -> facts.version().flatMap(e::pulledLine));
         return new RunnerHeader.About(facts.title().orElse(config.projectName()), original.map(SyncModel.Slug::owner), facts.version(),
-                available);
+                available, pulled);
     }
 
     /**

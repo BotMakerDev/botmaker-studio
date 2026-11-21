@@ -189,7 +189,10 @@ public final class GetBots {
         String slug = entry.slug();
         boolean here = isMine(entry);
         boolean ready = BmkDownload.ready(entry);
-        String note = failures.getOrDefault(slug, here ? "" : !entry.runsHere(Os.current())
+        // Every release yanked (2026-11-21): the row stays listed, saying why, and offers nothing to get.
+        boolean pulled = entry.allPulled();
+        String note = failures.getOrDefault(slug, here ? "" : pulled ? entry.allPulledLine().orElse("")
+                : !entry.runsHere(Os.current())
                 ? "Not for this computer: its author says it runs on " + entry.systemsLine() + "."
                 : ready || here ? "" : "No ready-to-run file yet: Edit in Studio gets its code.");
         Label status = new Label(note);
@@ -206,7 +209,7 @@ public final class GetBots {
             Button in = new Button("In My bots");
             in.setDisable(true);
             buttons.getChildren().add(in);
-        } else {
+        } else if (!pulled) {
             Button edit = new Button("Edit in Studio");
             edit.setTooltip(new Tooltip("Get its code, linked to its author, to change it"));
             edit.setOnAction(e -> get(entry, Way.EDIT));

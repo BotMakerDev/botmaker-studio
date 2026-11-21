@@ -11,6 +11,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- A yanked release (catalog trust, phase 2) is offered nowhere: not in *Get more bots*, New Project, the
+  Plugins versions or the update offer. A run copy, a cloned project (Versions) or a plugin row on a pulled release
+  shows "⚠ <tag> was pulled: <reason>. Newest: <tag>". Nothing is refused. A bot whose every release was pulled
+  stays listed: its card says why and offers neither *Get* nor *Edit in Studio*.
 - A *Get more bots* card now shows "N downloads · updated <when>" beside its stars. When the newest release does
   not name this system, the card says "Not for this computer". The Plugins list shows when each plugin was last
   updated.

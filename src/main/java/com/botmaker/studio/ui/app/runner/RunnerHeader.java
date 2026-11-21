@@ -32,9 +32,15 @@ public final class RunnerHeader {
      * @param owner     the author of a bot got from someone, empty for the user's own
      * @param version   the release the bot is at, empty for one never released
      * @param available the catalog's newer release, empty when there is none
+     * @param pulled    "v1.2.0 was pulled: … Newest: v1.1.0" when the catalog yanked the release the bot is at
+     *                  (2026-11-21); nothing is refused, the bot still runs
      */
     public record About(String name, Optional<String> owner, Optional<String> version,
-                        Optional<String> available) {
+                        Optional<String> available, Optional<String> pulled) {
+
+        public About(String name, Optional<String> owner, Optional<String> version, Optional<String> available) {
+            this(name, owner, version, available, Optional.empty());
+        }
 
         /** "by LiQiyeDev · 1.0.0", "mine · 0.2.0", or "mine". */
         public String byLine() {
@@ -119,6 +125,13 @@ public final class RunnerHeader {
         bar.getStyleClass().add("runner-header");
 
         VBox header = new VBox(bar, updateStrip());
+        about.pulled().ifPresent(line -> {
+            Label pulled = new Label("⚠ " + line);
+            pulled.setId("runner-pulled");
+            pulled.setWrapText(true);
+            pulled.getStyleClass().add("text-warning");
+            header.getChildren().add(1, pulled);
+        });
         showStatus();
         return header;
     }

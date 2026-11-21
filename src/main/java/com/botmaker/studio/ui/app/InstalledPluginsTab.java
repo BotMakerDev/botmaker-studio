@@ -43,6 +43,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -130,6 +131,8 @@ public final class InstalledPluginsTab {
 
     /** In dev mode, the {@code ~/.m2} build of each coordinate that has one: {@code group:artifact → version}. */
     private Map<String, String> localVersions = Map.of();
+    /** "v1.2.0 was pulled: … Newest: v1.1.0" by {@code groupId:artifactId}, for a plugin on a yanked release. */
+    private Map<String, String> pulledLines = Map.of();
 
     /** Bumped by every {@link #load}, so a slower earlier load never draws over a later one. */
     private int generation;
@@ -297,11 +300,19 @@ public final class InstalledPluginsTab {
             List<PluginHost.LoadedJar> loaded = PluginHost.loaded();
             List<Declared> declared = declaredOnce(found, loaded);
             List<PluginHost.LoadedJar> bundled = bundled(declaredLibraries, loaded);
-            Map<String, String> local = new java.util.HashMap<>();
+            Map<String, String> local = new HashMap<>();
             builds.forEach(build -> local.put(build.coordinate(), build.version()));
+            // A yank refuses nothing (2026-11-21): the row says why its release was pulled and stays as it is.
+            Map<String, String> pulled = new HashMap<>();
+            for (Declared d : declared) {
+                UserLibrary artifact = d.row().artifact();
+                PluginRegistry.entryFor(entries, artifact).flatMap(e -> e.pulledLine(d.row().installed()))
+                        .ifPresent(said -> pulled.put(artifact.groupId() + ":" + artifact.artifactId(), said));
+            }
             Platform.runLater(() -> {
                 if (asked != generation) return;        // a later load (a dev-mode switch) owns the table
                 localVersions = Map.copyOf(local);
+                pulledLines = Map.copyOf(pulled);
                 render(declared, bundled);
             });
             return null;
@@ -404,7 +415,16 @@ public final class InstalledPluginsTab {
             table.add(log.button, 6, line);
             line++;
             // One line for the fold and the verdict: a closed fold alone on a line would still cost a gap.
-            table.add(new VBox(4, log.fold, row.verdict), 0, line, 7, 1);
+            VBox under = new VBox(4, log.fold, row.verdict);
+            String pulledLine = pulledLines.get(entry.row().artifact().groupId() + ":"
+                    + entry.row().artifact().artifactId());
+            if (pulledLine != null) {
+                Label pulled = new Label("⚠ " + pulledLine);
+                pulled.setWrapText(true);
+                pulled.getStyleClass().add("text-warning");
+                under.getChildren().addFirst(pulled);
+            }
+            table.add(under, 0, line, 7, 1);
             line++;
             row.loadVersions();
             if (!entry.twins().isEmpty()) table.add(twinBar(entry), 0, line++, 7, 1);

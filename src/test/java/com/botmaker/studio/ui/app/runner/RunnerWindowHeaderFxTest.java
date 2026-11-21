@@ -36,7 +36,9 @@ class RunnerWindowHeaderFxTest extends FxHeadlessTest {
                 Optional.of("1.1.0")));
         withoutUpdate = header(new RunnerHeader.About("PushTest", Optional.empty(), Optional.empty(),
                 Optional.empty()));
-        VBox both = new VBox(withUpdate.node(), withoutUpdate.node());
+        RunnerHeader pulled = header(new RunnerHeader.About("Miner", Optional.of("o"), Optional.of("v3"),
+                Optional.empty(), Optional.of("v3 was pulled: Bans accounts. Newest: v2")));
+        VBox both = new VBox(withUpdate.node(), withoutUpdate.node(), pulled.node());
         stage.setScene(new Scene(new StackPane(both), 1000, 400));
         stage.show();
     }
@@ -89,6 +91,13 @@ class RunnerWindowHeaderFxTest extends FxHeadlessTest {
         assertEquals(1, lookup(".runner-update").queryAll().stream().filter(n -> n.isVisible()).count());
         clickOn("Later");
         assertEquals(0, lookup(".runner-update").queryAll().stream().filter(n -> n.isVisible()).count());
+    }
+
+    /** Spec § 4: a copy on a yanked release says why and which is newest; Start still works. */
+    @Test
+    void aCopyOnAPulledReleaseSaysWhy() {
+        assertTrue(shown("⚠ v3 was pulled: Bans accounts. Newest: v2"));
+        assertEquals(1, lookup("#runner-pulled").queryAll().size(), "only the pulled copy says so");
     }
 
     @Test
