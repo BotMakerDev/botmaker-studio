@@ -38,6 +38,7 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.stage.Stage;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -55,6 +56,9 @@ public class MenuBarManager {
     private Runnable onReviewChanges;
     private Runnable onBotInfo;
     private Runnable onGettingStarted;
+    private final MenuItem coreDashboardItem = new MenuItem("Core dashboard");
+    private Runnable onCoreDashboard;
+    private BooleanSupplier coreDashboardAvailable = () -> false;
     /** Help ▸ Picker Gallery — present only in a dev build. See {@link #createHelpMenu()}. */
     private Runnable onPickerGallery;
     private Runnable onGetMoreBots;
@@ -624,9 +628,15 @@ public class MenuBarManager {
         MenuItem aboutItem = new MenuItem("About BotMaker");
         aboutItem.setOnAction(e -> showAboutDialog());
 
+        // What BotMaker's core is doing, in the browser: greyed while this window has no core to ask.
+        coreDashboardItem.setDisable(true);
+        coreDashboardItem.setOnAction(e -> { if (onCoreDashboard != null) onCoreDashboard.run(); });
+        helpMenu.setOnShowing(e -> coreDashboardItem.setDisable(
+                onCoreDashboard == null || !coreDashboardAvailable.getAsBoolean()));
+
         helpMenu.getItems().addAll(gettingStartedItem, new SeparatorMenuItem(),
                 studioRepoItem, sdkRepoItem, new SeparatorMenuItem(),
-                reportIssueItem, diagnosticsItem, checkUpdatesItem, aboutItem);
+                reportIssueItem, diagnosticsItem, coreDashboardItem, checkUpdatesItem, aboutItem);
 
         // The `botmaker` command is a package on Linux and nothing at all on Windows or macOS, so the entry is
         // not merely disabled there — it is absent, because every command it could offer would fail.
@@ -939,5 +949,11 @@ public class MenuBarManager {
      */
     public void setOnShowHistory(Runnable callback) {
         this.onShowHistory = callback;
+    }
+
+    /** Sets what Help ▸ Core dashboard does, and whether it can now: read each time the Help menu opens. */
+    public void setOnCoreDashboard(Runnable callback, BooleanSupplier available) {
+        this.onCoreDashboard = callback;
+        this.coreDashboardAvailable = available;
     }
 }

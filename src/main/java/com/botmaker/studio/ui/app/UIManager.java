@@ -49,6 +49,7 @@ import com.botmaker.studio.ui.app.terminal.TerminalPane;
 import com.botmaker.studio.ui.app.versions.VersionsPane;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
+import com.botmaker.studio.util.BrowserLauncher;
 import com.botmaker.studio.validation.DiagnosticsManager;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -453,6 +454,8 @@ public class UIManager implements ProjectWindow {
         // Wired here rather than in StudioActions: what it opens is a tab of this window, and the actions
         // object knows nothing about the shell's tool window.
         menuBarManager.setOnReviewChanges(this::openReview);
+        menuBarManager.setOnCoreDashboard(this::openCoreDashboard,
+                () -> codeEditorService.edits() instanceof CoreEdits);
         menuBarManager.setOnPreviewAsUser(() -> { if (onPreviewAsUser != null) onPreviewAsUser.run(); });
         // The toolbar's 👁 is the same action, not a lookalike — see ToolbarManager for what it replaced.
         toolbarManager.setOnPreviewAsUser(() -> { if (onPreviewAsUser != null) onPreviewAsUser.run(); });
@@ -1119,6 +1122,18 @@ public class UIManager implements ProjectWindow {
             throw new IllegalStateException("Several runs at once need BotMaker's core, which this window has not.");
         }
         return core.runSeveral(ask);
+    }
+
+    /**
+     * Help ▸ Core dashboard: asks the core for a fresh one-time link, off the FX thread, and opens it in the browser.
+     * A link is good once, so each click asks again.
+     */
+    private void openCoreDashboard() {
+        if (!(codeEditorService.edits() instanceof CoreEdits core)) return;
+        Thread.ofVirtual().name("core-dashboard").start(() -> core.dashboardLink().ifPresentOrElse(
+                link -> BrowserLauncher.open(link.toString()),
+                () -> Platform.runLater(() -> ThemedWindows.alert(Alert.AlertType.ERROR,
+                        "BotMaker's core gave no dashboard link: it may have stopped.").show())));
     }
 
     /** Sets what Project ▸ Get More Bots does: the shell's home, at its Get more bots section. */

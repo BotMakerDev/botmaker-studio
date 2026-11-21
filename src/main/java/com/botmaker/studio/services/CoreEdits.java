@@ -28,6 +28,7 @@ import com.botmaker.shared.config.CacheDirs;
 import com.botmaker.studio.events.CoreApplicationEvents;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -276,6 +277,19 @@ public final class CoreEdits implements EditPort, AutoCloseable {
      */
     public void heardByRuns(Consumer<CoreEvent> listener) {
         runListener.complete(listener);
+    }
+
+    /**
+     * A fresh one-time link to the core's dashboard, on the caller's thread (never the FX thread: it is an HTTP ask);
+     * empty when the core did not give one.
+     */
+    public Optional<URI> dashboardLink() {
+        try {
+            return Optional.of(link.client().dashboardLink());
+        } catch (IOException e) {
+            System.err.println("BotMaker's core gave no dashboard link: " + e.getMessage());
+            return Optional.empty();
+        }
     }
 
     /** A request to the core, on the caller's thread, with nothing told drained; for what the mirror does not wait on. */
