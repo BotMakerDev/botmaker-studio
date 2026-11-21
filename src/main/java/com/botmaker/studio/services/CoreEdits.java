@@ -194,13 +194,39 @@ public final class CoreEdits implements EditPort, AutoCloseable {
      * have taken it, so a plugin that reads its value back after a write reads the new one either way.
      */
     public Optional<String> pluginWrite(PluginWrite write) {
+        return landed(client -> client.pluginWrite(write));
+    }
+
+    /**
+     * A plugin's together of this Studio (2026-11-21, {@code History.together}): {@code writes} sent in one request,
+     * which the core makes as one step named {@code label}, or none of them; the refusal, when it made none. A core that
+     * did not answer is a refusal too, which says the core may still make them. Drawn as {@link #pluginWrite} draws one
+     * write; after a refusal the files beside the open one are read again all the same, since a take-back the core
+     * could not finish, or a late answer, leaves them changed. Nothing is sent when {@code writes} is empty.
+     */
+    public Optional<String> together(String label, List<PluginWrite> writes) {
+        if (writes == null || writes.isEmpty()) return Optional.empty();
+        Optional<String> refused = landed(client -> {
+            try {
+                return client.together(label, writes);
+            } catch (IOException e) {
+                return new EditResult.Refused("BotMaker's core did not answer the writes of " + label
+                        + " in time; it may still make them all: " + e.getMessage());
+            }
+        });
+        if (refused.isPresent()) ui.later(this::readOthersFromDisk);
+        return refused;
+    }
+
+    /** {@code ask}, a plugin's write or writes, answered; once landed, the mirror holds them as {@link #pluginWrite} says. */
+    private Optional<String> landed(Ask ask) {
         if (ui.isCurrent()) {
-            EditResult result = ask(client -> client.pluginWrite(write));
+            EditResult result = ask(ask);
             if (result instanceof EditResult.Refused refused) return Optional.of(refused.reason());
             wrote();
             return Optional.empty();
         }
-        EditResult result = request(client -> client.pluginWrite(write));
+        EditResult result = request(ask);
         if (result instanceof EditResult.Refused refused) return Optional.of(refused.reason());
         CountDownLatch taken = new CountDownLatch(1);
         try {
@@ -350,6 +376,9 @@ public final class CoreEdits implements EditPort, AutoCloseable {
         } catch (IOException e) {
             result = new EditResult.Refused("BotMaker's core did not answer: " + e.getMessage());
             bus.publish(new CoreApplicationEvents.StatusMessageEvent(((EditResult.Refused) result).reason()));
+        } catch (IllegalArgumentException e) {
+            // As request: what a request cannot carry is refused, on whichever thread it was asked.
+            result = new EditResult.Refused(e.getMessage());
         }
         drain();
         return result;

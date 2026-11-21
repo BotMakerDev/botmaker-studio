@@ -11,6 +11,9 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- A plugin's `History.together` reaches the core in one request (2026-11-21): its writes are queued in Studio and the
+  core makes them as one ↶ step, or none of them when one is refused, so a plugin's run of many writes need no
+  longer be one round trip each.
 - A run copy or plugin release under a security advisory asks first: the Runner's Start and the plugin prompt name
   the advisory and its severity and offer *Run anyway*, for this release alone.
 - New Project and Get more bots say *Catalog could not be verified* where they say *Offline* when GitHub answers a

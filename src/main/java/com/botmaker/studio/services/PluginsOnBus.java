@@ -11,6 +11,7 @@ import com.botmaker.core.plugin.HostPluginValues;
 import com.botmaker.core.plugin.HostRuns;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Supplier;
 
@@ -73,7 +74,8 @@ public final class PluginsOnBus {
 
     /**
      * Installs the project's history for plugins: ↶ and ↷ asked on {@code bus}, its state heard from it, and a batch
-     * held open in the core around the plugin's writes, which the core makes and records (plan phase 10c).
+     * held open in the core around the plugin's writes, which the core makes and records (plan phase 10c); a together's
+     * writes queued here and sent as one request (2026-11-21).
      */
     public static HostHistory history(EventBus bus, CoreEdits core) {
         if (bus == null || core == null) {
@@ -105,6 +107,12 @@ public final class PluginsOnBus {
                 } finally {
                     core.batch(label, false);
                 }
+            }
+
+            @Override
+            public Optional<String> together(String label, Runnable writes) {
+                // Queued here, a read inside seeing the bot as before; one request, which the core makes whole or not.
+                return core.together(label, HostPluginValues.queued(writes));
             }
         });
     }
