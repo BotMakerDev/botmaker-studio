@@ -41,10 +41,12 @@ public final class CommunityPluginPrompt {
     }
 
     private static boolean show(PluginGate.Asked asked) {
-        ButtonType run = new ButtonType("Run it", ButtonBar.ButtonData.OK_DONE);
+        // A release under a security advisory (spec 2026-11-21 § 5): the question names its severity, and the yes
+        // is "Run anyway", for this release alone.
+        ButtonType run = new ButtonType(asked.advised() ? "Run anyway" : "Run it", ButtonBar.ButtonData.OK_DONE);
         ButtonType skip = new ButtonType("Don't load it", ButtonBar.ButtonData.CANCEL_CLOSE);
         Alert alert = ThemedWindows.alert(Alert.AlertType.WARNING, asked.question(), run, skip);
-        alert.setHeaderText("Run this plugin?");
+        alert.setHeaderText(asked.advised() ? "This release has a security advisory" : "Run this plugin?");
         return alert.showAndWait().filter(run::equals).isPresent();
     }
 }

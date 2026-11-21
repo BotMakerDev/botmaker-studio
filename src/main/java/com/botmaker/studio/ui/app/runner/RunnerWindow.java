@@ -8,6 +8,7 @@ import com.botmaker.plugin.api.run.Readiness;
 import com.botmaker.core.project.params.ParameterRow;
 import com.botmaker.core.project.vcs.SyncModel;
 import com.botmaker.studio.runtime.StopKeyPreference;
+import com.botmaker.core.sharing.Advisories;
 import com.botmaker.core.sharing.CatalogClient;
 import com.botmaker.core.sharing.GalleryEntry;
 import com.botmaker.studio.ui.app.home.MyBots;
@@ -41,6 +42,7 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -637,6 +639,10 @@ public final class RunnerWindow implements ProjectWindow {
      * installed cannot lose its data because nothing here ever reads it.
      */
     private void run() {
+        if (!clearedOfAdvisories()) {
+            status.setText("Not started: this release has a security advisory.");
+            return;
+        }
         status.setText("Saving your choices…");
         try {
             flushValues();
@@ -648,6 +654,25 @@ public final class RunnerWindow implements ProjectWindow {
         // Start stays enabled until ProgramStarted: a run that is refused (a compile error, an already-running
         // bot) reports on the status line and never sends ProgramStarted/Stopped.
         eventBus.publish(new CoreApplicationEvents.ExecutionRequestedEvent());
+    }
+
+    /**
+     * Whether this run copy may start: no advisory names its release, or the user says <i>Run anyway</i> now, which
+     * is kept for this release alone (spec 2026-11-21 § 5). The core refuses the run otherwise.
+     */
+    private boolean clearedOfAdvisories() {
+        Advisories here = Advisories.here();
+        Optional<Advisories.Refused> refused = here.refusingRun(config.projectPath(), CatalogClient.session().kept());
+        if (refused.isEmpty()) return true;
+        ButtonType anyway = new ButtonType("Run anyway", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("Don't run", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = ThemedWindows.alert(Alert.AlertType.WARNING, refused.get().text()
+                + "\n\nRun it anyway on this computer? Only this release is let through; Studio asks again for any other.",
+                anyway, cancel);
+        alert.setHeaderText("This release has a " + refused.get().advisory().severity().id() + " security advisory");
+        if (alert.showAndWait().filter(anyway::equals).isEmpty()) return false;
+        here.override(refused.get());
+        return true;
     }
 
     /**

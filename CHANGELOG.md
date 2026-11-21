@@ -11,6 +11,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- A run copy or plugin release under a security advisory asks first: the Runner's Start and the plugin prompt name
+  the advisory and its severity and offer *Run anyway*, for this release alone.
 - New Project and Get more bots say *Catalog could not be verified* where they say *Offline* when GitHub answers a
   catalog whose signature fails (catalog trust, phase 4): the kept catalog shows, as offline.
 
