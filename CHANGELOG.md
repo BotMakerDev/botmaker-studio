@@ -11,6 +11,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- Help ▸ Core dashboard (2026-11-21) opens the core's dashboard in the browser; greyed while Studio has no core of
+  its own process.
 - The Runner's Start asks about each security advisory naming the release, worst first (catalog trust, phase 6's
   review): a *Run anyway* lets one through, not all.
 - A plugin's `History.together` reaches the core in one request (2026-11-21): its writes are queued in Studio and the
