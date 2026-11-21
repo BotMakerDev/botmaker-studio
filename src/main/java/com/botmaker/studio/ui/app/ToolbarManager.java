@@ -78,6 +78,8 @@ public class ToolbarManager {
     private AppState currentAppState = AppState.IDLE;
     /** Whether the debug session is paused, so Step and Continue can be pressed; kept across a rebuild. */
     private boolean debugPaused;
+    /** Whether a refresh of the bar is queued after the plugin writes being made now. */
+    private boolean refreshQueued;
 
     public ToolbarManager(EventBus eventBus, ProjectSettingsService settings) {
         this.eventBus = eventBus;
@@ -93,7 +95,7 @@ public class ToolbarManager {
             showRunChoice();
         }, true);
         // A plugin's write to the bot's Java — its game or capture source is a @Param now — relabels the bar too.
-        eventBus.subscribe(CoreApplicationEvents.PluginWroteEvent.class, e -> refreshItems(), true);
+        eventBus.subscribe(CoreApplicationEvents.PluginWroteEvent.class, e -> refreshSoon(), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStartedEvent.class, e -> setAppState(AppState.RUNNING), true);
         eventBus.subscribe(CoreApplicationEvents.ProgramStoppedEvent.class, e -> setAppState(AppState.IDLE), true);
         eventBus.subscribe(CoreApplicationEvents.DebugSessionEvent.class, e -> {
@@ -454,6 +456,20 @@ public class ToolbarManager {
     /** Runs a wired callback, or does nothing when the bar was built before that callback was set. */
     private static void run(Runnable callback) {
         if (callback != null) callback.run();
+    }
+
+    /**
+     * The bar refreshed once after the writes being made now, however many (2026-11-21). A plugin's batch makes them
+     * one after another on this thread, and a refresh after each one re-read the game button's value, which parsed
+     * the whole bot. That was half of the Screens map's ⋯ ▸ <i>Tidy</i>, 63 writes.
+     */
+    private void refreshSoon() {
+        if (refreshQueued) return;
+        refreshQueued = true;
+        eventBus.uiThread().later(() -> {
+            refreshQueued = false;
+            refreshItems();
+        });
     }
 
     /**

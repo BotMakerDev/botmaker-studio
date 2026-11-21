@@ -24,6 +24,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - The Publish sheet has *Runs on:* checkboxes for Linux, Windows and macOS. They start ticked from the pom.
   Publish writes the ticked set to `botmaker.platforms` before the tag.
 
+### Changed
+
+- The toolbar refreshes once after a plugin's run of writes, not once per write. Each refresh re-read the game
+  button's value, which parses the whole bot, and that was half of Studio's time in the Screens map's ⋯ ▸ *Tidy*
+  (63 writes).
+
 ## [1.14.0] — 2026-11-21
 
 ### Added
