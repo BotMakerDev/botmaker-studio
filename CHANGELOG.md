@@ -7,7 +7,7 @@ A change is written under `## [Unreleased]`; the release (sluice) stamps it with
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.14.1] — 2026-11-22
 
 ### Added
 
@@ -41,6 +41,13 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - The toolbar refreshes once after a plugin's run of writes, not once per write. Each refresh re-read the game
   button's value, which parses the whole bot, and that was half of Studio's time in the Screens map's ⋯ ▸ *Tidy*
   (63 writes).
+- Built against botmaker-shared 0.10.1 (was 0.10.0).
+- Built against botmaker-session 0.9.1 (was 0.9.0).
+- Built against botmaker-studio-api 0.19.1 (was 0.19.0).
+- Built against botmaker-plugin-host 0.14.1 (was 0.14.0).
+- Built against botmaker-cli 0.14.1 (was 0.14.0).
+- Built against botmaker-java 0.4.1 (was 0.4.0).
+- Built against botmaker-core 0.3.1 (was 0.3.0).
 
 ## [1.14.0] — 2026-11-21
 
