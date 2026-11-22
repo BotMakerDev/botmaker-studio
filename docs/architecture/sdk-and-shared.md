@@ -438,7 +438,7 @@ point of it.**
     **before** anything is written, so the answer is known while refusing is still cheap. `snapshot` is
     best-effort for the same reason: a project whose history was never initialised must not lose the ability
     to rename a function.
-  - **The snapshot rule is "does this touch a file the user is not looking at".** `CodeEditor.touchesOtherFiles`
+  - **The snapshot rule is "does this touch a file the user is not looking at".** `MemberEdits.touchesOtherFiles`
     asks exactly that of the plan. The editor's own ↶ already puts the active file back and dies with the
     session; a file the user never opened has no other way home, and a template repoint happens outside the
     editor entirely. Active-file-only edits take no snapshot — a commit per keystroke is not a history.

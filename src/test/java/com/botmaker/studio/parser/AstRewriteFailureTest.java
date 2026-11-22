@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * }
  * }</pre>
  *
- * <p>{@code CodeEditor.edit} then publishes a {@code CodeUpdatedEvent} carrying source identical to what was
+ * <p>{@code EditGate.edit} then publishes a {@code CodeUpdatedEvent} carrying source identical to what was
  * already there. The editor re-parses it, the block tree redraws the same, and the user's drag or menu pick
  * simply does not happen — no message, no error marker, no entry in the Errors tab. The only trace is a stack
  * trace on stdout, which in a packaged app-image goes nowhere.
@@ -96,13 +96,13 @@ class AstRewriteFailureTest {
 
     /**
      * A <b>third</b> site with B11's shape, found by running this test rather than by reading the two the bug
-     * names. {@code CodeEditor.addStatement}'s private overload opens with
+     * names. {@code StatementEdits.addStatement}'s private overload opens with
      * {@code if (newStatement == null) return originalCode;} — so a {@link BlockType} the factory declines to
      * build (a class member dropped into a body) publishes a {@code CodeUpdatedEvent} carrying unchanged
      * source, exactly as a thrown rewrite does.
      *
      * <p>It matters because the {@code null}-means-nothing-happened convention this bug's fix relies on is
-     * declared one layer up, in {@code CodeEditor.edit} — and this path does not go through {@code edit}. SP5
+     * declared one layer up, in {@code EditGate.edit} — and this path does not go through {@code edit}. SP5
      * has to change three lines, not two, or the convention stays half-true.
      */
     @Test

@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A screen that reacts to a write is answered with the file that write produced — not the one before it.
  *
- * <p>{@code CodeUpdatedEvent} is published synchronously by {@code CodeEditor.triggerUpdate}, while
+ * <p>{@code CodeUpdatedEvent} is published synchronously by {@code EditGate.triggerUpdate}, while
  * {@code CodeEditorService} used to do <em>all</em> of its refresh inside a {@code Platform.runLater} — the
  * re-parse into {@code ProjectState} included. So every listener that answered the event by asking the state
  * what the file said got the file as it was before the write. The Edit Variable screen showed the type picked
