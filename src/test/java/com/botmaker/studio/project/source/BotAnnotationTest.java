@@ -90,17 +90,16 @@ class BotAnnotationTest {
     }
 
     @Test
-    void withoutBindingsTheAnnotationsOwnConstantsAndLiteralsAreRead() {
+    void withoutBindingsTheLiteralsAreRead() {
         Annotation annotation = only(BotParser.SYNTAX, """
                 package com.example.bot;
                 import com.botmaker.plugin.api.params.Param;
                 class Parameters {
-                    @Param(visibility = Param.PUBLIC, min = -1, max = 2.5, category = "Limits", options = {"a", "b"})
+                    @Param(min = -1, max = 2.5, category = "Limits", options = {"a", "b"})
                     public static int a = 1;
                 }
                 """);
         Map<String, Object> members = BotAnnotation.PARAM.members(annotation);
-        assertEquals("public", members.get("visibility"));
         assertEquals(-1.0, members.get("min"));
         assertEquals(2.5, members.get("max"));
         assertEquals("Limits", members.get("category"));

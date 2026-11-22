@@ -6,7 +6,6 @@ package com.botmaker.studio.ui.app.dev;
 import com.botmaker.plugin.api.StyleClasses;
 import com.botmaker.plugin.api.value.PluginType;
 import com.botmaker.core.project.params.ParameterRow;
-import com.botmaker.core.project.params.Visibility;
 import com.botmaker.core.plugin.PluginHost;
 import com.botmaker.java.grammar.JavaNames;
 import com.botmaker.java.grammar.JavaValue;
@@ -311,7 +310,6 @@ public final class PickerGalleryWindow {
         ValueGrammar grammar = PluginHost.grammar();
         ParameterRow row = ParameterRow.named(identifier(type, shape), ValueTypes.sourceName(form))
                 .value(grammar.freshInitializer(form))
-                .visibility(Visibility.PUBLIC)
                 .build();
         return new Sample(row, form);
     }

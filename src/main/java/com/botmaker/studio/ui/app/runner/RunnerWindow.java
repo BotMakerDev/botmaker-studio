@@ -433,17 +433,14 @@ public final class RunnerWindow implements ProjectWindow {
     }
 
     /**
-     * The public parameters of the project — the bot's own {@code @Param} fields and the loaded plugins'
-     * rows, in section order.
+     * The parameters of the project — the bot's own {@code @Param} groups and the loaded plugins' rows, in
+     * section order. Every one the editor can rewrite: a value only the author sets is bot data, not a parameter,
+     * so there is no audience to check (the contract's visibility went 2026-11-22).
      *
      * <p>Read once, when the window is built: the Runner is not an editor, so nothing here changes a
      * declaration and the only writes are values, which go back to their owner on Run.
      *
-     * <p><b>A parameter the author kept to themselves is never read at all</b> — {@code isPublic()} is
-     * checked here rather than at the card, so an editor-only one has no widget, no reader and nothing that
-     * could send a value for it. A user's window must not be able to change what it cannot see.
-     *
-     * <p><b>And neither is one the editor itself cannot rewrite.</b> A hand-written initialiser is shown
+     * <p><b>One the editor itself cannot rewrite is not read.</b> A hand-written initialiser is shown
      * read-only in the Parameters window, where its author can read the reason; here there is no author and
      * no reason to show, so it is simply not one of this bot's settings.
      */
@@ -452,7 +449,7 @@ public final class RunnerWindow implements ProjectWindow {
         HostParamScope scope = HostParamScope.over(HostPluginValues.live());
         for (JavaParameter entry : JavaParameters.scan(config, state)) {
             // A plugin's conditional parameter only while it applies (ManagedParam.ConditionStep.when, 2026-10-12).
-            if (entry.row().isPublic() && entry.editable() && scope.shown(entry)) rows.add(entry);
+            if (entry.editable() && scope.shown(entry)) rows.add(entry);
         }
         records = BotRecords.scan(config, state, PluginHost.grammar());
     }

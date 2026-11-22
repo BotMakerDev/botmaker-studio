@@ -9,7 +9,6 @@ import com.botmaker.plugin.api.source.RunParameter;
 import com.botmaker.plugin.host.LoadedPlugin;
 import com.botmaker.core.project.managed.ManagedHolders;
 import com.botmaker.core.project.params.ParameterRow;
-import com.botmaker.core.project.params.Visibility;
 import com.botmaker.java.index.nav.Usages;
 import com.botmaker.core.project.ProjectConfig;
 import com.botmaker.core.project.ProjectState;
@@ -627,7 +626,7 @@ public final class ParametersDialog {
         Node note;
         if (mine) {
             TextField description = new TextField(v.description());
-            description.setPromptText("what this is for (shown as a tooltip, and to the user when shared)");
+            description.setPromptText("what this is for (shown as a tooltip, and to the user)");
             // On focus loss rather than per keystroke: every letter would otherwise rewrite the source file.
             description.focusedProperty().addListener((o, was, is) -> {
                 if (is || description.getText().equals(entry.row().description())) return;
@@ -641,17 +640,7 @@ public final class ParametersDialog {
         grid.add(note, 1, row);
         GridPane.setHgrow(note, Priority.ALWAYS);
         row++;
-
-        // A group has no audience: every parameter is this computer's own (2026-11-04). An old field still has one.
-        if (!entry.group()) {
-            CheckBox shared = new CheckBox("Show to user");
-            shared.setSelected(v.isPublic());
-            shared.setDisable(!mine);
-            shared.setOnAction(e -> edit(entry, "who sees", current -> current.toBuilder().visibility(
-                    shared.isSelected() ? Visibility.PUBLIC : Visibility.EDITOR_ONLY).build()));
-            grid.add(shared, 1, row);
-        }
-        row++;
+        // No audience since 2026-11-22: the Runner lists every editable parameter, so there is no tick to show.
         Optional<Node> pool = poolSection(entry);
         if (pool.isPresent()) grid.add(pool.get(), 0, row, 2, 1);
         return grid;
@@ -1018,13 +1007,6 @@ public final class ParametersDialog {
         type.setPrefWidth(160);
         Button add = new Button("Add parameter");
         add.getStyleClass().add(StyleClasses.PRIMARY_BUTTON);
-        // Ticked by default (2026-09-26): an old field is most often added for the person running the bot. A group's
-        // parameter has no audience, so the tick means nothing to it.
-        CheckBox shown = new CheckBox("Show to user");
-        shown.setSelected(true);
-        shown.setTooltip(new Tooltip("Ticked, a field of an old parameters class appears in the Runner window. A "
-                + "group's parameter is this computer's own either way."));
-
         intoPicker.valueProperty().addListener((o, was, is) -> {
             if (is != null) selectedClass = is;
         });
@@ -1053,14 +1035,6 @@ public final class ParametersDialog {
                             + "a parameter of that name, or no installed plugin declares this type.");
                     return;
                 }
-                if (shown.isSelected()) {
-                    reload();
-                    JavaParameter added = find(selectedClass, candidate);
-                    if (added != null && !added.group()) {
-                        JavaParameters.declare(config, state, added,
-                                added.row().toBuilder().visibility(Visibility.PUBLIC).build(), added.form());
-                    }
-                }
                 // After the parameter, not before: a name refused above must not cost the project a dependency.
                 boolean declared = libraries != null && libraries.ensureContract();
                 String created = fresh ? "Created " + selectedClass + ".java for it." : "";
@@ -1077,7 +1051,7 @@ public final class ParametersDialog {
         });
 
         HBox row = new HBox(6, newGroup, new Separator(Orientation.VERTICAL), new Label("New"), name, type,
-                intoPicker, shown, add);
+                intoPicker, add);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(10, 10, 0, 10));
         return row;
@@ -1216,7 +1190,6 @@ public final class ParametersDialog {
                 .value(row.value())
                 .description(row.description())
                 .category(row.category())
-                .visibility(row.visibility())
                 .changes(row.changes())
                 .build();
     }

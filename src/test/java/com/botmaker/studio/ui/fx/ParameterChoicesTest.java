@@ -30,6 +30,7 @@ import java.util.jar.JarOutputStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -136,9 +137,9 @@ class ParameterChoicesTest extends FxHeadlessTest {
                 || "Range".equals(l.getText()))));
     }
 
-    /** A parameter added from the bar is shown to the user unless its tick is cleared first. */
+    /** A parameter added from the bar is written with no visibility: the contract has none since 2026-11-22. */
     @Test
-    void aNewParameterIsShownToTheUserByDefault() throws IOException {
+    void aNewParameterIsWrittenWithNoVisibility() throws IOException {
         open("", "public static String mode = \"fast\";");
         TextField name = (TextField) find(n -> n instanceof TextField tf && "parameter name".equals(tf.getPromptText()));
         interact(() -> {
@@ -148,7 +149,7 @@ class ParameterChoicesTest extends FxHeadlessTest {
 
         String source = Files.readString(parameters);
         assertTrue(source.contains("speed"), source);
-        assertTrue(source.contains("visibility"), source);
+        assertFalse(source.contains("visibility"), source);
     }
 
     private static Node find(Predicate<Node> test) {

@@ -7,6 +7,13 @@ A change is written under `## [Unreleased]`; the release (sluice) stamps it with
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
+## [Unreleased]
+
+### Changed
+
+- The Runner lists every editable parameter that changes outside a run; the Parameters window has no *Show to user*
+  checkbox any more, since the contract removed a parameter's visibility.
+
 ## [1.14.1] — 2026-11-22
 
 ### Added
