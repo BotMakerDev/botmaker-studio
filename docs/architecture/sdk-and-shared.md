@@ -502,7 +502,7 @@ point of it.**
   generates, reconciles, restores or re-renders source. **A project's structure belongs to the user**, and a
   plugin — the SDK included — contributes methods a user calls rather than files a user inherits.
   - **`project/StarterSources` is the whole of it**: one file, composed by Studio, handed to
-    `Authoring.createProject` as a caller file beside `MavenService.pomXml`. It is Studio's for the reason
+    `Authoring.createProject` as a caller file beside `PomDefaults.pomXml`. It is Studio's for the reason
     the pom already was — only the thing that knows the whole plugin set can compose the file that calls into
     them.
   - **And since 2026-08-30 it composes only the *blank* project.** There was a second shape, a game bot, and

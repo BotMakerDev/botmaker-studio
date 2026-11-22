@@ -5,7 +5,7 @@ Libraries tab, `ui/app/PluginsWindow` and `LibrariesTab`; *Manage Libraries…* 
 2026-09-29). The design keeps Maven simple:
 
 - **The `pom.xml` is the single source of truth.** A "user library" is just any dependency in the pom that isn't
-  one of `MavenService.DEFAULT_DEPENDENCIES`. There is no separate store file. `UserLibrary` is an immutable
+  one Studio writes itself (the core's `PomDefaults`). There is no separate store file. `UserLibrary` is an immutable
   `record(groupId, artifactId, version)`; `MavenService.readUserLibraries` / `writeUserLibraries` read and rewrite
   the non-default dependencies in place (defaults, repositories and properties are preserved).
 - **`LibraryService.updateLibraries`** runs the slow work off the FX thread: write pom → the core reloads (it
