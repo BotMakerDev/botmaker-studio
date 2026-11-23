@@ -873,7 +873,8 @@ final class UiTools {
             case ButtonBase button -> button.getClass().getSimpleName().toLowerCase(Locale.ROOT).contains("link")
                     ? "link" : "button";
             case IndexedCell<?> cell -> cell.isSelected() ? "item (selected)" : "item";
-            default -> "label";
+            // A label that acts on a click (a canvas's "+ Add a block") is pressed like any clickable part.
+            default -> labeled.getOnMouseClicked() != null || labeled.getOnMousePressed() != null ? "click" : "label";
         };
         if (text.isBlank() && kind.equals("label")) return;
         if (kind.startsWith("item") && (text.isBlank() || ((IndexedCell<?>) labeled).isEmpty())) return;

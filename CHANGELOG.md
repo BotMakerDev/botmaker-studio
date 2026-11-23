@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - The Runner lists every editable parameter that changes outside a run; the Parameters window has no *Show to user*
   checkbox any more, since the contract removed a parameter's visibility.
 
+### Fixed
+
+- The assistant's `ui` tool presses a label that acts on a click, such as a body's *+ Add a block*: it was listed
+  as text with no ref, so the block menu could not be opened through it.
+
 ## [1.14.1] — 2026-11-22
 
 ### Added

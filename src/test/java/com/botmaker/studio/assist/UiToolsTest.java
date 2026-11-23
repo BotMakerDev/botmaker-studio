@@ -187,6 +187,20 @@ class UiToolsTest extends FxHeadlessTest {
     }
 
     @Test
+    void aLabelThatActsOnAClickIsPressed() {
+        AtomicInteger blocksAdded = new AtomicInteger();
+        Label addBlock = new Label("+  Add a block");
+        addBlock.setOnMouseClicked(e -> blocksAdded.incrementAndGet());
+        add(addBlock);
+        UiTools ui = new UiTools();
+        String read = UiTools.onFx(() -> ui.read("my bots"));
+        ui.press(refOf(read, "click \"+  Add a block\""));
+        WaitForAsyncUtils.waitForFxEvents();
+        assertEquals(1, blocksAdded.get());
+        assertFalse(Pattern.compile("r\\d+ label").matcher(read).find(), "a label that does nothing has no ref:\n" + read);
+    }
+
+    @Test
     void theMenuBarIsNamedOnlyUnlessAskedFor() {
         UiTools ui = new UiTools();
         String read = UiTools.onFx(() -> ui.read(null));
