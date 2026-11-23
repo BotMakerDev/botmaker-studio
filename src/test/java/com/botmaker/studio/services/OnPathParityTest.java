@@ -112,12 +112,13 @@ class OnPathParityTest {
     }
 
     /**
-     * The files SV4 touched that are still Studio's; the ones whose arguments have to stay bare names. The other two,
-     * {@code DesktopGrab} and {@code SessionEnvironment}, are the core's since plan phase 7a, and so is their guard
-     * ({@code OnPathCallSitesTest} there).
+     * Studio's files that call {@code Executables.onPath}; the ones whose arguments have to stay bare names. SV4's
+     * other two, {@code DesktopGrab} and {@code SessionEnvironment}, are the core's since plan phase 7a, and so is
+     * their guard ({@code OnPathCallSitesTest} there); its third, {@code UpdateService}, became botmaker-cli's
+     * {@code StudioUpdate} on 2026-11-23.
      */
     private static final List<Path> CALL_SITES = List.of(
-            Path.of("src/main/java/com/botmaker/studio/services/UpdateService.java"));
+            Path.of("src/main/java/com/botmaker/studio/services/CliUpdateService.java"));
 
     /**
      * <b>SV4's gate.</b> No Studio source spawns {@code which} any more — the question is answered in-process.

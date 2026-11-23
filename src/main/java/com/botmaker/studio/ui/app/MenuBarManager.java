@@ -3,6 +3,7 @@
 
 package com.botmaker.studio.ui.app;
 
+import com.botmaker.cli.update.StudioUpdate;
 import com.botmaker.shared.input.InputEvent;
 import com.botmaker.shared.input.InputListener;
 import com.botmaker.shared.input.InputListenerFactory;
@@ -27,9 +28,12 @@ import com.botmaker.core.parser.guard.RefusalJournal;
 import com.botmaker.studio.ui.render.theme.BlockTheme;
 import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.studio.util.BrowserLauncher;
+import javafx.application.Platform;
+import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.ToggleGroup;
@@ -38,6 +42,11 @@ import javafx.scene.input.KeyCodeCombination;
 import javafx.scene.input.KeyCombination;
 import javafx.stage.Stage;
 
+import java.io.IOException;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -469,7 +478,7 @@ public class MenuBarManager {
             listener = InputListenerFactory.create();
             listener.start(event -> {
                 if (event instanceof InputEvent.KeyPress press && StopKeyPreference.offerable(press.keysym())) {
-                    javafx.application.Platform.runLater(() -> {
+                    Platform.runLater(() -> {
                         if (!prompt.isShowing()) return;
                         StopKeyPreference.keysymProperty().set(press.keysym());
                         prompt.close();
@@ -659,28 +668,44 @@ public class MenuBarManager {
     }
 
     /**
-     * Checks GitHub Releases for a newer version and, if the user agrees, downloads and launches the matching
-     * installer. When {@code silentIfNone} is true a "you're up to date" result shows no dialog (used for an
-     * optional check on startup); a manual check always reports its outcome.
+     * Checks GitHub Releases for a newer Studio and, if the user agrees, updates this one the way it is installed,
+     * through botmaker-cli's {@link StudioUpdate}, which {@code botmaker studio update} runs too (2026-11-23). When
+     * {@code silentIfNone} is true only an update it can install shows a dialog; a manual check always says why not.
      */
     public void checkForUpdates(boolean silentIfNone) {
-        com.botmaker.studio.services.UpdateService service = new com.botmaker.studio.services.UpdateService();
-        service.checkForUpdate().thenAccept(opt -> javafx.application.Platform.runLater(() -> {
-            if (opt.isEmpty()) {
-                if (!silentIfNone) {
-                    showInfo("You're up to date",
-                            "BotMaker Studio " + com.botmaker.core.config.AppVersion.get() + " is the latest version.");
+        Optional<String> version = AppVersion.isDevBuild() ? Optional.empty() : Optional.of(AppVersion.get());
+        CompletableFuture.supplyAsync(() -> {
+            StudioUpdate update = StudioUpdate.forStudio(version);
+            return Map.entry(update, update.check());
+        }).thenAccept(found -> Platform.runLater(() -> {
+            StudioUpdate update = found.getKey();
+            StudioUpdate.Check check = found.getValue();
+            if (!check.updatable()) {
+                if (silentIfNone) return;
+                if (check.latest().isEmpty()) {
+                    showInfo("Could not check for updates",
+                            "Studio's latest release could not be read; try again later.");
+                } else if (check.newer()) {
+                    showInfo("BotMaker Studio " + check.latest().get() + " is out",
+                            "This Studio is " + check.install().describe() + ".");
+                } else {
+                    showInfo("You're up to date", "BotMaker Studio " + AppVersion.get() + " is the latest version.");
                 }
                 return;
             }
-            com.botmaker.studio.services.UpdateService.AvailableUpdate update = opt.get();
-            if (!confirm("Update available",
-                    "Version " + update.tag() + " is available (you have "
-                            + com.botmaker.core.config.AppVersion.get() + ").\n\nDownload and install it now?")) {
+            String tag = check.latest().get();
+            if (!confirm("Update available", "Version " + tag + " is available (you have " + AppVersion.get()
+                    + ").\n\nThis Studio is " + check.install().describe()
+                    + ", and is updated the same way. Update it now?")) {
                 return;
             }
-            downloadAndInstall(service, update);
-        }));
+            downloadAndInstall(update, tag);
+        })).exceptionally(ex -> {
+            Platform.runLater(() -> {
+                if (!silentIfNone) showError("Could not check for updates", rootMessage(ex));
+            });
+            return null;
+        });
     }
 
     /**
@@ -693,7 +718,7 @@ public class MenuBarManager {
     private void checkForCliUpdate() {
         com.botmaker.studio.services.CliUpdateService service =
                 new com.botmaker.studio.services.CliUpdateService();
-        service.checkForUpdate().thenAccept(opt -> javafx.application.Platform.runLater(() -> {
+        service.checkForUpdate().thenAccept(opt -> Platform.runLater(() -> {
             if (opt.isEmpty()) {
                 String installed = service.installedVersion();
                 showInfo("The command-line tool is up to date",
@@ -717,7 +742,7 @@ public class MenuBarManager {
                 } catch (Exception ex) {
                     throw new java.util.concurrent.CompletionException(ex);
                 }
-            }).whenComplete((v, ex) -> javafx.application.Platform.runLater(() -> {
+            }).whenComplete((v, ex) -> Platform.runLater(() -> {
                 if (ex != null) {
                     showError("Upgrade failed", ex.getCause() != null
                             ? ex.getCause().getMessage() : ex.getMessage());
@@ -730,18 +755,18 @@ public class MenuBarManager {
     }
 
     /**
-     * Downloads {@code update}'s installer behind a modal progress dialog, then hands it to the OS installer on
-     * a background thread (the launch does AWT {@code Desktop} work that must never run on the FX thread, which
-     * previously froze the window to a white screen). The user restarts the app manually once the installer runs.
+     * Runs {@code update} to {@code tag} off the FX thread behind a modal progress dialog: the download's progress,
+     * then the install (a package manager under pkexec's own prompt, the AppImage's or the app's swap, the MSI's
+     * window). The user reopens Studio afterwards.
      */
-    private void downloadAndInstall(com.botmaker.studio.services.UpdateService service,
-                                    com.botmaker.studio.services.UpdateService.AvailableUpdate update) {
-        javafx.scene.control.ProgressBar bar = new javafx.scene.control.ProgressBar(0);
+    private void downloadAndInstall(StudioUpdate update, String tag) {
+        ProgressBar bar =
+                new ProgressBar(ProgressBar.INDETERMINATE_PROGRESS);
         bar.setPrefWidth(320);
-        javafx.scene.control.Label status = new javafx.scene.control.Label("Downloading " + update.tag() + "…");
+        Label status = new Label("Updating to " + tag + "…");
         status.setStyle("-fx-text-fill: gray;");
         javafx.scene.layout.VBox box = new javafx.scene.layout.VBox(
-                12, new javafx.scene.control.Label("Updating BotMaker Studio"), bar, status);
+                12, new Label("Updating BotMaker Studio"), bar, status);
         box.setAlignment(javafx.geometry.Pos.CENTER);
         box.setPadding(new javafx.geometry.Insets(24));
 
@@ -755,44 +780,35 @@ public class MenuBarManager {
 
         // Progress arrives on the HTTP client's thread; marshal to FX. A negative fraction means the server sent
         // no Content-Length, so show an indeterminate bar instead.
-        java.util.function.DoubleConsumer onProgress = fraction -> javafx.application.Platform.runLater(() -> {
+        java.util.function.DoubleConsumer onProgress = fraction -> Platform.runLater(() -> {
             if (fraction < 0) {
-                bar.setProgress(javafx.scene.control.ProgressBar.INDETERMINATE_PROGRESS);
+                bar.setProgress(ProgressBar.INDETERMINATE_PROGRESS);
             } else {
                 bar.setProgress(fraction);
-                status.setText("Downloading " + update.tag() + "… " + (int) Math.round(fraction * 100) + "%");
+                status.setText(fraction >= 1 ? "Installing " + tag + "…"
+                        : "Downloading " + tag + "… " + (int) Math.round(fraction * 100) + "%");
             }
         });
 
-        service.downloadInstaller(update, onProgress)
-                .thenAccept(path -> javafx.application.Platform.runLater(() -> {
-                    status.setText("Starting installer…");
-                    bar.setProgress(javafx.scene.control.ProgressBar.INDETERMINATE_PROGRESS);
-                    // Launch off the FX thread; report the outcome back on it.
-                    java.util.concurrent.CompletableFuture.runAsync(() -> {
-                        try {
-                            service.launchInstaller(path);
-                        } catch (Exception ex) {
-                            throw new java.util.concurrent.CompletionException(ex);
-                        }
-                    }).whenComplete((v, ex) -> javafx.application.Platform.runLater(() -> {
-                        dialog.close();
-                        if (ex == null) {
-                            showInfo("Installer started",
-                                    "The installer for " + update.tag() + " has been launched.\n\n"
-                                            + com.botmaker.studio.services.UpdateService.finishInstructions());
-                        } else {
-                            showError("Update failed", rootMessage(ex));
-                        }
-                    }));
-                }))
-                .exceptionally(ex -> {
-                    javafx.application.Platform.runLater(() -> {
-                        dialog.close();
-                        showError("Download failed", rootMessage(ex));
-                    });
-                    return null;
-                });
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                return update.update(onProgress);
+            } catch (IOException ex) {
+                throw new CompletionException(ex);
+            }
+        }).whenComplete((outcome, ex) -> Platform.runLater(() -> {
+            dialog.close();
+            switch (outcome) {
+                case null -> showError("Update failed", rootMessage(ex));
+                case StudioUpdate.Outcome.Current current ->
+                        showInfo("You're up to date", "BotMaker Studio " + current.tag() + " is the latest version.");
+                case StudioUpdate.Outcome.Updated updated -> showInfo("BotMaker Studio updated",
+                        "BotMaker Studio " + updated.tag() + " is installed. Quit and reopen Studio to run it.");
+                case StudioUpdate.Outcome.Started started -> showInfo("Installer started",
+                        "The installer for " + started.tag() + " is running. Quit BotMaker Studio to let it "
+                                + "finish, then reopen it.");
+            }
+        }));
     }
 
     /** Unwraps {@code CompletionException} so the alert shows the real cause, not the wrapper. */

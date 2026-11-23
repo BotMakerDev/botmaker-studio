@@ -16,6 +16,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- *Check for Updates* updates Studio the way it is installed, through botmaker-cli's updater, which `botmaker studio
+  update` runs too: a repository's rpm or deb is upgraded by dnf or apt, and the `.app` is replaced from the dmg
+  instead of opening it in Finder. It says why when this Studio is not updated from here (a development build, an
+  unpacked archive, an Intel Mac).
 - The file tree lists the files Studio and the plugins write again, under *Managed by Studio*: the bot's parameters
   and each plugin's own Java open read-only, so you can read them; change them in their windows.
 

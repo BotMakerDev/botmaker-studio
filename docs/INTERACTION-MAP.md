@@ -136,7 +136,8 @@ GitHub" (OAuth device flow), "Sign out", "Switch account"; status label cycles a
 - **Project** — Plugins & Libraries… (Installed / Browse / Libraries tabs, Reload), Manage Activities…, Set Activity Values…,
   Resource Manager…, Get More Bots… (→ the home, at Get more bots), Publish to Gallery…, Project Repository on GitHub (disabled until
   published).
-- **Help** — Studio/SDK on GitHub, "Check for Updates…" (`UpdateService`, modal progress `Stage`),
+- **Help** — Studio/SDK on GitHub, "Check for Updates…" (botmaker-cli's `update.StudioUpdate`, as `botmaker studio update`; modal
+  progress `Stage`),
   "About BotMaker".
 
 > **2026-11-13** (plan `2026-11-13-studio-window-cleanup`): the toolbar, left panel and bottom tabs below are

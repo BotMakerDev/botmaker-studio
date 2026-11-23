@@ -34,8 +34,8 @@ import java.util.regex.Pattern;
  * is not created at all.
  *
  * <p>Nothing here runs a privileged command silently: {@link #upgradeCommand()} is what a dialog shows the
- * user before {@link #runUpgrade()} hands it to {@code pkexec}, exactly as {@link UpdateService} hands an
- * installer to the OS rather than writing system files itself. Every network and process call is best-effort:
+ * user before {@link #runUpgrade()} hands it to {@code pkexec}, as Studio's own update (botmaker-cli's
+ * {@code StudioUpdate}) hands its package to the package manager rather than writing system files itself. Every network and process call is best-effort:
  * a failure resolves to "no update" rather than throwing, because a broken check must never be why the editor
  * shows an error.
  */
