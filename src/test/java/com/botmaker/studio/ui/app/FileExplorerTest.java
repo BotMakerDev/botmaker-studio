@@ -90,6 +90,9 @@ class FileExplorerTest extends FxHeadlessTest {
                 "      " + member("rounds"),
                 "      " + member("main"),
                 "      " + member("play"),
+                "Managed by Studio",
+                "  com.mybot.params",
+                "    Parameters.java",
                 "Resources",
                 "  images",
                 "    ore.png"), explorer.get().rows());
@@ -127,7 +130,7 @@ class FileExplorerTest extends FxHeadlessTest {
         int at = rows.indexOf("    Helper.java");
         assertEquals("      " + member("help"), rows.get(at + 1));
         assertEquals("    MyBot.java", rows.get(at + 2));
-        assertEquals("Resources", rows.get(at + 3));
+        assertEquals("Managed by Studio", rows.get(at + 3));
     }
 
     private static final String HELPER = """
