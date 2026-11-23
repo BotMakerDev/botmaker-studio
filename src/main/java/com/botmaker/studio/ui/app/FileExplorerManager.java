@@ -78,9 +78,10 @@ import java.util.stream.Stream;
  * plugin files under {@code plugins/sdk}, the user's own sub-packages — so {@code com.mybot} is one row.
  * Groups: <b>My code</b> ({@link FileRole#EDITABLE} Java the user writes), <b>Resources</b> ({@code src/main/resources}, to see the pictures
  * and data files, which open nowhere here) and <b>Library</b> (read-only bundled source). The header's <i>+</i>
- * makes a class in the selected row's package. Parameters.java and the plugins' files, which their windows change,
- * are not listed: a <b>Managed by Studio</b> group from 2026-10-13, when a user could not tell which files were
- * theirs, until 2026-11-13, the user's call.
+ * makes a class in the selected row's package. The parameter groups and the plugins' files, which their windows
+ * change, are <b>Managed by Studio</b> (closed, read-only, no New, Rename or Delete): apart from 2026-10-13, when a
+ * user could not tell which files were theirs; not listed from 2026-11-13; listed again on 2026-11-23, the user's
+ * call both times, to read them.
  *
  * <p>A row's icon says what the file is ({@link ExplorerModel.Kind}), its colour whether it differs from the
  * last saved version — git's answer plus the editor's unsaved buffers, read on a worker. A right-click offers
@@ -95,6 +96,7 @@ import java.util.stream.Stream;
 public class FileExplorerManager {
 
     private static final String GROUP_USER = "My code";
+    private static final String GROUP_MANAGED = "Managed by Studio";
     private static final String GROUP_RESOURCES = "Resources";
     private static final String GROUP_LIBRARY = "Library";
 
@@ -275,12 +277,14 @@ public class FileExplorerManager {
                     getStyleClass().add("tree-group");
                     setContextMenu(GROUP_USER.equals(item.label())
                             ? new ContextMenu(newMenu(config.mainPackageDir())) : null);
+                    if (GROUP_MANAGED.equals(item.label())) setTooltip(new Tooltip(
+                            "Files Studio and the plugins write, shown read-only. Change them in their windows."));
                     return;
                 }
                 setGraphic(icon(item.kind()));
                 String what = item.kind().displayName();
                 setTooltip(new Tooltip(what));
-                setContextMenu(contextMenu(item));
+                setContextMenu(contextMenu(item, inGroup(getTreeItem(), GROUP_MANAGED)));
                 if (item.isFolder()) {
                     getStyleClass().add("tree-dir");
                     return;
@@ -367,10 +371,12 @@ public class FileExplorerManager {
         root.setExpanded(true);
         Predicate<Path> java = p -> p.getFileName().toString().endsWith(".java");
         Predicate<Path> editable = java.and(p -> FileRole.of(p) == FileRole.EDITABLE).and(matches);
-        // A file a window keeps (Parameters.java, a plugin's) is that window's to change, and not listed.
+        // A file a window keeps (a parameter group, a plugin's) is that window's to change: listed apart, read-only.
         Predicate<Path> kept = p -> classFiles.managed(p).isPresent();
         TreeItem<ExplorerNode> user = group(GROUP_USER, true, filtering,
                 ExplorerModel.tree(javaRoot, editable.and(kept.negate())), entryPoint);
+        TreeItem<ExplorerNode> managed = group(GROUP_MANAGED, false, filtering,
+                ExplorerModel.tree(javaRoot, editable.and(kept)), entryPoint);
         TreeItem<ExplorerNode> resources = group(GROUP_RESOURCES, false, filtering,
                 ExplorerModel.tree(config.resourcesRoot(), matches), entryPoint);
         TreeItem<ExplorerNode> library = group(GROUP_LIBRARY, false, filtering, ExplorerModel.tree(javaRoot,
@@ -378,6 +384,7 @@ public class FileExplorerManager {
 
         // Each group only when it has anything: an ordinary project reads as one list plus its resources.
         if (!user.getChildren().isEmpty() || !filtering) root.getChildren().add(user);
+        if (!managed.getChildren().isEmpty()) root.getChildren().add(managed);
         if (!resources.getChildren().isEmpty()) root.getChildren().add(resources);
         if (!library.getChildren().isEmpty()) root.getChildren().add(library);
         // Markdown at the bot's root sits beside no source (its README): first, by name.
@@ -592,8 +599,16 @@ public class FileExplorerManager {
     // the context menu
     // ------------------------------------------------------------------
 
-    /** A row's menu. */
-    private ContextMenu contextMenu(ExplorerNode node) {
+    /** Whether {@code item} sits under the top-level group labelled {@code label}. */
+    private static boolean inGroup(TreeItem<ExplorerNode> item, String label) {
+        for (TreeItem<ExplorerNode> at = item; at != null; at = at.getParent()) {
+            if (at.getValue() != null && at.getValue().group() && label.equals(at.getValue().label())) return true;
+        }
+        return false;
+    }
+
+    /** A row's menu; {@code managed} for a row of <i>Managed by Studio</i>, where nothing is made, renamed or deleted. */
+    private ContextMenu contextMenu(ExplorerNode node, boolean managed) {
         MenuItem show = new MenuItem("Show in file manager");
         show.setOnAction(e -> BrowserLauncher.open((node.isFolder() ? node.path() : node.path().getParent())
                 .toUri().toString()));
@@ -605,6 +620,7 @@ public class FileExplorerManager {
         });
         ContextMenu menu = new ContextMenu(show, copy);
         Path folder = node.isFolder() ? node.path() : node.path().getParent();
+        if (managed) return menu;
         boolean userCode = node.isFolder() || node.opens() && node.role() == FileRole.EDITABLE;
         if (userCode && classFiles.folderProblem(folder).isEmpty()) {
             menu.getItems().addAll(new SeparatorMenuItem(), newMenu(folder));

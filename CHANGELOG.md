@@ -14,6 +14,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - The Runner lists every editable parameter that changes outside a run; the Parameters window has no *Show to user*
   checkbox any more, since the contract removed a parameter's visibility.
 
+### Added
+
+- The file tree lists the files Studio and the plugins write again, under *Managed by Studio*: the bot's parameters
+  and each plugin's own Java open read-only, so you can read them; change them in their windows.
+
 ### Fixed
 
 - The assistant's `ui` tool presses a label that acts on a click, such as a body's *+ Add a block*: it was listed
