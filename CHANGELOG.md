@@ -7,12 +7,17 @@ A change is written under `## [Unreleased]`; the release (sluice) stamps it with
 
 Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
-## [Unreleased]
+## [1.14.2] — 2026-11-24
 
 ### Changed
 
 - The Runner lists every editable parameter that changes outside a run; the Parameters window has no *Show to user*
   checkbox any more, since the contract removed a parameter's visibility.
+- Built against botmaker-studio-api 0.20.0 (was 0.19.1).
+- Built against botmaker-plugin-host 0.14.2 (was 0.14.1).
+- Built against botmaker-cli 0.14.3 (was 0.14.1).
+- Built against botmaker-java 0.4.2 (was 0.4.1).
+- Built against botmaker-core 0.3.3 (was 0.3.1).
 
 ### Added
 
