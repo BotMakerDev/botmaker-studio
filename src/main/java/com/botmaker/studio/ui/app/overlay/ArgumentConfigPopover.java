@@ -7,6 +7,7 @@ import com.botmaker.studio.blocks.func.MethodInvocationBlock;
 import com.botmaker.studio.core.ExpressionBlock;
 import com.botmaker.studio.core.ValueSlot;
 import com.botmaker.studio.services.CodeEditorService;
+import com.botmaker.studio.ui.render.theme.ThemedWindows;
 import com.botmaker.java.types.ResolvedType;
 import com.botmaker.studio.ui.render.components.pickers.PickerContext;
 import com.botmaker.studio.ui.render.components.pickers.PickerRegistry;
@@ -132,8 +133,7 @@ final class ArgumentConfigPopover {
         dlg.setTitle("Configure arguments");
         dlg.setAlwaysOnTop(true);
         Scene sc = new Scene(pane);
-        java.net.URL css = getClass().getResource("/css/blocks.css");
-        if (css != null) sc.getStylesheets().add(css.toExternalForm());
+        ThemedWindows.addStylesheet(sc);
         applyThemeClass(sc.getRoot());
         dlg.setScene(sc);
         dialog = dlg;

@@ -73,8 +73,7 @@ final class DockedPanel {
         root.setStyle("-fx-background-color: transparent; -fx-background: rgb(20,24,33);");
         root.getStyleClass().add(ThemedWindows.UNTHEMED);
         Scene scene = new Scene(root, Color.TRANSPARENT);
-        java.net.URL css = getClass().getResource("/css/blocks.css");
-        if (css != null) scene.getStylesheets().add(css.toExternalForm());
+        ThemedWindows.addStylesheet(scene);
         OverlayStyles.applyThemeClass(root);
         stage.setScene(scene);
         stage.setAlwaysOnTop(true);

@@ -189,7 +189,7 @@ public final class ThemedWindows {
     private static void addBlocksCss(List<String> stylesheets) {
         URL css = ThemedWindows.class.getResource("/css/blocks.css");
         if (css == null) return;
-        String url = css.toExternalForm();
+        String url = DevCss.url(css);
         if (!stylesheets.contains(url)) stylesheets.add(url);
     }
 

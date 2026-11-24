@@ -525,6 +525,8 @@
                         <option>--enable-native-access=ALL-UNNAMED</option>
                         <!-- ClassGraph's invokeCleaner goes through sun.misc.Unsafe (JDK >= 23 warns). -->
                         <option>--sun-misc-unsafe-memory-access=allow</option>
+                        <!-- Dev only: a save of blocks.css re-skins every open window (DevCss). -->
+                        <option>-Dbotmaker.dev.css=${project.basedir}/src/main/resources/css/blocks.css</option>
                     </options>
                 </configuration>
             </plugin>
@@ -591,6 +593,31 @@
     </build>
 
     <profiles>
+        <!--
+          `devreload` profile: javafx:run with the dev-reload agent, for tools/dev-studio.sh (run it on a JetBrains
+          Runtime; -XX:+IgnoreUnrecognizedVMOptions keeps a stock JDK starting, reloading method bodies only).
+        -->
+        <profile>
+            <id>devreload</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.openjfx</groupId>
+                        <artifactId>javafx-maven-plugin</artifactId>
+                        <configuration>
+                            <options>
+                                <option>--enable-native-access=ALL-UNNAMED</option>
+                                <option>--sun-misc-unsafe-memory-access=allow</option>
+                                <option>-Dbotmaker.dev.css=${project.basedir}/src/main/resources/css/blocks.css</option>
+                                <option>-XX:+IgnoreUnrecognizedVMOptions</option>
+                                <option>-XX:+AllowEnhancedClassRedefinition</option>
+                                <option>-javaagent:${devreload.agent}=${project.build.outputDirectory}</option>
+                            </options>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!--
           `dist` profile: build a self-contained, portable app-image via jpackage.
           The shaded jar (built in the package phase) is staged into a clean input dir,
