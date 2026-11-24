@@ -46,9 +46,9 @@
         <!-- botmaker-java version: the parser and the value grammar. Same contract again. -->
         <botmaker.java.version>0.4.2-SNAPSHOT</botmaker.java.version>
         <!-- botmaker-cli version: its main jar, the silent library Studio's Publish runs. Same contract again. -->
-        <botmaker.cli.version>0.14.2-SNAPSHOT</botmaker.cli.version>
+        <botmaker.cli.version>0.14.3-SNAPSHOT</botmaker.cli.version>
         <!-- botmaker-core version: the open project and its plugins, in-process (2026-11-05). -->
-        <botmaker.core.version>0.3.2-SNAPSHOT</botmaker.core.version>
+        <botmaker.core.version>0.3.3-SNAPSHOT</botmaker.core.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
              (2026-09-02). See the note where that dependency stood, below. -->
         <!-- Numeric-only version for jpackage (rejects -SNAPSHOT / non-numeric versions). -->
