@@ -14,7 +14,7 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - In a dev run (`mvn javafx:run`), saving `blocks.css` restyles every open window at once, with no restart
   (`DevCss`, system property `botmaker.dev.css`).
 - `tools/dev-studio.sh`: a dev Studio that reloads recompiled classes while it runs (JetBrains Runtime, enhanced class
-  redefinition, `tools/devreload/DevReloadAgent`).
+  redefinition, `dev/DevReloadAgent`); `botmaker studio start` and the MCP's `start_studio` start the same one.
 
 ## [1.14.2] — 2026-11-24
 

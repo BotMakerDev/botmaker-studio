@@ -594,13 +594,37 @@
 
     <profiles>
         <!--
-          `devreload` profile: javafx:run with the dev-reload agent, for tools/dev-studio.sh (run it on a JetBrains
-          Runtime; -XX:+IgnoreUnrecognizedVMOptions keeps a stock JDK starting, reloading method bodies only).
+          `devreload` profile: javafx:run with the dev-reload agent (tools/dev-studio.sh, `botmaker studio`,
+          start_studio). Run it on a JetBrains Runtime; -XX:+IgnoreUnrecognizedVMOptions keeps a stock JDK
+          starting, reloading method bodies only. The agent is one class packed into its own jar at process-classes.
         -->
         <profile>
             <id>devreload</id>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <version>3.4.1</version>
+                        <executions>
+                            <execution>
+                                <id>devreload-agent</id>
+                                <phase>process-classes</phase>
+                                <goals><goal>jar</goal></goals>
+                                <configuration>
+                                    <classifier>devreload</classifier>
+                                    <includes><include>com/botmaker/studio/dev/DevReloadAgent*.class</include></includes>
+                                    <archive>
+                                        <addMavenDescriptor>false</addMavenDescriptor>
+                                        <manifestEntries>
+                                            <Premain-Class>com.botmaker.studio.dev.DevReloadAgent</Premain-Class>
+                                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                                        </manifestEntries>
+                                    </archive>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
                     <plugin>
                         <groupId>org.openjfx</groupId>
                         <artifactId>javafx-maven-plugin</artifactId>
@@ -611,7 +635,7 @@
                                 <option>-Dbotmaker.dev.css=${project.basedir}/src/main/resources/css/blocks.css</option>
                                 <option>-XX:+IgnoreUnrecognizedVMOptions</option>
                                 <option>-XX:+AllowEnhancedClassRedefinition</option>
-                                <option>-javaagent:${devreload.agent}=${project.build.outputDirectory}</option>
+                                <option>-javaagent:${project.build.directory}/${project.build.finalName}-devreload.jar=${project.build.outputDirectory}</option>
                             </options>
                         </configuration>
                     </plugin>

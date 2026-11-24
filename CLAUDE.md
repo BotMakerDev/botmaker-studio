@@ -66,7 +66,7 @@ mvn -Pdist package
 swaps the stylesheet in every open window on save.
 
 **Code hot reload (2026-11-24):** `tools/dev-studio.sh` runs `javafx:run -Pdevreload` on a JetBrains Runtime
-(`~/.jdks/jbr-*`, `$BOTMAKER_JBR`) with `-XX:+AllowEnhancedClassRedefinition` and `tools/devreload/DevReloadAgent`, which
+(`~/.jdks/jbr-*`, `$BOTMAKER_JBR`) with `-XX:+AllowEnhancedClassRedefinition` and `dev/DevReloadAgent` (packed into its own jar by the profile), which
 redefines each class that `mvn -o -q -pl botmaker-studio compile` (or the IDE) rewrites in `target/classes`; fields and
 methods may change. Objects already built keep their old state until their view is rebuilt. On a stock JDK only method
 bodies reload, and the agent says which class needs a restart.

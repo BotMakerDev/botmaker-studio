@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 LiQiyeDev
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+package com.botmaker.studio.dev;
+
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
@@ -12,6 +14,7 @@ import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -19,7 +22,9 @@ import java.util.Map;
  * Dev-only: redefines Studio's classes in the running JVM when {@code mvn compile} (or the IDE) rewrites them in
  * {@code target/classes}. On a JetBrains Runtime started with {@code -XX:+AllowEnhancedClassRedefinition} a class may
  * also gain or lose fields and methods; on a stock JDK only method bodies change and the rest is reported.
- * Started by {@code tools/dev-studio.sh}: {@code -javaagent:devreload.jar=<classes dir>}.
+ *
+ * <p>Never loaded by Studio itself: the {@code devreload} Maven profile packs this class alone into
+ * {@code target/*-devreload.jar} and starts {@code javafx:run} with {@code -javaagent:<that jar>=<classes dir>}.
  */
 public final class DevReloadAgent {
 
@@ -28,7 +33,7 @@ public final class DevReloadAgent {
 
     private DevReloadAgent() {}
 
-    public static void premain(String classesDir, Instrumentation inst) throws IOException {
+    public static void premain(String classesDir, Instrumentation inst) {
         Path root = Path.of(classesDir).toAbsolutePath();
         Thread watcher = new Thread(() -> watch(root, inst), "dev-reload");
         watcher.setDaemon(true);
@@ -97,7 +102,7 @@ public final class DevReloadAgent {
             if (c == null) continue; // not loaded yet: it loads fresh from disk
             try {
                 byte[] bytes = Files.readAllBytes(entry.getValue());
-                int hash = java.util.Arrays.hashCode(bytes);
+                int hash = Arrays.hashCode(bytes);
                 Integer before = SEEN.put(entry.getKey(), hash);
                 if (before != null && before == hash) continue; // Maven rewrites every class: only a change counts
                 inst.redefineClasses(new ClassDefinition(c, bytes));
