@@ -11,6 +11,8 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- A plugin's window can start its run with arguments, such as the SDK's 🔭 Explore goal field: Studio passes them on
+  to the run, as the assistant's start with arguments does.
 - In a dev run (`mvn javafx:run`), saving `blocks.css` restyles every open window at once, with no restart
   (`DevCss`, system property `botmaker.dev.css`).
 - `tools/dev-studio.sh`: a dev Studio that reloads recompiled classes while it runs (JetBrains Runtime, enhanced class

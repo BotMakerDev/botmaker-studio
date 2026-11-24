@@ -40,8 +40,8 @@ public final class PluginsOnBus {
             }
 
             @Override
-            public void startEntry(String title, String mainClass) {
-                bus.publish(new CoreApplicationEvents.EntryRunRequestedEvent(title, mainClass));
+            public void startEntry(String title, String mainClass, String arguments) {
+                bus.publish(new CoreApplicationEvents.EntryRunRequestedEvent(title, mainClass, arguments));
             }
 
             @Override
