@@ -46,7 +46,7 @@
         <!-- botmaker-java version: the parser and the value grammar. Same contract again. -->
         <botmaker.java.version>0.4.3-SNAPSHOT</botmaker.java.version>
         <!-- botmaker-cli version: its main jar, the silent library Studio's Publish runs. Same contract again. -->
-        <botmaker.cli.version>0.14.4-SNAPSHOT</botmaker.cli.version>
+        <botmaker.cli.version>0.14.5-SNAPSHOT</botmaker.cli.version>
         <!-- botmaker-core version: the open project and its plugins, in-process (2026-11-05). -->
         <botmaker.core.version>0.3.4-SNAPSHOT</botmaker.core.version>
         <!-- botmaker.plugintoolkit.version was here and is gone with the dependency it versioned
