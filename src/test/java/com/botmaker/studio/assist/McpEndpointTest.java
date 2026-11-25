@@ -834,7 +834,7 @@ class McpEndpointTest {
         String command = config.claudeCodeCommand(file);
         assertFalse(command.contains(config.token()), "the token is not on the command line");
         assertTrue(Files.readString(file).contains("Bearer " + config.token()));
-        assertTrue(command.startsWith("claude --mcp-config " + file + " --allowedTools mcp__botmaker-studio"),
+        assertTrue(command.startsWith("claude --mcp-config " + file + " --allowedTools mcp__botmaker "),
                 command);
         assertTrue(command.contains("--disallowedTools Edit Write NotebookEdit \"Bash(sed -i *)\""),
                 command);
