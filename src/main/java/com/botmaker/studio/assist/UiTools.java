@@ -56,6 +56,7 @@ import javafx.stage.PopupWindow;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.stage.WindowEvent;
+import javafx.util.StringConverter;
 
 import java.awt.image.BufferedImage;
 import java.lang.management.GarbageCollectorMXBean;
@@ -1444,21 +1445,66 @@ final class UiTools {
                 field.setText(value);
                 field.positionCaret(value.length());
             }
-            case ComboBox<?> box -> pick(box.getItems(), value, item -> select(box, item));
-            case ChoiceBox<?> box -> pick(box.getItems(), value, item -> select(box, item));
+            case ComboBox<?> box -> pick(box.getItems(), shown(box), value, item -> select(box, item));
+            case ChoiceBox<?> box -> pick(box.getItems(), shown(box), value, item -> select(box, item));
             default -> throw new IllegalArgumentException("r" + ref + " takes no text.");
         }
         return "r" + ref + " now holds \"" + value + "\".";
     }
 
-    private static <T> void pick(List<T> items, String text, Consumer<T> choose) {
+    /**
+     * Chooses the item whose shown text, else whose own text, is {@code text}; a miss names the texts shown. An item's
+     * own text is often a record's dump (2026-11-25, Starts on's page list showed "Google's sign-in page").
+     */
+    private static <T> void pick(List<T> items, List<String> shown, String text, Consumer<T> choose) {
+        String wanted = text.strip();
+        for (int i = 0; i < items.size(); i++) {
+            if (shown.get(i).equalsIgnoreCase(wanted)) {
+                choose.accept(items.get(i));
+                return;
+            }
+        }
         for (T item : items) {
-            if (String.valueOf(item).equalsIgnoreCase(text.strip())) {
+            if (String.valueOf(item).equalsIgnoreCase(wanted)) {
                 choose.accept(item);
                 return;
             }
         }
-        throw new IllegalArgumentException("No item \"" + text + "\"; it offers " + items + ".");
+        throw new IllegalArgumentException("No item \"" + text + "\"; it offers " + shown.stream()
+                .map(s -> "\"" + s + "\"").collect(Collectors.joining(", ")) + ".");
+    }
+
+    /** What each of {@code box}'s items shows in its popup: its cell factory's text, else its converter's. */
+    private static <T> List<String> shown(ComboBox<T> box) {
+        List<T> items = box.getItems();
+        ListCell<T> cell = null;
+        if (box.getCellFactory() != null) {
+            ListView<T> list = new ListView<>(box.getItems());
+            list.setCellFactory(box.getCellFactory());
+            cell = spareCell(list);
+        }
+        List<String> texts = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            String text = "";
+            if (cell != null) {
+                try {
+                    cell.updateIndex(i);
+                    text = texts(cell);
+                } catch (RuntimeException e) {
+                    // the converter's text stands in for a cell that can't draw outside a scene
+                }
+            }
+            texts.add(text.isBlank() ? convertedText(box.getConverter(), items.get(i)) : text);
+        }
+        return texts;
+    }
+
+    private static <T> List<String> shown(ChoiceBox<T> box) {
+        return box.getItems().stream().map(item -> convertedText(box.getConverter(), item)).toList();
+    }
+
+    private static <T> String convertedText(StringConverter<T> converter, T item) {
+        return converter == null ? String.valueOf(item) : converter.toString(item);
     }
 
     @SuppressWarnings("unchecked")

@@ -18,6 +18,11 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 - `tools/dev-studio.sh`: a dev Studio that reloads recompiled classes while it runs (JetBrains Runtime, enhanced class
   redefinition, `dev/DevReloadAgent`); `botmaker studio start` and the MCP's `start_studio` start the same one.
 
+### Fixed
+
+- The assistant's `ui type` into a choice takes the text its list shows ("Google's sign-in page"), not only the
+  item's own text, and a miss lists the shown texts.
+
 ## [1.14.2] — 2026-11-24
 
 ### Changed

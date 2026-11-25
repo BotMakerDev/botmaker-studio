@@ -420,6 +420,32 @@ class UiToolsTest extends FxHeadlessTest {
         assertFalse(read.contains("Commit["), read);
     }
 
+    /** A choice is typed as its popup shows it, not as its item's dump (2026-11-25, Starts on's page list). */
+    @Test
+    void aChoiceIsTypedAsItsCellsShowIt() {
+        ComboBox<Commit> pages = new ComboBox<>(FXCollections.observableArrayList(new Commit("g", "Google's sign-in"),
+                new Commit("w", "Wi-Fi")));
+        pages.setCellFactory(view -> new ListCell<>() {
+            @Override
+            protected void updateItem(Commit commit, boolean empty) {
+                super.updateItem(commit, empty);
+                setText(empty || commit == null ? null : commit.title() + " page");
+            }
+        });
+        add(pages);
+        UiTools ui = new UiTools();
+        int ref = refOf(UiTools.onFx(() -> ui.read(null)), "choice");
+        UiTools.onFx(() -> ui.type(ref, "google's sign-in page"));
+        assertEquals("g", UiTools.onFx(() -> pages.getValue().sha()));
+        // The item's own text still works, and a miss names the texts shown.
+        UiTools.onFx(() -> ui.type(ref, new Commit("w", "Wi-Fi").toString()));
+        assertEquals("w", UiTools.onFx(() -> pages.getValue().sha()));
+        IllegalArgumentException miss = assertThrows(IllegalArgumentException.class,
+                () -> UiTools.onFx(() -> ui.type(ref, "Bluetooth")));
+        assertTrue(miss.getMessage().contains("\"Wi-Fi page\"") && !miss.getMessage().contains("Commit["),
+                miss.getMessage());
+    }
+
     @Test
     void aTreeSaysWhichRowsAreOpenAndExpandOpensOne() {
         TreeItem<String> firestone = new TreeItem<>("Firestone");
