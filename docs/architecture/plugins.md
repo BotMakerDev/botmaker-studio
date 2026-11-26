@@ -95,8 +95,8 @@ depend on it."*
   real test now that the way to break the rule is to add the dependency back rather than widen a scope.
 **The Remote Pilot left Studio (2026-08-30).** Fifth step of *Studio knows only the contract*, and the one the
 toolbar surface was added for: 17 files and ~3,400 lines, plus the built web client under
-`src/main/resources/pilot/`, moved to `botmaker-sdk`'s `internal/plugin/pilot/`, and Javalin and ZXing left
-this pom with them.
+`src/main/resources/pilot/`, moved to `botmaker-sdk`'s `internal/plugin/pilot/` (`plugin/pilot/` now), and
+Javalin and ZXing left this pom with them.
 
 - **What it needed from the host turned out to be four things, all already on the contract.** Which project
   is open (`resourcesDir`), a line in the status bar (`status`), the look and the owning window (`theme`,

@@ -60,7 +60,7 @@ The `ui/` package is split by concern:
   the insertable catalogs are `palette/` below, and the overlay's own palette bar is
   `ui/app/overlay/OverlayPalette`.
 - **`ui/app/pilot/` and `services/pilot/` are gone (2026-08-30)** — the Remote Pilot is the SDK plugin's
-  feature, in `botmaker-sdk`'s `internal/plugin/pilot/`, reached through a `ToolbarItem` like any other
+  feature, in `botmaker-sdk`'s `plugin/pilot/`, reached through a `ToolbarItem` like any other
   plugin's contribution. Nothing here calls it and nothing here closes it: the host says the project is
   closing and the plugin releases its own port and display. See *the Remote Pilot left Studio* below.
 - **`ui/app/capture/` is gone** — it held what was left of the screen-capture feature (`OverlayTemplateCapture`,
