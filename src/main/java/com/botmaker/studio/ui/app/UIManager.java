@@ -189,6 +189,7 @@ public class UIManager implements ProjectWindow {
     private final AssistantPane assistantPane;
     /** The Assistant window, the toolbar's 🤖; it shows {@link #assistantPane} and every MCP call. */
     private final AssistantWindow assistantWindow;
+    private final PilotWindow pilotWindow;
     /** The bottom tool window's tabs, keyed by the closed set so nothing selects one by index. Built by {@link #createScene()}. */
     private BottomTabs bottomTabs;
     /** Restores the dividers and the open tab at open, and writes them back from {@link #dispose()}. */
@@ -253,6 +254,7 @@ public class UIManager implements ProjectWindow {
         this.assistantPane = new AssistantPane(ctx,
                 new com.botmaker.studio.ui.app.trial.Trials(eventBus, ctx.state(), config), primaryStage);
         this.assistantWindow = new AssistantWindow(assistantPane, config.projectName(), this::revealMethod);
+        this.pilotWindow = new PilotWindow(config.projectName(), toolbarManager::pilotChanged);
 
         this.actions = new StudioActions(ctx, primaryStage, screenCaptureService,
                 menuBarManager, toolbarManager,
@@ -332,6 +334,7 @@ public class UIManager implements ProjectWindow {
         // The AI tools are child processes, and the MCP endpoint holds a port and serves this window's project;
         // the next window starts its own.
         assistantWindow.dispose();
+        pilotWindow.dispose();
         assistantPane.dispose();
         versionsWindow.dispose();
         reportsWindow.dispose();
@@ -465,6 +468,10 @@ public class UIManager implements ProjectWindow {
         if (RunsWindow.takeSeveralAsked(config.projectPath())) Platform.runLater(() -> runsWindow.show(primaryStage));
         toolbarManager.setOnVersions(() -> versionsWindow.show(primaryStage));
         toolbarManager.setOnAssistant(() -> assistantWindow.show(primaryStage));
+        // The pilot is the core's; the window hears it from the start so the bar's mark is true before it opens.
+        toolbarManager.setPilot(() -> pilotWindow.show(primaryStage),
+                () -> pilotWindow.running() ? " ●" : pilotWindow.starting() ? " …" : "");
+        pilotWindow.watch();
 
         // --- 1. Top Bar Construction (edit controls left, project actions centered, run controls right) ---
         // A BorderPane, not a FlowPane. Only the *center* group wraps; left and right are pinned to their

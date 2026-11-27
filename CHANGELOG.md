@@ -11,6 +11,12 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- The Remote Pilot window (pilot in core, phase 5b) and its toolbar item 🎮 Pilot, which wears a dot while the pilot
+  is reachable. The pilot is the core's: the window holds no server or tunnel, it shows the core's state over a
+  channel of its own: Start/Stop, one pairing QR, the phones connected with Disconnect, the bot's Background mode,
+  and folds for the phone app, the way it connects, the Tailscale Funnel checklist and the pairing token's reset.
+  Every ask of the core runs off the FX thread.
+
 - The Runs window shows a ready row's notes after its status with ⚠ (`Ready ⚠ MEmu_1 last read other@gmail.com`),
   what a plugin's pool said about the row it dealt (2026-11-27). Once started, the start's line keeps each run's
   notes (`2 of 2 started · run 1 ⚠ …`), since a live row carries none.

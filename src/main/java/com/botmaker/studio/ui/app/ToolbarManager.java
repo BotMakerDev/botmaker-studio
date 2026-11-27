@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public class ToolbarManager {
 
@@ -66,6 +67,8 @@ public class ToolbarManager {
     private Runnable onVersions;
     /** Shows the Assistant window; wired by {@link UIManager}. */
     private Runnable onAssistant;
+    private Runnable onPilot;
+    private Supplier<String> pilotMark = () -> "";
 
     /** Turns the reader-mode preview on and off, and what it is when the bar is built. */
     private Runnable onPreviewAsUser;
@@ -188,6 +191,18 @@ public class ToolbarManager {
     /** Sets the callback invoked when the toolbar's Assistant button is clicked. */
     public void setOnAssistant(Runnable callback) {
         this.onAssistant = callback;
+    }
+
+    /** Sets the Remote Pilot button's press and the mark it wears (the core's pilot, shown by {@link PilotWindow}). */
+    public void setPilot(Runnable callback, Supplier<String> mark) {
+        this.onPilot = callback;
+        this.pilotMark = mark;
+        refreshSoon();
+    }
+
+    /** The pilot's state changed: the bar reads its mark again. */
+    public void pilotChanged() {
+        refreshSoon();
     }
 
     /**
@@ -318,6 +333,13 @@ public class ToolbarManager {
                         + "its arguments, its reply and what it did to the device")
                 .onBar(45)
                 .onPress(() -> c -> run(onAssistant)));
+
+        // 🎮 Pilot came back on 2026-11-27, as Studio's own item: the pilot is the core's now, and its window shows
+        // the core's state. The label wears a dot while the phones can reach it.
+        own.add(ToolbarItem.id("pilot").label(() -> "🎮 Pilot" + pilotMark.get())
+                .tooltip("Remote Pilot: drive this computer from a phone. Pair it, see who is connected, stop it")
+                .onBar(46)
+                .onPress(() -> c -> run(onPilot)));
 
         // 🖱 Input stood here at TOOLS/10 until 2026-09-27, opening Studio's Input & Clicks window over
         // botmaker-project.properties. The action moved and the sentence moved with it, as this comment said
