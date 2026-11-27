@@ -11,6 +11,10 @@ Sections are `## [x.y.z] — YYYY-MM-DD`, newest first.
 
 ### Added
 
+- The Runs window shows a ready row's notes after its status with ⚠ (`Ready ⚠ MEmu_1 last read other@gmail.com`),
+  what a plugin's pool said about the row it dealt (2026-11-27). Once started, the start's line keeps each run's
+  notes (`2 of 2 started · run 1 ⚠ …`), since a live row carries none.
+
 - A plugin's window can start its run with arguments, such as the SDK's 🔭 Explore goal field: Studio passes them on
   to the run, as the assistant's start with arguments does.
 - In a dev run (`mvn javafx:run`), saving `blocks.css` restyles every open window at once, with no restart

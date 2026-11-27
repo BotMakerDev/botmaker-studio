@@ -336,7 +336,7 @@ public final class RunsWindow {
             List<Node> cells = new ArrayList<>();
             for (String column : table.columns()) cells.add(cell(row, column, style));
             cells.add(styled((row.kind() == RunsRows.Kind.LIVE ? "● " : row.kind() == RunsRows.Kind.READY ? "◆ "
-                    : row.kind() == RunsRows.Kind.MISSING ? "◇ " : "") + row.status(), style));
+                    : row.kind() == RunsRows.Kind.MISSING ? "◇ " : "") + row.shownStatus(), style));
             grid.addRow(r++, cells.toArray(Node[]::new));
         }
         nodes.add(grid);
@@ -459,7 +459,7 @@ public final class RunsWindow {
         SeveralAsk ask = new SeveralAsk(asked.getValue(), SeveralAsk.How.START, Map.copyOf(pins));
         draw();
         ask(p, ask, result -> {
-            said = result.words();
+            said = RunsRows.said(result);
             pins.clear();
             counted = Optional.empty();
             countAgain = true;

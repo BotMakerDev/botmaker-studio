@@ -32,11 +32,37 @@ public final class RunsRows {
      *
      * @param index for a ready row, its row in the count from 0, which a pin names; -1 otherwise
      * @param picks by column key, the elements as the grammar writes them
+     * @param notes what the pools' owners said about a ready row, shown after its status with ⚠; none for most
      */
-    public record Row(Kind kind, int index, Map<String, List<String>> picks, String status) {
+    public record Row(Kind kind, int index, Map<String, List<String>> picks, String status, List<String> notes) {
         public Row {
             picks = Map.copyOf(picks);
+            notes = List.copyOf(notes);
         }
+
+        /** A row with no note. */
+        public Row(Kind kind, int index, Map<String, List<String>> picks, String status) {
+            this(kind, index, picks, status, List.of());
+        }
+
+        /** Its status as the table shows it: {@code Ready ⚠ MEmu_1 last read other@gmail.com}. */
+        public String shownStatus() {
+            return status + CoreEvent.RunsStarted.Started.marked(notes);
+        }
+    }
+
+    /**
+     * What a start says once its runs went: its words, then each started run's notes, which its live row, read from
+     * the registry, no longer carries: {@code 2 of 2 started · run 1 ⚠ MEmu_1 last read other@gmail.com}.
+     */
+    public static String said(CoreEvent.RunsStarted started) {
+        StringBuilder out = new StringBuilder(started.words());
+        for (CoreEvent.RunsStarted.Started run : started.runs()) {
+            if (!run.notes().isEmpty()) {
+                out.append(" · run ").append(run.row()).append(CoreEvent.RunsStarted.Started.marked(run.notes()));
+            }
+        }
+        return out.toString();
     }
 
     private final List<String> columns;
@@ -63,7 +89,7 @@ public final class RunsRows {
             List<CoreEvent.RunsStarted.Started> ready = counted.get().runs();
             for (CoreEvent.RunsStarted.Started row : ready) {
                 columns.addAll(row.picks().keySet());
-                rows.add(new Row(Kind.READY, row.row() - 1, row.picks(), "Ready"));
+                rows.add(new Row(Kind.READY, row.row() - 1, row.picks(), "Ready", row.notes()));
             }
             for (int missing = ready.size(); missing < asked; missing++) {
                 rows.add(new Row(Kind.MISSING, -1, Map.of(), "Not dealt"));

@@ -32,7 +32,8 @@ class RunsRowsTest {
                 Optional.of(Path.of("farm")), List.of(live));
         CoreEvent.RunsStarted count = new CoreEvent.RunsStarted("t1", "1 of 3 can run: too few instances", List.of(
                 new CoreEvent.RunsStarted.Started(1, "", Map.of(INSTANCE, List.of("Instance.of(\"LDPlayer-2\")"),
-                        ACCOUNT, List.of("GameAccount.ALT")))), List.of(), List.of("Add instances…"), true);
+                        ACCOUNT, List.of("GameAccount.ALT")), List.of("LDPlayer-2 last read other@example.com"))),
+                List.of(), List.of("Add instances…"), true);
         LiveRunsView.Group arena = new LiveRunsView.Group("arena", "Arena bot", LiveRunsView.Kind.MY_BOT,
                 Optional.of(Path.of("arena")), List.of(new LiveRunsView.Live("a1", NOW, List.of(
                 Hold.plugin(SDK, INSTANCE, "Instance.of(\"LDPlayer-3\")"), Hold.bot("arena", ACCOUNT, "X.Y")),
@@ -45,6 +46,12 @@ class RunsRowsTest {
                 RunsRows.Kind.OTHER), rows.rows().stream().map(RunsRows.Row::kind).toList());
         assertEquals("Running · 42 min", rows.rows().getFirst().status());
         assertEquals(0, rows.rows().get(1).index(), "a pin names the count's row from 0");
+        assertEquals("Ready ⚠ LDPlayer-2 last read other@example.com", rows.rows().get(1).shownStatus());
+        assertEquals("Running · 42 min", rows.rows().getFirst().shownStatus(), "no note, no ⚠");
+        CoreEvent.RunsStarted started = new CoreEvent.RunsStarted("t2", "2 of 2 started", List.of(
+                new CoreEvent.RunsStarted.Started(1, "r-1", Map.of(), List.of("a", "b")),
+                new CoreEvent.RunsStarted.Started(2, "r-2", Map.of(), List.of())), List.of(), List.of(), false);
+        assertEquals("2 of 2 started · run 1 ⚠ a; b", RunsRows.said(started), "a started run's notes stay said");
         assertEquals(1, rows.ready());
         RunsRows.Row other = rows.rows().getLast();
         assertEquals("Held by Arena bot", other.status());
