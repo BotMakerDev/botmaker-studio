@@ -258,7 +258,7 @@
             <artifactId>javafx-web</artifactId>
             <version>${javafx.version}</version>
         </dependency>
-        <!-- A real pseudo-terminal behind it, the same library botmaker-remote-claude serves tmux with.
+        <!-- A real pseudo-terminal behind it, the same library pocketclaude serves tmux with.
              Natives bundled, loaded through JNA; the other platforms' are filtered out of the shaded jar. -->
         <dependency>
             <groupId>org.jetbrains.pty4j</groupId>

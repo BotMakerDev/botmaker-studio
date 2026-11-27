@@ -24,7 +24,7 @@ import java.util.function.IntConsumer;
  *
  * <p>No JavaFX here. What draws the screen is xterm.js in the Terminal tab; this is the wire between it and
  * the PTY and interprets nothing, so a full-screen program ({@code vim}, {@code htop}, an AI TUI) draws exactly
- * as it would in a desktop terminal. It is the same shape as {@code botmaker-remote-claude}'s {@code Terminal}.
+ * as it would in a desktop terminal. It is the same shape as {@code pocketclaude}'s {@code Terminal}.
  *
  * <p>The bot does <em>not</em> run here: its output is lines on pipes for the Run tab, and its questions are
  * dialogs over its telemetry socket ({@code Ask}, since 2026-10-01), which is why the Run tab and the Terminal
