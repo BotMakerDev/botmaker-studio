@@ -36,6 +36,8 @@ the **Eclipse JDT** AST; Studio is its client.
 - 🤖 **Assistant** — a Claude window that reads and edits the open bot through the core, which also serves an MCP
   endpoint so an outside Claude session can do the same
 - 🛑 **Stop key and run overlay** — a global key stops a run; plugins draw their status over it
+- 🎮 **Pilot** — watch and drive the computer's runs from your phone or a browser, with the
+  [BotPilot](https://github.com/BotMakerDev/botmaker-pilot) app
 
 ## What plugins add
 
@@ -50,8 +52,7 @@ plugin #1, and most of what makes a bot a *game* bot is its:
 - 🗺 **Screens** — the map of the game's screens and the buttons between them, with 🎯 Goals (what the bot
   wants: facts, goals and plans), 🔭 Explore (finds screens not mapped yet) and 🧩 Elements (every picture
   and tree element) in its rail;
-- vision and OCR, mouse and keyboard;
-- 🎮 **Pilot** — watch and drive a run from your phone.
+- vision and OCR, mouse and keyboard.
 
 The SDK's [README](https://github.com/BotMakerDev/botmaker-sdk#readme) describes them.
 [`botmaker-plugin-basics`](https://github.com/BotMakerDev/botmaker-plugin-basics) adds editors for the JDK

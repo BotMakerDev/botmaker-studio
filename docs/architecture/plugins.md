@@ -116,6 +116,8 @@ Javalin and ZXing left this pom with them.
 - **The `pilot` Maven profile went with it**, so the web client is rebuilt by the module that serves it.
 - The accepted consequence, stated plainly: **a project with no SDK plugin has no Pilot button.** That is
   the platform's own rule working, and it is worth meeting here rather than in phase 9.
+- **Superseded 2026-11-27** (spec `2026-11-26-pilot-in-core-design.md`): the pilot is `botmaker-core`'s, with the
+  SDK naming only what a run shows (`RunView`). Studio's 🎮 Pilot button is its own again, on every project.
 
 **The capture targets stopped being stored twice (2026-08-30).** Fourth step of *Studio knows only the
 contract*, and the first that changes where a project's data lives: the targets are the SDK's

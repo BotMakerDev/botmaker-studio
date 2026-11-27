@@ -63,6 +63,8 @@ The `ui/` package is split by concern:
   feature, in `botmaker-sdk`'s `plugin/pilot/`, reached through a `ToolbarItem` like any other
   plugin's contribution. Nothing here calls it and nothing here closes it: the host says the project is
   closing and the plugin releases its own port and display. See *the Remote Pilot left Studio* below.
+  **Superseded 2026-11-27:** the pilot is `botmaker-core`'s (`pilot/`), and Studio's part is the window
+  `ui/app/PilotWindow` behind its own 🎮 Pilot toolbar item, a client of the core that holds no server.
 - **`ui/app/capture/` is gone** — it held what was left of the screen-capture feature (`OverlayTemplateCapture`,
   `CaptureSourcePicker`, `TargetThumbnail`, `BatchTemplateNamingDialog`) until each followed into the SDK plugin
   (`capture-and-moved-editors.md`). **The overlay is a feature of the SDK, not of Studio** — it exists to turn a `CaptureTargetModel` into an
